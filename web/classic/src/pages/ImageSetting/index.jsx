@@ -230,7 +230,7 @@ const ImageSetting = () => {
           {modes.length === 0 && <Text type='tertiary'>{t('未启用')}</Text>}
           {modes.map((mode) => (
             <Tag key={mode}>
-              {mode === 'edits' ? t('图片编辑') : t('文生图')}
+              {mode === 'edits' ? t('图生图') : t('文生图')}
             </Tag>
           ))}
         </Space>

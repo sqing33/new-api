@@ -25,17 +25,26 @@ import {
   Card,
   Empty,
   InputNumber,
+  Modal,
   Select,
   Spin,
   Tabs,
   TextArea,
   Typography,
+  Upload,
 } from '@douyinfe/semi-ui';
 import {
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
   Download,
+  Eye,
+  History,
   Image as ImageIcon,
   Loader2,
   Sparkles,
+  Trash2,
+  UploadCloud,
   WandSparkles,
 } from 'lucide-react';
 import { API, showError, showSuccess } from '../../helpers';
@@ -47,6 +56,12 @@ import {
   imageModelSupportsMode,
   parseImageModelSettings,
 } from '../../helpers/imageModelSettings';
+import {
+  addImageHistoryRecord,
+  clearImageHistory,
+  deleteImageHistoryRecord,
+  listImageHistory,
+} from '../../helpers/imageHistory';
 
 const { Text } = Typography;
 
@@ -162,12 +177,18 @@ const ImageStudio = () => {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [groups, setGroups] = useState([]);
   const [imageFiles, setImageFiles] = useState([]);
+  const [imageFileList, setImageFileList] = useState([]);
   const [results, setResults] = useState([]);
+  const [currentResultIndex, setCurrentResultIndex] = useState(0);
   const [lastError, setLastError] = useState('');
   const [imageErrors, setImageErrors] = useState({});
   const [loadingModels, setLoadingModels] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [generatedCount, setGeneratedCount] = useState(0);
+  const [resultTab, setResultTab] = useState('current');
+  const [historyRecords, setHistoryRecords] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyImageErrors, setHistoryImageErrors] = useState({});
   const [imageModelSettingsValue, setImageModelSettingsValue] = useState(
     statusState?.status?.image_model_settings,
   );
@@ -286,9 +307,40 @@ const ImageStudio = () => {
     }
   }, [groups, config.group]);
 
+  useEffect(() => {
+    if (results.length === 0) {
+      setCurrentResultIndex(0);
+      return;
+    }
+    if (currentResultIndex > results.length - 1) {
+      setCurrentResultIndex(results.length - 1);
+    }
+  }, [results.length, currentResultIndex]);
+
   const updateConfig = (key, value) => {
     setConfig((current) => ({ ...current, [key]: value }));
   };
+
+  const handleReferenceUploadChange = ({ fileList = [] }) => {
+    const nextFileList = fileList.filter((item) => item.fileInstance);
+    setImageFileList(nextFileList);
+    setImageFiles(nextFileList.map((item) => item.fileInstance));
+  };
+
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      setHistoryRecords(await listImageHistory());
+    } catch (error) {
+      showError(extractErrorMessage(error, t('加载历史记录失败')));
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
   const updateResolution = (resolution) => {
     setConfig((current) => ({
@@ -438,6 +490,23 @@ const ImageStudio = () => {
     return data[0];
   };
 
+  const saveImageHistory = async (result) => {
+    const source = resultSource(result);
+    if (!source) return;
+
+    await addImageHistoryRecord({
+      mode,
+      model: config.model,
+      group: config.group,
+      prompt: config.prompt,
+      ratio: config.ratio,
+      resolution: config.resolution,
+      size: selectedSize,
+      image: source,
+      revised_prompt: result.revised_prompt || '',
+    });
+  };
+
   const handleGenerate = async () => {
     if (!currentModelSetting) {
       showError(t('当前模型没有生图配置'));
@@ -458,11 +527,13 @@ const ImageStudio = () => {
 
     const total = Math.min(Math.max(Number(config.count) || 1, 1), maxCount);
     const failures = [];
+    let historySaveFailed = false;
 
     setGenerating(true);
     setGeneratedCount(0);
     setLastError('');
     setResults([]);
+    setCurrentResultIndex(0);
     setImageErrors({});
 
     try {
@@ -470,6 +541,11 @@ const ImageStudio = () => {
         try {
           const result = await requestOneImage();
           setResults((current) => [...current, result]);
+          try {
+            await saveImageHistory(result);
+          } catch {
+            historySaveFailed = true;
+          }
         } catch (error) {
           failures.push(extractErrorMessage(error, t('生图请求失败')));
         } finally {
@@ -486,23 +562,347 @@ const ImageStudio = () => {
           t('部分图片生成失败：') + [...new Set(failures)].join('；'),
         );
       }
+
+      if (historySaveFailed) {
+        showError(t('历史记录保存失败'));
+      }
+      await loadHistory();
     } finally {
       setGenerating(false);
     }
   };
 
-  const handleDownload = (result, index) => {
-    const href = resultSource(result);
+  const downloadSource = (href, filename) => {
     if (!href) return;
 
     const link = document.createElement('a');
     link.href = href;
-    link.download = `image-studio-${index + 1}.png`;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     showSuccess(t('已开始下载'));
   };
+
+  const handleDownload = (result, index) => {
+    downloadSource(resultSource(result), `image-studio-${index + 1}.png`);
+  };
+
+  const handleHistoryDownload = (record) => {
+    downloadSource(record.image, `image-studio-history-${record.id}.png`);
+  };
+
+  const formatHistoryTime = (timestamp) => {
+    if (!timestamp) return '';
+    return new Date(timestamp).toLocaleString();
+  };
+
+  const previewHistoryRecord = (record) => {
+    Modal.info({
+      title: t('查看历史图片'),
+      width: 720,
+      content: (
+        <div className='flex flex-col gap-3'>
+          <div
+            className='flex items-center justify-center overflow-hidden rounded'
+            style={{
+              background: 'var(--semi-color-fill-0)',
+              maxHeight: 520,
+            }}
+          >
+            <img
+              alt={record.revised_prompt || record.prompt}
+              className='max-h-[520px] max-w-full object-contain'
+              src={record.image}
+            />
+          </div>
+          <Text ellipsis={{ showTooltip: true, rows: 4 }} type='tertiary'>
+            {record.revised_prompt || record.prompt}
+          </Text>
+        </div>
+      ),
+      okText: t('关闭'),
+    });
+  };
+
+  const removeHistoryRecord = (record) => {
+    Modal.confirm({
+      title: t('确认删除'),
+      content: t('确定要删除这条历史记录吗？'),
+      okText: t('删除'),
+      onOk: async () => {
+        try {
+          await deleteImageHistoryRecord(record.id);
+          setHistoryImageErrors((current) => {
+            const next = { ...current };
+            delete next[record.id];
+            return next;
+          });
+          await loadHistory();
+          showSuccess(t('删除成功'));
+        } catch (error) {
+          showError(extractErrorMessage(error, t('删除失败')));
+        }
+      },
+    });
+  };
+
+  const removeAllHistory = () => {
+    Modal.confirm({
+      title: t('确认清空历史记录'),
+      content: t('清空后无法恢复，确定要删除全部生图历史记录吗？'),
+      okText: t('清空'),
+      onOk: async () => {
+        try {
+          await clearImageHistory();
+          setHistoryImageErrors({});
+          await loadHistory();
+          showSuccess(t('已清空'));
+        } catch (error) {
+          showError(extractErrorMessage(error, t('清空历史记录失败')));
+        }
+      },
+    });
+  };
+
+  const showPreviousResult = () => {
+    setCurrentResultIndex((current) =>
+      current === 0 ? results.length - 1 : current - 1,
+    );
+  };
+
+  const showNextResult = () => {
+    setCurrentResultIndex((current) =>
+      current === results.length - 1 ? 0 : current + 1,
+    );
+  };
+
+  const renderCurrentResults = () => {
+    if (results.length === 0) {
+      return (
+        <div className='flex min-h-[420px] items-center justify-center'>
+          <Empty
+            description={t('生成的图片会显示在这里')}
+            image={<ImageIcon size={44} color='var(--semi-color-text-2)' />}
+            title={t('暂无图片')}
+          />
+        </div>
+      );
+    }
+
+    const result = results[currentResultIndex] || results[0];
+    const source = resultSource(result);
+    const imageFailed = imageErrors[currentResultIndex];
+    const hasMultipleResults = results.length > 1;
+
+    return (
+      <div className='flex flex-col gap-3'>
+        <div
+          className='relative flex items-center justify-center overflow-hidden rounded'
+          style={{
+            background: 'var(--semi-color-fill-0)',
+            height: isMobile ? 380 : 'calc(100vh - 250px)',
+            minHeight: 340,
+          }}
+        >
+          {source && !imageFailed ? (
+            <img
+              alt={result.revised_prompt || config.prompt}
+              className='max-h-full max-w-full object-contain'
+              onError={() => {
+                setImageErrors((current) => ({
+                  ...current,
+                  [currentResultIndex]: true,
+                }));
+                showError(t('图片加载失败'));
+              }}
+              src={source}
+            />
+          ) : (
+            <Text type='tertiary'>
+              {source ? t('图片加载失败') : t('不支持的图片数据')}
+            </Text>
+          )}
+
+          {hasMultipleResults && (
+            <>
+              <Button
+                aria-label='previous image'
+                className='absolute left-3 top-1/2 -translate-y-1/2'
+                icon={<ChevronLeft size={22} />}
+                onClick={showPreviousResult}
+                style={{ borderRadius: 999 }}
+                theme='solid'
+                type='tertiary'
+              />
+              <Button
+                aria-label='next image'
+                className='absolute right-3 top-1/2 -translate-y-1/2'
+                icon={<ChevronRight size={22} />}
+                onClick={showNextResult}
+                style={{ borderRadius: 999 }}
+                theme='solid'
+                type='tertiary'
+              />
+            </>
+          )}
+        </div>
+
+        <div className='flex items-center justify-between gap-3'>
+          <Text type='tertiary'>
+            {currentResultIndex + 1}/{results.length}
+          </Text>
+          <Button
+            disabled={!source}
+            icon={<Download size={16} />}
+            onClick={() => handleDownload(result, currentResultIndex)}
+            theme='outline'
+          >
+            {t('下载')}
+          </Button>
+        </div>
+
+        {result.revised_prompt && (
+          <Text
+            ellipsis={{ showTooltip: true, rows: 3 }}
+            size='small'
+            type='tertiary'
+          >
+            {result.revised_prompt}
+          </Text>
+        )}
+
+      </div>
+    );
+  };
+
+  const renderHistoryRecords = () => (
+    <Spin spinning={historyLoading}>
+      <div className='mb-3 flex items-center justify-between gap-3'>
+        <Text type='tertiary'>
+          {t('仅保存在当前浏览器，最多保留 50 条')}
+        </Text>
+        <Button
+          disabled={historyRecords.length === 0}
+          icon={<Trash2 size={15} />}
+          onClick={removeAllHistory}
+          theme='outline'
+          type='danger'
+        >
+          {t('清空')}
+        </Button>
+      </div>
+
+      {historyRecords.length === 0 ? (
+        <div className='flex min-h-[380px] items-center justify-center'>
+          <Empty
+            description={t('生成成功后会自动保存到这里')}
+            image={<History size={44} color='var(--semi-color-text-2)' />}
+            title={t('暂无历史记录')}
+          />
+        </div>
+      ) : (
+        <div
+          className='grid gap-4'
+          style={{
+            gridTemplateColumns: isMobile
+              ? '1fr'
+              : 'repeat(auto-fill, minmax(220px, 1fr))',
+          }}
+        >
+          {historyRecords.map((record) => {
+            const imageFailed = historyImageErrors[record.id];
+            return (
+              <Card
+                bordered
+                bodyStyle={{ padding: 12 }}
+                className='overflow-hidden'
+                key={record.id}
+              >
+                <button
+                  className='mb-3 flex w-full items-center justify-center overflow-hidden rounded border-0 p-0'
+                  onClick={() => previewHistoryRecord(record)}
+                  style={{
+                    aspectRatio: '1 / 1',
+                    background: 'var(--semi-color-fill-0)',
+                    cursor: 'pointer',
+                  }}
+                  type='button'
+                >
+                  {record.image && !imageFailed ? (
+                    <img
+                      alt={record.revised_prompt || record.prompt}
+                      className='h-full w-full object-cover'
+                      onError={() =>
+                        setHistoryImageErrors((current) => ({
+                          ...current,
+                          [record.id]: true,
+                        }))
+                      }
+                      src={record.image}
+                    />
+                  ) : (
+                    <Text type='tertiary'>{t('图片加载失败')}</Text>
+                  )}
+                </button>
+
+                <div className='mb-3 flex flex-col gap-1'>
+                  <Text ellipsis={{ showTooltip: true }} strong>
+                    {record.model || t('未知模型')}
+                  </Text>
+                  <Text size='small' type='tertiary'>
+                    {record.mode === 'edit' ? t('图生图') : t('文生图')} ·{' '}
+                    {record.size || t('自动')}
+                  </Text>
+                  <Text
+                    className='flex items-center gap-1'
+                    size='small'
+                    type='tertiary'
+                  >
+                    <Clock3 size={13} />
+                    {formatHistoryTime(record.created_at)}
+                  </Text>
+                  <Text
+                    ellipsis={{ showTooltip: true, rows: 2 }}
+                    size='small'
+                    type='tertiary'
+                  >
+                    {record.revised_prompt || record.prompt}
+                  </Text>
+                </div>
+
+                <div className='grid grid-cols-3 gap-2'>
+                  <Button
+                    icon={<Eye size={15} />}
+                    onClick={() => previewHistoryRecord(record)}
+                    theme='outline'
+                  >
+                    {t('查看')}
+                  </Button>
+                  <Button
+                    disabled={!record.image}
+                    icon={<Download size={15} />}
+                    onClick={() => handleHistoryDownload(record)}
+                    theme='outline'
+                  >
+                    {t('下载')}
+                  </Button>
+                  <Button
+                    icon={<Trash2 size={15} />}
+                    onClick={() => removeHistoryRecord(record)}
+                    theme='outline'
+                    type='danger'
+                  >
+                    {t('删除')}
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </Spin>
+  );
 
   return (
     <div className='mt-[60px] px-2'>
@@ -518,7 +918,7 @@ const ImageStudio = () => {
       <div
         className='grid gap-4'
         style={{
-          gridTemplateColumns: isMobile ? '1fr' : '420px minmax(0, 1fr)',
+          gridTemplateColumns: isMobile ? '1fr' : '340px minmax(0, 1fr)',
           alignItems: 'start',
         }}
       >
@@ -542,22 +942,29 @@ const ImageStudio = () => {
                   <Tabs.TabPane itemKey='generate' tab={t('文生图')} />
                 )}
                 {imageModelSupportsMode(currentModelSetting, 'edits') && (
-                  <Tabs.TabPane itemKey='edit' tab={t('图片编辑')} />
+                  <Tabs.TabPane itemKey='edit' tab={t('图生图')} />
                 )}
               </Tabs>
 
               {mode === 'edit' && (
                 <div className='flex flex-col gap-2'>
                   <Text strong>{t('参考图')}</Text>
-                  <input
+                  <Upload
                     accept='image/png,image/jpeg,image/webp'
-                    className='semi-input-default'
+                    beforeUpload={() => false}
+                    fileList={imageFileList}
                     multiple
-                    onChange={(event) =>
-                      setImageFiles(Array.from(event.target.files || []))
-                    }
-                    type='file'
-                  />
+                    onChange={handleReferenceUploadChange}
+                    uploadTrigger='custom'
+                  >
+                    <Button
+                      disabled={generating}
+                      icon={<UploadCloud size={16} />}
+                      theme='outline'
+                    >
+                      {t('上传参考图')}
+                    </Button>
+                  </Upload>
                   {imageFiles.length > 0 && (
                     <Text type='tertiary' size='small'>
                       {imageFiles.map((file) => file.name).join(', ')}
@@ -566,7 +973,14 @@ const ImageStudio = () => {
                 </div>
               )}
 
-              <div className='grid grid-cols-1 gap-3'>
+              <div
+                className='grid gap-3'
+                style={{
+                  gridTemplateColumns: isMobile
+                    ? '1fr'
+                    : 'minmax(0, 1fr) minmax(0, 1fr)',
+                }}
+              >
                 <div className='flex flex-col gap-2'>
                   <Text strong>{t('模型')}</Text>
                   <Select
@@ -651,86 +1065,19 @@ const ImageStudio = () => {
         </Card>
 
         <Card bordered bodyStyle={{ minHeight: 480 }}>
-          {results.length === 0 ? (
-            <div className='flex min-h-[420px] items-center justify-center'>
-              <Empty
-                description={t('生成的图片会显示在这里')}
-                image={<ImageIcon size={44} color='var(--semi-color-text-2)' />}
-                title={t('暂无图片')}
-              />
-            </div>
-          ) : (
-            <div
-              className='grid gap-4'
-              style={{
-                gridTemplateColumns: isMobile
-                  ? '1fr'
-                  : 'repeat(auto-fill, minmax(220px, 1fr))',
-              }}
-            >
-              {results.map((result, index) => {
-                const source = resultSource(result);
-                const imageFailed = imageErrors[index];
+          <Tabs activeKey={resultTab} onChange={setResultTab} type='button'>
+            <Tabs.TabPane itemKey='current' tab={t('当前结果')} />
+            <Tabs.TabPane
+              itemKey='history'
+              tab={`${t('历史记录')} (${historyRecords.length})`}
+            />
+          </Tabs>
 
-                return (
-                  <Card
-                    bordered
-                    bodyStyle={{ padding: 12 }}
-                    className='overflow-hidden'
-                    key={`${source}-${index}`}
-                  >
-                    <div
-                      className='mb-3 flex items-center justify-center overflow-hidden rounded'
-                      style={{
-                        aspectRatio: '1 / 1',
-                        background: 'var(--semi-color-fill-0)',
-                      }}
-                    >
-                      {source && !imageFailed ? (
-                        <img
-                          alt={result.revised_prompt || config.prompt}
-                          className='h-full w-full object-cover'
-                          onError={() => {
-                            setImageErrors((current) => ({
-                              ...current,
-                              [index]: true,
-                            }));
-                            showError(t('图片加载失败'));
-                          }}
-                          src={source}
-                        />
-                      ) : (
-                        <Text type='tertiary'>
-                          {source ? t('图片加载失败') : t('不支持的图片数据')}
-                        </Text>
-                      )}
-                    </div>
-
-                    {result.revised_prompt && (
-                      <Text
-                        className='mb-3 block'
-                        ellipsis={{ showTooltip: true, rows: 3 }}
-                        size='small'
-                        type='tertiary'
-                      >
-                        {result.revised_prompt}
-                      </Text>
-                    )}
-
-                    <Button
-                      block
-                      disabled={!source}
-                      icon={<Download size={16} />}
-                      onClick={() => handleDownload(result, index)}
-                      theme='outline'
-                    >
-                      {t('下载')}
-                    </Button>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+          <div className='mt-4'>
+            {resultTab === 'history'
+              ? renderHistoryRecords()
+              : renderCurrentResults()}
+          </div>
         </Card>
       </div>
     </div>

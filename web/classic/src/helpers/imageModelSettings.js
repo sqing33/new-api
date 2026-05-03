@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 export const IMAGE_MODEL_MODE_OPTIONS = [
   { value: 'generations', label: '文生图' },
-  { value: 'edits', label: '图片编辑' },
+  { value: 'edits', label: '图生图' },
 ];
 
 export const VIDEO_MODEL_MODE_OPTIONS = [

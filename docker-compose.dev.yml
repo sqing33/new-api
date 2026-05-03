@@ -28,7 +28,7 @@ services:
       - dev_data:/data
     environment:
       - SQL_DSN=postgresql://root:123456@postgres:5432/new-api
-      - REDIS_CONN_STRING=redis://redis
+      - REDIS_CONN_STRING=redis://:123456@redis:6379
       - TZ=Asia/Shanghai
       - BATCH_UPDATE_ENABLED=true
     depends_on:
@@ -42,6 +42,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: new-api-dev-redis
+    command: ["redis-server", "--requirepass", "123456"]
     restart: unless-stopped
     networks:
       - dev-network
