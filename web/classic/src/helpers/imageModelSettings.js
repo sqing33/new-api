@@ -36,7 +36,6 @@ export const DEFAULT_VIDEO_MODEL_CONFIG = {
 export const DEFAULT_IMAGE_MODEL_SETTINGS = [
   {
     model: 'gpt-image-2',
-    label: 'GPT Image 2',
     modes: ['generations', 'edits'],
     max_n: 10,
   },
@@ -89,7 +88,6 @@ export const normalizeImageModelSetting = (setting) => {
   );
   const normalized = {
     model: typeof setting?.model === 'string' ? setting.model.trim() : '',
-    label: typeof setting?.label === 'string' ? setting.label.trim() : '',
     modes,
     max_n: Math.min(Math.max(Number(setting?.max_n) || 1, 1), 12),
   };

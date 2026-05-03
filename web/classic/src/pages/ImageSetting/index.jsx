@@ -20,25 +20,29 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Banner,
   Button,
-  Card,
+  Checkbox,
+  Empty,
   Form,
   Modal,
   Space,
   Spin,
   Table,
+  Tabs,
+  TabPane,
   Tag,
   Typography,
+  Upload,
 } from '@douyinfe/semi-ui';
 import {
   IconDelete,
   IconEdit,
+  IconImage,
   IconPlus,
-  IconSaveStroked,
 } from '@douyinfe/semi-icons';
 import { API, showError, showSuccess } from '../../helpers';
 import { StatusContext } from '../../context/Status';
+import CardPro from '../../components/common/ui/CardPro';
 import {
   DEFAULT_IMAGE_MODEL_SETTINGS,
   IMAGE_MODEL_MODE_OPTIONS,
@@ -48,9 +52,10 @@ import {
   parseImageModelSettings,
 } from '../../helpers/imageModelSettings';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 const OPTION_KEY = 'ImageModelSettings';
+const PROMPT_PRESETS_OPTION_KEY = 'ImagePromptPresets';
 
 const settingsToJson = (settings) => JSON.stringify(settings, null, 2);
 const splitCsv = (value) =>
@@ -59,23 +64,85 @@ const splitCsv = (value) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const normalizePromptPreset = (preset = {}) => ({
+  id:
+    preset.id ||
+    `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  name: String(preset.name || '').trim(),
+  image: String(preset.image || ''),
+  prompt: String(preset.prompt || '').trim(),
+});
+
+const parsePromptPresets = (value) => {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map(normalizePromptPreset)
+      .filter((item) => item.name || item.prompt || item.image);
+  } catch {
+    return [];
+  }
+};
+
+const fileToDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
 const ImageSetting = () => {
   const { t } = useTranslation();
   const [statusState, statusDispatch] = useContext(StatusContext);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('models');
   const [settings, setSettings] = useState(DEFAULT_IMAGE_MODEL_SETTINGS);
+  const [promptPresets, setPromptPresets] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editingSetting, setEditingSetting] = useState(null);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const [editingPresetIndex, setEditingPresetIndex] = useState(null);
+  const [editingPreset, setEditingPreset] = useState(null);
+  const [presetFileList, setPresetFileList] = useState([]);
 
   const loadSettings = async () => {
     setLoading(true);
     try {
       const res = await API.get('/api/option/');
       const option = res.data?.data?.find((item) => item.key === OPTION_KEY);
+      const presetOption = res.data?.data?.find(
+        (item) => item.key === PROMPT_PRESETS_OPTION_KEY,
+      );
       setSettings(parseImageModelSettings(option?.value));
+      setPromptPresets(parsePromptPresets(presetOption?.value));
     } catch (error) {
       showError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const savePromptPresets = async (nextPresets) => {
+    setLoading(true);
+    try {
+      const normalized = nextPresets.map(normalizePromptPreset);
+      const res = await API.put('/api/option/', {
+        key: PROMPT_PRESETS_OPTION_KEY,
+        value: settingsToJson(normalized),
+      });
+      if (res.data?.success) {
+        setPromptPresets(normalized);
+        showSuccess(t('保存成功'));
+        return true;
+      }
+      showError(res.data?.message || t('保存失败'));
+      return false;
+    } catch (error) {
+      showError(error);
+      return false;
     } finally {
       setLoading(false);
     }
@@ -120,7 +187,6 @@ const ImageSetting = () => {
     setEditingSetting(
       normalizeImageModelSetting({
         model: '',
-        label: '',
         modes: ['generations'],
         max_n: 4,
       }),
@@ -187,14 +253,6 @@ const ImageSetting = () => {
     });
   };
 
-  const resetTemplates = () => {
-    setSettings(DEFAULT_IMAGE_MODEL_SETTINGS.map(normalizeImageModelSetting));
-  };
-
-  const saveVisualSettings = async () => {
-    await saveSettings(settings);
-  };
-
   const updateEditingSetting = (patch) => {
     setEditingSetting((current) =>
       normalizeImageModelSetting({ ...current, ...patch }),
@@ -211,16 +269,100 @@ const ImageSetting = () => {
     });
   };
 
+  const openAddPresetModal = () => {
+    setEditingPreset({
+      id: '',
+      name: '',
+      image: '',
+      prompt: '',
+    });
+    setEditingPresetIndex(null);
+    setPresetFileList([]);
+    setPresetModalVisible(true);
+  };
+
+  const openEditPresetModal = (preset, index) => {
+    setEditingPreset(normalizePromptPreset(preset));
+    setEditingPresetIndex(index);
+    setPresetFileList([]);
+    setPresetModalVisible(true);
+  };
+
+  const closePresetModal = () => {
+    setPresetModalVisible(false);
+    setEditingPresetIndex(null);
+    setEditingPreset(null);
+    setPresetFileList([]);
+  };
+
+  const updateEditingPreset = (patch) => {
+    setEditingPreset((current) => ({
+      ...(current || {}),
+      ...patch,
+    }));
+  };
+
+  const handlePresetImageChange = async ({ fileList = [] }) => {
+    const nextFileList = fileList.filter((item) => item.fileInstance).slice(-1);
+    setPresetFileList(nextFileList);
+    if (nextFileList.length === 0) {
+      updateEditingPreset({ image: '' });
+      return;
+    }
+    try {
+      const file = nextFileList[0].fileInstance;
+      const dataUrl = await fileToDataUrl(file);
+      updateEditingPreset({ image: dataUrl });
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  const upsertPromptPreset = async () => {
+    const nextPreset = normalizePromptPreset(editingPreset);
+    if (!nextPreset.name) {
+      showError(t('请输入预设名称'));
+      return;
+    }
+    if (!nextPreset.image) {
+      showError(t('请上传预设图片'));
+      return;
+    }
+    if (!nextPreset.prompt) {
+      showError(t('请输入提示词内容'));
+      return;
+    }
+
+    const nextPresets =
+      editingPresetIndex === null
+        ? [...promptPresets, nextPreset]
+        : promptPresets.map((item, index) =>
+            index === editingPresetIndex ? nextPreset : item,
+          );
+
+    const saved = await savePromptPresets(nextPresets);
+    if (saved) closePresetModal();
+  };
+
+  const deletePromptPreset = (index) => {
+    const nextPresets = promptPresets.filter(
+      (_, itemIndex) => itemIndex !== index,
+    );
+    Modal.confirm({
+      title: t('确认删除'),
+      content: t('删除后会立即保存预设提示词。'),
+      okText: t('删除'),
+      cancelText: t('取消'),
+      okButtonProps: { type: 'danger' },
+      onOk: () => savePromptPresets(nextPresets),
+    });
+  };
+
   const columns = [
     {
       title: t('模型'),
       dataIndex: 'model',
-      render: (text, record) => (
-        <div className='flex flex-col'>
-          <Text strong>{text}</Text>
-          {record.label && <Text type='tertiary'>{record.label}</Text>}
-        </div>
-      ),
+      render: (text) => <Text strong>{text}</Text>,
     },
     {
       title: t('图片模式'),
@@ -229,9 +371,7 @@ const ImageSetting = () => {
         <Space wrap>
           {modes.length === 0 && <Text type='tertiary'>{t('未启用')}</Text>}
           {modes.map((mode) => (
-            <Tag key={mode}>
-              {mode === 'edits' ? t('图生图') : t('文生图')}
-            </Tag>
+            <Tag key={mode}>{mode === 'edits' ? t('图生图') : t('文生图')}</Tag>
           ))}
         </Space>
       ),
@@ -291,50 +431,155 @@ const ImageSetting = () => {
     },
   ];
 
+  const renderTabsArea = () => (
+    <Tabs
+      activeKey={activeTab}
+      className='mb-2'
+      collapsible
+      onChange={setActiveTab}
+      type='card'
+    >
+      <TabPane itemKey='models' tab={t('创作模型')} />
+      <TabPane itemKey='presets' tab={t('预设提示词')} />
+    </Tabs>
+  );
+
+  const renderActionsArea = () => {
+    if (activeTab === 'presets') {
+      return (
+        <div className='flex gap-2 w-full md:w-auto'>
+          <Button
+            className='w-full md:w-auto'
+            icon={<IconPlus />}
+            onClick={openAddPresetModal}
+            size='small'
+            type='primary'
+          >
+            {t('添加预设提示词')}
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <Space wrap>
+        <Button
+          icon={<IconPlus />}
+          onClick={openAddModal}
+          size='small'
+          type='primary'
+        >
+          {t('添加创作模型')}
+        </Button>
+      </Space>
+    );
+  };
+
+  const renderPromptPresets = () => {
+    if (promptPresets.length === 0) {
+      return (
+        <div className='py-10'>
+          <Empty
+            image={<IconImage size='extra-large' />}
+            title={t('暂无预设提示词')}
+            description={t(
+              '添加预设提示词后，会以图片和提示词卡片展示在这里。',
+            )}
+          >
+            <Button
+              icon={<IconPlus />}
+              onClick={openAddPresetModal}
+              type='primary'
+            >
+              {t('添加预设提示词')}
+            </Button>
+          </Empty>
+        </div>
+      );
+    }
+
+    return (
+      <div className='grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
+        {promptPresets.map((preset, index) => (
+          <div
+            key={preset.id || index}
+            className='flex min-h-0 flex-col overflow-hidden rounded-lg border'
+            style={{ borderColor: 'var(--semi-color-border)' }}
+          >
+            <div className='aspect-video bg-semi-color-fill-0'>
+              {preset.image ? (
+                <img
+                  alt={preset.name}
+                  className='h-full w-full object-cover'
+                  src={preset.image}
+                />
+              ) : (
+                <div className='flex h-full items-center justify-center text-semi-color-text-2'>
+                  <IconImage size='extra-large' />
+                </div>
+              )}
+            </div>
+            <div className='flex flex-1 flex-col gap-3 p-4'>
+              <div className='flex flex-col gap-1'>
+                <Text strong ellipsis={{ showTooltip: true }}>
+                  {preset.name || t('未命名预设')}
+                </Text>
+                <Text
+                  className='min-h-[44px]'
+                  ellipsis={{ rows: 2, showTooltip: true }}
+                  size='small'
+                  type='tertiary'
+                >
+                  {preset.prompt}
+                </Text>
+              </div>
+              <div className='mt-auto flex gap-2'>
+                <Button
+                  block
+                  icon={<IconEdit />}
+                  onClick={() => openEditPresetModal(preset, index)}
+                  size='small'
+                  type='primary'
+                >
+                  {t('编辑')}
+                </Button>
+                <Button
+                  block
+                  icon={<IconDelete />}
+                  onClick={() => deletePromptPreset(index)}
+                  size='small'
+                  type='danger'
+                >
+                  {t('删除')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className='mt-[60px] px-2'>
-      <div className='mb-4 flex flex-col gap-1'>
-        <Title heading={3} style={{ margin: 0 }}>
-          {t('创作设置')}
-        </Title>
-        <Text type='tertiary'>
-          {t('配置内置图片和视频创作页可使用的模型与能力。')}
-        </Text>
-      </div>
-
       <Spin spinning={loading}>
-        <Card bordered>
-          <Space vertical style={{ width: '100%' }}>
-            <Banner
-              closeIcon={null}
-              description={t(
-                '图片比例与分辨率由生图页固定映射；视频页使用这里配置的时长与尺寸选项。',
-              )}
-              type='info'
-            />
-
-            <Space wrap>
-              <Button icon={<IconPlus />} onClick={openAddModal} type='primary'>
-                {t('添加创作模型')}
-              </Button>
-              <Button onClick={resetTemplates}>{t('恢复内置模板')}</Button>
-              <Button
-                icon={<IconSaveStroked />}
-                onClick={saveVisualSettings}
-                theme='solid'
-                type='primary'
-              >
-                {t('保存创作设置')}
-              </Button>
-            </Space>
+        <CardPro
+          type='type3'
+          tabsArea={renderTabsArea()}
+          actionsArea={renderActionsArea()}
+          t={t}
+        >
+          {activeTab === 'models' ? (
             <Table
               columns={columns}
               dataSource={settings}
               pagination={false}
               rowKey='model'
             />
-          </Space>
-        </Card>
+          ) : (
+            renderPromptPresets()
+          )}
+        </CardPro>
       </Spin>
 
       <Modal
@@ -353,45 +598,38 @@ const ImageSetting = () => {
               placeholder='gpt-image-2'
               value={editingSetting.model}
             />
-            <Form.Input
-              field='label'
-              label={t('显示名称')}
-              onChange={(value) => updateEditingSetting({ label: value })}
-              placeholder='GPT Image 2'
-              value={editingSetting.label}
-            />
-            <Form.Select
-              field='modes'
-              label={t('图片支持模式')}
-              multiple
-              onChange={(value) => updateEditingSetting({ modes: value })}
-              optionList={IMAGE_MODEL_MODE_OPTIONS.map((item) => ({
-                value: item.value,
-                label: t(item.label),
-              }))}
-              value={editingSetting.modes}
-            />
-            <Form.InputNumber
-              field='max_n'
-              label={t('图片最大数量')}
-              min={1}
-              max={12}
-              onChange={(value) =>
-                updateEditingSetting({ max_n: Number(value) || 1 })
-              }
-              value={editingSetting.max_n}
-            />
-            <Form.Select
-              field='video_modes'
-              label={t('视频支持模式')}
-              multiple
-              onChange={(value) => updateEditingSetting({ video_modes: value })}
-              optionList={VIDEO_MODEL_MODE_OPTIONS.map((item) => ({
-                value: item.value,
-                label: t(item.label),
-              }))}
-              value={editingSetting.video_modes || []}
-            />
+            <div className='mb-4 flex flex-col gap-2'>
+              <Text strong>{t('图片支持模式')}</Text>
+              <Checkbox.Group
+                onChange={(value) => updateEditingSetting({ modes: value })}
+                value={editingSetting.modes || []}
+              >
+                <div className='grid grid-cols-1 gap-2 md:grid-cols-2'>
+                  {IMAGE_MODEL_MODE_OPTIONS.map((item) => (
+                    <Checkbox key={item.value} value={item.value}>
+                      {t(item.label)}
+                    </Checkbox>
+                  ))}
+                </div>
+              </Checkbox.Group>
+            </div>
+            <div className='mb-4 flex flex-col gap-2'>
+              <Text strong>{t('视频支持模式')}</Text>
+              <Checkbox.Group
+                onChange={(value) =>
+                  updateEditingSetting({ video_modes: value })
+                }
+                value={editingSetting.video_modes || []}
+              >
+                <div className='grid grid-cols-1 gap-2 md:grid-cols-2'>
+                  {VIDEO_MODEL_MODE_OPTIONS.map((item) => (
+                    <Checkbox key={item.value} value={item.value}>
+                      {t(item.label)}
+                    </Checkbox>
+                  ))}
+                </div>
+              </Checkbox.Group>
+            </div>
             {editingSetting.video_modes?.includes('text_to_video') && (
               <>
                 <Form.Input
@@ -440,6 +678,77 @@ const ImageSetting = () => {
               </>
             )}
           </Form>
+        )}
+      </Modal>
+
+      <Modal
+        title={
+          editingPresetIndex === null
+            ? t('添加预设提示词')
+            : t('编辑预设提示词')
+        }
+        visible={presetModalVisible}
+        onCancel={closePresetModal}
+        onOk={upsertPromptPreset}
+        width={820}
+      >
+        {editingPreset && (
+          <div className='grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,280px)_minmax(0,1fr)]'>
+            <div className='flex flex-col gap-3'>
+              <Text strong>{t('预设图片')}</Text>
+              {editingPreset.image ? (
+                <div
+                  className='w-full overflow-hidden rounded-lg border bg-semi-color-fill-0'
+                  style={{ borderColor: 'var(--semi-color-border)' }}
+                >
+                  <img
+                    alt={editingPreset.name || t('预设图片')}
+                    className='block h-auto max-h-[420px] w-full object-contain'
+                    src={editingPreset.image}
+                  />
+                </div>
+              ) : (
+                <div
+                  className='flex min-h-[180px] w-full items-center justify-center rounded-lg border bg-semi-color-fill-0 text-semi-color-text-2'
+                  style={{ borderColor: 'var(--semi-color-border)' }}
+                >
+                  <div className='flex h-full items-center justify-center text-semi-color-text-2'>
+                    <IconImage size='extra-large' />
+                  </div>
+                </div>
+              )}
+              <Upload
+                accept='image/png,image/jpeg,image/jpg,image/webp'
+                beforeUpload={() => false}
+                fileList={presetFileList}
+                limit={1}
+                onChange={handlePresetImageChange}
+                uploadTrigger='custom'
+              >
+                <Button block icon={<IconImage />} theme='outline'>
+                  {editingPreset.image ? t('重新上传') : t('上传图片')}
+                </Button>
+              </Upload>
+            </div>
+
+            <Form>
+              <Form.Input
+                field='preset_name'
+                label={t('预设名称')}
+                onChange={(value) => updateEditingPreset({ name: value })}
+                placeholder={t('例如：商品图爆款封面')}
+                value={editingPreset.name}
+              />
+              <Form.TextArea
+                autosize={{ minRows: 8, maxRows: 14 }}
+                field='preset_prompt'
+                label={t('提示词内容')}
+                onChange={(value) => updateEditingPreset({ prompt: value })}
+                placeholder={t('输入预设提示词')}
+                value={editingPreset.prompt}
+              />
+            </Form>
+          </div>
         )}
       </Modal>
     </div>
