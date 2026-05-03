@@ -24,10 +24,12 @@ import {
   Button,
   Card,
   Empty,
+  Input,
   InputNumber,
   Modal,
   Select,
   Spin,
+  Switch,
   Tabs,
   TextArea,
   Typography,
@@ -47,7 +49,7 @@ import {
   UploadCloud,
   WandSparkles,
 } from 'lucide-react';
-import { API, showError, showSuccess } from '../../helpers';
+import { API, copy, showError, showSuccess } from '../../helpers';
 import { StatusContext } from '../../context/Status';
 import { setStatusData } from '../../helpers/data';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
@@ -68,7 +70,9 @@ const { Text } = Typography;
 const API_ENDPOINTS = {
   IMAGE_GENERATIONS: '/pg/images/generations',
   IMAGE_EDITS: '/pg/images/edits',
+  CHAT_COMPLETIONS: '/pg/chat/completions',
   USER_GROUPS: '/api/user/self/groups',
+  USER_MODELS: '/api/user/models',
 };
 
 const RATIOS = ['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9'];
@@ -121,6 +125,62 @@ const DEFAULT_CONFIG = {
   resolution: 'standard',
 };
 
+const TEMPLATE_DEFAULTS = {
+  productName: '',
+  sellingPoints: '',
+  audience: '',
+  scenario: '',
+  campaign: '',
+  brandColor: '#1677ff',
+  style: '高级商业摄影、干净背景、强转化视觉',
+  optimize: false,
+  imagine: true,
+  count: 4,
+  textModel: '',
+};
+
+const PRODUCT_TEMPLATE_SLOTS = [
+  {
+    key: 'main',
+    title: '商品主图',
+    ratio: '1:1',
+    resolution: 'standard',
+    usage: '电商平台商品主图，突出商品主体和核心卖点',
+  },
+  {
+    key: 'social',
+    title: '社媒封面',
+    ratio: '3:4',
+    resolution: 'standard',
+    usage: '小红书、朋友圈、内容账号封面，吸引点击',
+  },
+  {
+    key: 'poster',
+    title: '销售海报',
+    ratio: '9:16',
+    resolution: 'standard',
+    usage: '竖版销售海报，包含短标题、卖点和活动氛围',
+  },
+  {
+    key: 'hero',
+    title: '详情页头图',
+    ratio: '16:9',
+    resolution: 'standard',
+    usage: '落地页或商品详情页首屏头图，建立品牌信任',
+  },
+];
+
+const IMAGE_MODEL_HINTS = [
+  'image',
+  'dall',
+  'gpt-image',
+  'imagen',
+  'flux',
+  'wan',
+  'jimeng',
+  'midjourney',
+];
+
 const selectOptions = (items, labels = {}) =>
   items.map((value) => ({ label: labels[value] || value, value }));
 
@@ -155,6 +215,12 @@ const normalizeRatioForResolution = (ratio, resolution) => {
   return available.includes(ratio) ? ratio : available[0];
 };
 
+const getTemplateSlots = (count) =>
+  Array.from(
+    { length: Math.min(Math.max(Number(count) || 4, 1), 8) },
+    (_, index) => PRODUCT_TEMPLATE_SLOTS[index % PRODUCT_TEMPLATE_SLOTS.length],
+  );
+
 const resultSource = (result) => {
   if (result?.url) return result.url;
   if (result?.b64_json) return `data:image/png;base64,${result.b64_json}`;
@@ -176,8 +242,14 @@ const ImageStudio = () => {
   const [mode, setMode] = useState('generate');
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [groups, setGroups] = useState([]);
+  const [allModels, setAllModels] = useState([]);
   const [imageFiles, setImageFiles] = useState([]);
   const [imageFileList, setImageFileList] = useState([]);
+  const [productFiles, setProductFiles] = useState([]);
+  const [productFileList, setProductFileList] = useState([]);
+  const [logoFiles, setLogoFiles] = useState([]);
+  const [logoFileList, setLogoFileList] = useState([]);
+  const [templateForm, setTemplateForm] = useState(TEMPLATE_DEFAULTS);
   const [results, setResults] = useState([]);
   const [currentResultIndex, setCurrentResultIndex] = useState(0);
   const [lastError, setLastError] = useState('');
@@ -220,9 +292,19 @@ const ImageStudio = () => {
     [imageModelSettings, config.model],
   );
 
-  const currentModeKey = mode === 'edit' ? 'edits' : 'generations';
   const selectedSize = getImageSize(config.ratio, config.resolution);
   const maxCount = currentModelSetting?.max_n || 1;
+  const textModelOptions = useMemo(() => {
+    const imageModelSet = new Set(filteredModels);
+    const textModels = allModels.filter((model) => {
+      const normalized = String(model || '').toLowerCase();
+      return (
+        !imageModelSet.has(model) &&
+        !IMAGE_MODEL_HINTS.some((hint) => normalized.includes(hint))
+      );
+    });
+    return textModels.length > 0 ? textModels : allModels;
+  }, [allModels, filteredModels]);
 
   const groupOptions = useMemo(() => {
     if (groups.length === 0) return [{ value: '', label: t('用户默认分组') }];
@@ -239,9 +321,10 @@ const ImageStudio = () => {
     const loadData = async () => {
       setLoadingModels(true);
       try {
-        const [groupsRes, statusRes] = await Promise.all([
+        const [groupsRes, statusRes, modelsRes] = await Promise.all([
           API.get(API_ENDPOINTS.USER_GROUPS),
           API.get('/api/status'),
+          API.get(API_ENDPOINTS.USER_MODELS),
         ]);
 
         const groupData =
@@ -263,6 +346,10 @@ const ImageStudio = () => {
           statusDispatch({ type: 'set', payload: nextStatus });
           setStatusData(nextStatus);
         }
+
+        if (modelsRes.data?.success && Array.isArray(modelsRes.data?.data)) {
+          setAllModels(modelsRes.data.data);
+        }
       } catch (error) {
         showError(extractErrorMessage(error, t('加载模型与分组失败')));
       } finally {
@@ -283,14 +370,12 @@ const ImageStudio = () => {
   useEffect(() => {
     if (!currentModelSetting) return;
 
-    if (!imageModelSupportsMode(currentModelSetting, currentModeKey)) {
-      const nextMode = imageModelSupportsMode(
-        currentModelSetting,
-        'generations',
-      )
-        ? 'generate'
-        : 'edit';
-      setMode(nextMode);
+    const currentModeSupported =
+      imageModelSupportsMode(currentModelSetting, 'generations') ||
+      imageModelSupportsMode(currentModelSetting, 'edits');
+
+    if (!currentModeSupported && mode !== 'generate') {
+      setMode('generate');
     }
 
     setConfig((current) => ({
@@ -298,7 +383,7 @@ const ImageStudio = () => {
       count: Math.min(Math.max(Number(current.count) || 1, 1), maxCount),
       ratio: normalizeRatioForResolution(current.ratio, current.resolution),
     }));
-  }, [currentModelSetting, currentModeKey, maxCount]);
+  }, [currentModelSetting, maxCount, mode]);
 
   useEffect(() => {
     if (groups.length === 0) return;
@@ -306,6 +391,14 @@ const ImageStudio = () => {
       setConfig((current) => ({ ...current, group: groups[0].value }));
     }
   }, [groups, config.group]);
+
+  useEffect(() => {
+    if (textModelOptions.length === 0 || templateForm.textModel) return;
+    setTemplateForm((current) => ({
+      ...current,
+      textModel: textModelOptions[0],
+    }));
+  }, [textModelOptions, templateForm.textModel]);
 
   useEffect(() => {
     if (results.length === 0) {
@@ -321,10 +414,26 @@ const ImageStudio = () => {
     setConfig((current) => ({ ...current, [key]: value }));
   };
 
+  const updateTemplateForm = (key, value) => {
+    setTemplateForm((current) => ({ ...current, [key]: value }));
+  };
+
   const handleReferenceUploadChange = ({ fileList = [] }) => {
     const nextFileList = fileList.filter((item) => item.fileInstance);
     setImageFileList(nextFileList);
     setImageFiles(nextFileList.map((item) => item.fileInstance));
+  };
+
+  const handleProductUploadChange = ({ fileList = [] }) => {
+    const nextFileList = fileList.filter((item) => item.fileInstance);
+    setProductFileList(nextFileList);
+    setProductFiles(nextFileList.map((item) => item.fileInstance));
+  };
+
+  const handleLogoUploadChange = ({ fileList = [] }) => {
+    const nextFileList = fileList.filter((item) => item.fileInstance);
+    setLogoFileList(nextFileList);
+    setLogoFiles(nextFileList.map((item) => item.fileInstance));
   };
 
   const loadHistory = async () => {
@@ -448,39 +557,57 @@ const ImageStudio = () => {
     </div>
   );
 
-  const buildGenerationPayload = () => {
+  const buildGenerationPayload = ({
+    prompt = config.prompt,
+    size = selectedSize,
+  } = {}) => {
     const payload = {
       model: config.model,
-      prompt: config.prompt,
+      prompt,
       n: 1,
       response_format: 'b64_json',
     };
     if (config.group) payload.group = config.group;
-    if (selectedSize) payload.size = selectedSize;
+    if (size) payload.size = size;
     return payload;
   };
 
-  const buildFormData = () => {
+  const buildFormData = ({
+    prompt = config.prompt,
+    size = selectedSize,
+    files = imageFiles,
+  } = {}) => {
     const formData = new FormData();
     formData.append('model', config.model);
     if (config.group) formData.append('group', config.group);
-    formData.append('prompt', config.prompt);
+    formData.append('prompt', prompt);
     formData.append('n', '1');
     formData.append('response_format', 'b64_json');
-    if (selectedSize) formData.append('size', selectedSize);
-    imageFiles.forEach((file) => formData.append('image[]', file));
+    if (size) formData.append('size', size);
+    files.forEach((file) => formData.append('image[]', file));
     return formData;
   };
 
-  const requestOneImage = async () => {
+  const requestOneImage = async ({
+    prompt = config.prompt,
+    size = selectedSize,
+    files = imageFiles,
+    requestMode,
+  } = {}) => {
+    const effectiveMode =
+      requestMode || (files.length > 0 ? 'edit' : 'generate');
     const res =
-      mode === 'edit'
-        ? await API.post(API_ENDPOINTS.IMAGE_EDITS, buildFormData(), {
-            skipErrorHandler: true,
-          })
+      effectiveMode === 'edit'
+        ? await API.post(
+            API_ENDPOINTS.IMAGE_EDITS,
+            buildFormData({ prompt, size, files }),
+            {
+              skipErrorHandler: true,
+            },
+          )
         : await API.post(
             API_ENDPOINTS.IMAGE_GENERATIONS,
-            buildGenerationPayload(),
+            buildGenerationPayload({ prompt, size }),
             {
               skipErrorHandler: true,
             },
@@ -495,16 +622,118 @@ const ImageStudio = () => {
     if (!source) return;
 
     await addImageHistoryRecord({
-      mode,
+      mode: result.mode || mode,
       model: config.model,
       group: config.group,
-      prompt: config.prompt,
-      ratio: config.ratio,
-      resolution: config.resolution,
-      size: selectedSize,
+      prompt: result.prompt || config.prompt,
+      ratio: result.ratio || config.ratio,
+      resolution: result.resolution || config.resolution,
+      size: result.size || selectedSize,
       image: source,
+      template_slot: result.template_slot || '',
       revised_prompt: result.revised_prompt || '',
     });
+  };
+
+  const buildTemplatePrompt = (slot) => {
+    const lines = [
+      '把这张图片做成商品图，文字语言是中文。',
+      `生成一张${slot.title}。`,
+      `用途：${slot.usage}。`,
+      templateForm.productName && `商品名称：${templateForm.productName}`,
+      templateForm.sellingPoints && `核心卖点：${templateForm.sellingPoints}`,
+      templateForm.audience && `目标人群：${templateForm.audience}`,
+      templateForm.scenario && `使用场景：${templateForm.scenario}`,
+      templateForm.campaign && `活动文案：${templateForm.campaign}`,
+      templateForm.brandColor && `品牌主色：${templateForm.brandColor}`,
+      templateForm.style && `视觉风格：${templateForm.style}`,
+      productFiles.length > 0
+        ? '严格参考上传的商品图片，保持商品主体、颜色、材质和关键结构一致。'
+        : '没有商品参考图时，请根据商品信息创建可信、清晰的商业视觉主体。',
+      logoFiles.length > 0
+        ? '参考上传的 Logo 或品牌图，保持品牌调性，但不要让 Logo 遮挡商品主体。'
+        : '',
+      templateForm.imagine
+        ? '请自行发挥想象：主动补全商业场景、构图、道具、光影、营销氛围和短标题表达，让图片更像可直接售卖的商品图。'
+        : '不要自行扩展未提供的商品功能、品牌承诺或活动信息；只围绕已提供的图片和文字做商业化呈现。',
+      '画面应商业化、干净、有转化感；文字只使用短标题和少量大字，避免生成密集小字。',
+      '不要出现水印、二维码、乱码、低清晰度、畸变商品、额外品牌标识。',
+    ];
+
+    return lines.filter(Boolean).join('\n');
+  };
+
+  const extractOptimizedPrompt = (content, fallback) => {
+    if (!content) return fallback;
+    const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+    const raw = fenced || content;
+    try {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed.final_prompt === 'string') return parsed.final_prompt;
+      if (typeof parsed.prompt === 'string') return parsed.prompt;
+    } catch {
+      // Some models return prose; use it directly if it is concise enough.
+    }
+    return raw.trim() || fallback;
+  };
+
+  const optimizeTemplatePrompt = async (slot, basePrompt) => {
+    if (!templateForm.optimize) return basePrompt;
+    if (!templateForm.textModel) throw new Error(t('请选择提示词优化模型'));
+
+    const res = await API.post(
+      API_ENDPOINTS.CHAT_COMPLETIONS,
+      {
+        model: templateForm.textModel,
+        group: config.group,
+        stream: false,
+        temperature: 0.4,
+        messages: [
+          {
+            role: 'system',
+            content:
+              '你是商业生图提示词专家。请把用户输入优化成适合图像生成模型的中文提示词，只返回 JSON，不要解释。',
+          },
+          {
+            role: 'user',
+            content:
+              '请输出 {"final_prompt":"..."}。要求保留商品一致性、商业构图、品牌色、用途和限制。\n\n' +
+              `物料：${slot.title}\n${basePrompt}`,
+          },
+        ],
+      },
+      { skipErrorHandler: true },
+    );
+
+    const content = res.data?.choices?.[0]?.message?.content || '';
+    return extractOptimizedPrompt(content, basePrompt);
+  };
+
+  const requestTemplateSlot = async (slot) => {
+    const size = getImageSize(slot.ratio, slot.resolution);
+    const basePrompt = buildTemplatePrompt(slot);
+    const prompt = await optimizeTemplatePrompt(slot, basePrompt);
+    const canEdit =
+      (productFiles.length > 0 || logoFiles.length > 0) &&
+      imageModelSupportsMode(currentModelSetting, 'edits');
+    const requestMode = canEdit ? 'edit' : 'generate';
+    const result = await requestOneImage({
+      prompt,
+      size,
+      files: [...productFiles, ...logoFiles],
+      requestMode,
+    });
+
+    return {
+      ...result,
+      mode: 'template',
+      prompt,
+      ratio: slot.ratio,
+      resolution: slot.resolution,
+      size,
+      template_slot: slot.title,
+      template_key: slot.key,
+    };
   };
 
   const handleGenerate = async () => {
@@ -512,16 +741,27 @@ const ImageStudio = () => {
       showError(t('当前模型没有生图配置'));
       return;
     }
-    if (!imageModelSupportsMode(currentModelSetting, currentModeKey)) {
-      showError(t('当前模型不支持该生图模式'));
+    if (mode === 'template') {
+      await handleTemplateGenerate();
       return;
     }
     if (!config.prompt.trim()) {
       showError(t('请输入提示词'));
       return;
     }
-    if (mode === 'edit' && imageFiles.length === 0) {
-      showError(t('请先上传参考图'));
+    const requestMode = imageFiles.length > 0 ? 'edit' : 'generate';
+    if (
+      requestMode === 'edit' &&
+      !imageModelSupportsMode(currentModelSetting, 'edits')
+    ) {
+      showError(t('当前模型不支持该生图模式'));
+      return;
+    }
+    if (
+      requestMode === 'generate' &&
+      !imageModelSupportsMode(currentModelSetting, 'generations')
+    ) {
+      showError(t('该模型需要先上传参考图'));
       return;
     }
 
@@ -537,21 +777,32 @@ const ImageStudio = () => {
     setImageErrors({});
 
     try {
-      for (let index = 0; index < total; index += 1) {
+      const tasks = Array.from({ length: total }, async () => {
         try {
-          const result = await requestOneImage();
+          const result = {
+            ...(await requestOneImage({ requestMode })),
+            mode: requestMode,
+            prompt: config.prompt,
+            ratio: config.ratio,
+            resolution: config.resolution,
+            size: selectedSize,
+          };
           setResults((current) => [...current, result]);
           try {
             await saveImageHistory(result);
           } catch {
             historySaveFailed = true;
           }
+          return result;
         } catch (error) {
           failures.push(extractErrorMessage(error, t('生图请求失败')));
         } finally {
-          setGeneratedCount(index + 1);
+          setGeneratedCount((current) => current + 1);
         }
-      }
+        return null;
+      });
+
+      await Promise.all(tasks);
 
       if (failures.length === total) {
         const message = failures[0] || t('生图请求失败');
@@ -561,6 +812,130 @@ const ImageStudio = () => {
         setLastError(
           t('部分图片生成失败：') + [...new Set(failures)].join('；'),
         );
+      }
+
+      if (historySaveFailed) {
+        showError(t('历史记录保存失败'));
+      }
+      await loadHistory();
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleRegenerateResult = async (index) => {
+    const current = results[index];
+    if (!current) return;
+
+    setGenerating(true);
+    setLastError('');
+    try {
+      const currentSlot = PRODUCT_TEMPLATE_SLOTS.find(
+        (slot) => slot.key === current.template_key,
+      );
+      const nextResult = currentSlot
+        ? await requestTemplateSlot(currentSlot)
+        : {
+            ...(await requestOneImage({
+              prompt: current.prompt || config.prompt,
+              size: current.size || selectedSize,
+              requestMode: current.mode === 'edit' ? 'edit' : 'generate',
+            })),
+            mode: current.mode || mode,
+            prompt: current.prompt || config.prompt,
+            size: current.size || selectedSize,
+          };
+
+      setResults((currentResults) =>
+        currentResults.map((item, itemIndex) =>
+          itemIndex === index ? nextResult : item,
+        ),
+      );
+      await saveImageHistory(nextResult);
+      await loadHistory();
+      showSuccess(t('重新生成成功'));
+    } catch (error) {
+      const message = extractErrorMessage(error, t('生图请求失败'));
+      setLastError(message);
+      showError(message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleTemplateGenerate = async () => {
+    const canGenerate = imageModelSupportsMode(
+      currentModelSetting,
+      'generations',
+    );
+    const canEdit = imageModelSupportsMode(currentModelSetting, 'edits');
+    if (!canGenerate && !canEdit) {
+      showError(t('当前模型不支持模板工作流'));
+      return;
+    }
+    if (
+      !canGenerate &&
+      canEdit &&
+      productFiles.length === 0 &&
+      logoFiles.length === 0
+    ) {
+      showError(t('该模型需要先上传参考图'));
+      return;
+    }
+    if (
+      productFiles.length === 0 &&
+      logoFiles.length === 0 &&
+      !templateForm.productName.trim() &&
+      !templateForm.sellingPoints.trim()
+    ) {
+      showError(t('请上传商品图或填写商品信息'));
+      return;
+    }
+    if (templateForm.optimize && !templateForm.textModel) {
+      showError(t('请选择提示词优化模型'));
+      return;
+    }
+
+    const failures = [];
+    let historySaveFailed = false;
+
+    setGenerating(true);
+    setGeneratedCount(0);
+    setLastError('');
+    setResults([]);
+    setCurrentResultIndex(0);
+    setImageErrors({});
+
+    try {
+      const templateSlots = getTemplateSlots(templateForm.count);
+      const tasks = templateSlots.map(async (slot) => {
+        try {
+          const result = await requestTemplateSlot(slot);
+          setResults((current) => [...current, result]);
+          try {
+            await saveImageHistory(result);
+          } catch {
+            historySaveFailed = true;
+          }
+          return result;
+        } catch (error) {
+          failures.push(
+            `${t(slot.title)}: ${extractErrorMessage(error, t('生图请求失败'))}`,
+          );
+        } finally {
+          setGeneratedCount((current) => current + 1);
+        }
+        return null;
+      });
+
+      await Promise.all(tasks);
+
+      if (failures.length === getTemplateSlots(templateForm.count).length) {
+        const message = failures[0] || t('生图请求失败');
+        setLastError(message);
+        showError(message);
+      } else if (failures.length > 0) {
+        setLastError(t('部分图片生成失败：') + failures.join('；'));
       }
 
       if (historySaveFailed) {
@@ -590,6 +965,15 @@ const ImageStudio = () => {
 
   const handleHistoryDownload = (record) => {
     downloadSource(record.image, `image-studio-history-${record.id}.png`);
+  };
+
+  const handleCopyPrompt = async (promptText) => {
+    if (!promptText) return;
+    if (await copy(promptText)) {
+      showSuccess(t('复制成功'));
+    } else {
+      showError(t('复制失败'));
+    }
   };
 
   const formatHistoryTime = (timestamp) => {
@@ -677,10 +1061,243 @@ const ImageStudio = () => {
     );
   };
 
+  const renderModelGroupSettings = () => (
+    <div
+      className='grid gap-3'
+      style={{
+        gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(0, 1fr)',
+      }}
+    >
+      <div className='flex flex-col gap-2'>
+        <Text strong>{t('模型')}</Text>
+        <Select
+          disabled={generating || filteredModels.length === 0}
+          filter
+          optionList={selectOptions(filteredModels)}
+          onChange={(value) => updateConfig('model', value)}
+          placeholder={t('请选择模型')}
+          value={config.model}
+        />
+      </div>
+
+      <div className='flex flex-col gap-2'>
+        <Text strong>{t('分组')}</Text>
+        <Select
+          disabled={generating}
+          optionList={groupOptions}
+          onChange={(value) => updateConfig('group', value)}
+          value={config.group}
+        />
+      </div>
+    </div>
+  );
+
+  const renderTemplateWorkflow = () => (
+    <div className='flex flex-col gap-4'>
+      <Banner
+        closeIcon={null}
+        description={t('一次生成商品主图、社媒封面、销售海报和详情页头图。')}
+        type='info'
+      />
+
+      <div className='grid grid-cols-2 gap-3'>
+        <Button
+          disabled={generating}
+          onClick={() => updateTemplateForm('optimize', false)}
+          theme={!templateForm.optimize ? 'solid' : 'outline'}
+          type={!templateForm.optimize ? 'primary' : 'tertiary'}
+        >
+          {t('快速生成')}
+        </Button>
+        <Button
+          disabled={generating}
+          onClick={() => updateTemplateForm('optimize', true)}
+          theme={templateForm.optimize ? 'solid' : 'outline'}
+          type={templateForm.optimize ? 'primary' : 'tertiary'}
+        >
+          {t('AI 优化')}
+        </Button>
+      </div>
+
+      {renderModelGroupSettings()}
+
+      {templateForm.optimize && (
+        <div className='flex flex-col gap-2'>
+          <Text strong>{t('提示词优化模型')}</Text>
+          <Select
+            disabled={generating || textModelOptions.length === 0}
+            filter
+            optionList={selectOptions(textModelOptions)}
+            onChange={(value) => updateTemplateForm('textModel', value)}
+            placeholder={t('请选择模型')}
+            value={templateForm.textModel}
+          />
+        </div>
+      )}
+
+      <div className='grid grid-cols-2 gap-3'>
+        <div className='flex flex-col gap-2'>
+          <Text strong>{t('生成张数')}</Text>
+          <InputNumber
+            disabled={generating}
+            max={8}
+            min={1}
+            onChange={(value) =>
+              updateTemplateForm('count', Number(value) || 4)
+            }
+            value={templateForm.count}
+          />
+        </div>
+        <div className='flex flex-col gap-2'>
+          <Text strong>{t('自行发挥想象')}</Text>
+          <div className='semi-input-default flex items-center justify-between gap-3'>
+            <Text size='small' type='tertiary'>
+              {templateForm.imagine ? t('开') : t('关')}
+            </Text>
+            <Switch
+              checked={templateForm.imagine}
+              disabled={generating}
+              onChange={(checked) => updateTemplateForm('imagine', checked)}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className='flex flex-col gap-2'>
+        <Text strong>{t('商品参考图')}</Text>
+        <Upload
+          accept='image/png,image/jpeg,image/webp'
+          beforeUpload={() => false}
+          fileList={productFileList}
+          limit={4}
+          multiple
+          onChange={handleProductUploadChange}
+          uploadTrigger='custom'
+        >
+          <Button
+            disabled={generating}
+            icon={<UploadCloud size={16} />}
+            theme='outline'
+          >
+            {t('上传商品图')}
+          </Button>
+        </Upload>
+        {productFiles.length > 0 && (
+          <Text size='small' type='tertiary'>
+            {productFiles.map((file) => file.name).join(', ')}
+          </Text>
+        )}
+      </div>
+
+      <div className='flex flex-col gap-2'>
+        <Text strong>{t('Logo/品牌图')}</Text>
+        <Upload
+          accept='image/png,image/jpeg,image/webp'
+          beforeUpload={() => false}
+          fileList={logoFileList}
+          limit={1}
+          onChange={handleLogoUploadChange}
+          uploadTrigger='custom'
+        >
+          <Button
+            disabled={generating}
+            icon={<UploadCloud size={16} />}
+            theme='outline'
+          >
+            {t('上传 Logo')}
+          </Button>
+        </Upload>
+      </div>
+
+      <div className='flex flex-col gap-2'>
+        <Text strong>{t('商品名称')}</Text>
+        <Input
+          disabled={generating}
+          onChange={(value) => updateTemplateForm('productName', value)}
+          placeholder={t('例如：AI 写作训练营')}
+          value={templateForm.productName}
+        />
+      </div>
+
+      <div className='flex flex-col gap-2'>
+        <Text strong>{t('核心卖点')}</Text>
+        <TextArea
+          autosize={{ minRows: 3, maxRows: 6 }}
+          disabled={generating}
+          onChange={(value) => updateTemplateForm('sellingPoints', value)}
+          placeholder={t('用 2-4 句话描述最想突出的卖点')}
+          value={templateForm.sellingPoints}
+        />
+      </div>
+
+      <div className='grid grid-cols-2 gap-3'>
+        <div className='flex flex-col gap-2'>
+          <Text strong>{t('目标人群')}</Text>
+          <Input
+            disabled={generating}
+            onChange={(value) => updateTemplateForm('audience', value)}
+            placeholder={t('例如：职场新人、内容创作者')}
+            value={templateForm.audience}
+          />
+        </div>
+        <div className='flex flex-col gap-2'>
+          <Text strong>{t('品牌色')}</Text>
+          <div className='image-studio-color-picker semi-input-default flex items-center gap-2'>
+            <input
+              aria-label={t('品牌色')}
+              disabled={generating}
+              onChange={(event) =>
+                updateTemplateForm('brandColor', event.target.value)
+              }
+              onInput={(event) =>
+                updateTemplateForm('brandColor', event.currentTarget.value)
+              }
+              type='color'
+              value={templateForm.brandColor}
+            />
+            <Text size='small' type='tertiary'>
+              {templateForm.brandColor}
+            </Text>
+          </div>
+        </div>
+      </div>
+
+      <div className='flex flex-col gap-2'>
+        <Text strong>{t('使用场景')}</Text>
+        <Input
+          disabled={generating}
+          onChange={(value) => updateTemplateForm('scenario', value)}
+          placeholder={t('例如：通勤学习、直播间转化、课程详情页')}
+          value={templateForm.scenario}
+        />
+      </div>
+
+      <div className='flex flex-col gap-2'>
+        <Text strong>{t('活动文案')}</Text>
+        <Input
+          disabled={generating}
+          onChange={(value) => updateTemplateForm('campaign', value)}
+          placeholder={t('例如：限时 7 折、今晚 20:00 开课')}
+          value={templateForm.campaign}
+        />
+      </div>
+
+      <div className='flex flex-col gap-2'>
+        <Text strong>{t('视觉风格')}</Text>
+        <TextArea
+          autosize={{ minRows: 2, maxRows: 4 }}
+          disabled={generating}
+          onChange={(value) => updateTemplateForm('style', value)}
+          value={templateForm.style}
+        />
+      </div>
+    </div>
+  );
+
   const renderCurrentResults = () => {
     if (results.length === 0) {
       return (
-        <div className='flex min-h-[420px] items-center justify-center'>
+        <div className='flex h-full min-h-[420px] items-center justify-center'>
           <Empty
             description={t('生成的图片会显示在这里')}
             image={<ImageIcon size={44} color='var(--semi-color-text-2)' />}
@@ -694,15 +1311,25 @@ const ImageStudio = () => {
     const source = resultSource(result);
     const imageFailed = imageErrors[currentResultIndex];
     const hasMultipleResults = results.length > 1;
+    const promptText = result.prompt || result.revised_prompt || config.prompt;
 
     return (
-      <div className='flex flex-col gap-3'>
+      <div className='flex h-full min-h-0 flex-col gap-3'>
+        {result.template_slot && (
+          <div className='flex flex-wrap items-center justify-between gap-2'>
+            <Text strong>{t(result.template_slot)}</Text>
+            <Text size='small' type='tertiary'>
+              {result.size || t('自动')}
+            </Text>
+          </div>
+        )}
+
         <div
           className='relative flex items-center justify-center overflow-hidden rounded'
           style={{
             background: 'var(--semi-color-fill-0)',
-            height: isMobile ? 380 : 'calc(100vh - 250px)',
-            minHeight: 340,
+            flex: 1,
+            minHeight: isMobile ? 300 : 0,
           }}
         >
           {source && !imageFailed ? (
@@ -752,160 +1379,186 @@ const ImageStudio = () => {
           <Text type='tertiary'>
             {currentResultIndex + 1}/{results.length}
           </Text>
-          <Button
-            disabled={!source}
-            icon={<Download size={16} />}
-            onClick={() => handleDownload(result, currentResultIndex)}
-            theme='outline'
-          >
-            {t('下载')}
-          </Button>
+          <div className='flex flex-wrap items-center justify-end gap-2'>
+            <Button
+              disabled={!promptText}
+              onClick={() => handleCopyPrompt(promptText)}
+              theme='outline'
+            >
+              {t('复制提示词')}
+            </Button>
+            <Button
+              disabled={generating}
+              icon={<Sparkles size={16} />}
+              onClick={() => handleRegenerateResult(currentResultIndex)}
+              theme='outline'
+            >
+              {t('重新生成')}
+            </Button>
+            <Button
+              disabled={!source}
+              icon={<Download size={16} />}
+              onClick={() => handleDownload(result, currentResultIndex)}
+              theme='outline'
+            >
+              {t('下载')}
+            </Button>
+          </div>
         </div>
 
-        {result.revised_prompt && (
+        {promptText && (
           <Text
             ellipsis={{ showTooltip: true, rows: 3 }}
             size='small'
             type='tertiary'
           >
-            {result.revised_prompt}
+            {promptText}
           </Text>
         )}
-
       </div>
     );
   };
 
   const renderHistoryRecords = () => (
-    <Spin spinning={historyLoading}>
-      <div className='mb-3 flex items-center justify-between gap-3'>
-        <Text type='tertiary'>
-          {t('仅保存在当前浏览器，最多保留 50 条')}
-        </Text>
-        <Button
-          disabled={historyRecords.length === 0}
-          icon={<Trash2 size={15} />}
-          onClick={removeAllHistory}
-          theme='outline'
-          type='danger'
-        >
-          {t('清空')}
-        </Button>
-      </div>
-
-      {historyRecords.length === 0 ? (
-        <div className='flex min-h-[380px] items-center justify-center'>
-          <Empty
-            description={t('生成成功后会自动保存到这里')}
-            image={<History size={44} color='var(--semi-color-text-2)' />}
-            title={t('暂无历史记录')}
-          />
+    <Spin spinning={historyLoading} wrapperClassName='h-full'>
+      <div className='flex h-full min-h-0 flex-col'>
+        <div className='mb-3 flex items-center justify-between gap-3'>
+          <Text type='tertiary'>{t('仅保存在当前浏览器，最多保留 50 条')}</Text>
+          <Button
+            disabled={historyRecords.length === 0}
+            icon={<Trash2 size={15} />}
+            onClick={removeAllHistory}
+            theme='outline'
+            type='danger'
+          >
+            {t('清空')}
+          </Button>
         </div>
-      ) : (
-        <div
-          className='grid gap-4'
-          style={{
-            gridTemplateColumns: isMobile
-              ? '1fr'
-              : 'repeat(auto-fill, minmax(220px, 1fr))',
-          }}
-        >
-          {historyRecords.map((record) => {
-            const imageFailed = historyImageErrors[record.id];
-            return (
-              <Card
-                bordered
-                bodyStyle={{ padding: 12 }}
-                className='overflow-hidden'
-                key={record.id}
-              >
-                <button
-                  className='mb-3 flex w-full items-center justify-center overflow-hidden rounded border-0 p-0'
-                  onClick={() => previewHistoryRecord(record)}
-                  style={{
-                    aspectRatio: '1 / 1',
-                    background: 'var(--semi-color-fill-0)',
-                    cursor: 'pointer',
-                  }}
-                  type='button'
+
+        {historyRecords.length === 0 ? (
+          <div className='flex min-h-[380px] flex-1 items-center justify-center'>
+            <Empty
+              description={t('生成成功后会自动保存到这里')}
+              image={<History size={44} color='var(--semi-color-text-2)' />}
+              title={t('暂无历史记录')}
+            />
+          </div>
+        ) : (
+          <div
+            className='grid flex-1 content-start gap-4 overflow-y-auto pr-1'
+            style={{
+              gridTemplateColumns: isMobile
+                ? '1fr'
+                : 'repeat(auto-fill, minmax(220px, 1fr))',
+            }}
+          >
+            {historyRecords.map((record) => {
+              const imageFailed = historyImageErrors[record.id];
+              return (
+                <Card
+                  bordered
+                  bodyStyle={{ padding: 12 }}
+                  className='overflow-hidden'
+                  key={record.id}
                 >
-                  {record.image && !imageFailed ? (
-                    <img
-                      alt={record.revised_prompt || record.prompt}
-                      className='h-full w-full object-cover'
-                      onError={() =>
-                        setHistoryImageErrors((current) => ({
-                          ...current,
-                          [record.id]: true,
-                        }))
-                      }
-                      src={record.image}
-                    />
-                  ) : (
-                    <Text type='tertiary'>{t('图片加载失败')}</Text>
-                  )}
-                </button>
-
-                <div className='mb-3 flex flex-col gap-1'>
-                  <Text ellipsis={{ showTooltip: true }} strong>
-                    {record.model || t('未知模型')}
-                  </Text>
-                  <Text size='small' type='tertiary'>
-                    {record.mode === 'edit' ? t('图生图') : t('文生图')} ·{' '}
-                    {record.size || t('自动')}
-                  </Text>
-                  <Text
-                    className='flex items-center gap-1'
-                    size='small'
-                    type='tertiary'
-                  >
-                    <Clock3 size={13} />
-                    {formatHistoryTime(record.created_at)}
-                  </Text>
-                  <Text
-                    ellipsis={{ showTooltip: true, rows: 2 }}
-                    size='small'
-                    type='tertiary'
-                  >
-                    {record.revised_prompt || record.prompt}
-                  </Text>
-                </div>
-
-                <div className='grid grid-cols-3 gap-2'>
-                  <Button
-                    icon={<Eye size={15} />}
+                  <button
+                    className='mb-3 flex w-full items-center justify-center overflow-hidden rounded border-0 p-0'
                     onClick={() => previewHistoryRecord(record)}
-                    theme='outline'
+                    style={{
+                      aspectRatio: '1 / 1',
+                      background: 'var(--semi-color-fill-0)',
+                      cursor: 'pointer',
+                    }}
+                    type='button'
                   >
-                    {t('查看')}
-                  </Button>
-                  <Button
-                    disabled={!record.image}
-                    icon={<Download size={15} />}
-                    onClick={() => handleHistoryDownload(record)}
-                    theme='outline'
-                  >
-                    {t('下载')}
-                  </Button>
-                  <Button
-                    icon={<Trash2 size={15} />}
-                    onClick={() => removeHistoryRecord(record)}
-                    theme='outline'
-                    type='danger'
-                  >
-                    {t('删除')}
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                    {record.image && !imageFailed ? (
+                      <img
+                        alt={record.revised_prompt || record.prompt}
+                        className='h-full w-full object-cover'
+                        onError={() =>
+                          setHistoryImageErrors((current) => ({
+                            ...current,
+                            [record.id]: true,
+                          }))
+                        }
+                        src={record.image}
+                      />
+                    ) : (
+                      <Text type='tertiary'>{t('图片加载失败')}</Text>
+                    )}
+                  </button>
+
+                  <div className='mb-3 flex flex-col gap-1'>
+                    <Text ellipsis={{ showTooltip: true }} strong>
+                      {record.model || t('未知模型')}
+                    </Text>
+                    <Text size='small' type='tertiary'>
+                      {record.template_slot
+                        ? t(record.template_slot)
+                        : record.mode === 'edit'
+                          ? t('图生图')
+                          : t('文生图')}{' '}
+                      · {record.size || t('自动')}
+                    </Text>
+                    <Text
+                      className='flex items-center gap-1'
+                      size='small'
+                      type='tertiary'
+                    >
+                      <Clock3 size={13} />
+                      {formatHistoryTime(record.created_at)}
+                    </Text>
+                    <Text
+                      ellipsis={{ showTooltip: true, rows: 2 }}
+                      size='small'
+                      type='tertiary'
+                    >
+                      {record.revised_prompt || record.prompt}
+                    </Text>
+                  </div>
+
+                  <div className='grid grid-cols-3 gap-2'>
+                    <Button
+                      icon={<Eye size={15} />}
+                      onClick={() => previewHistoryRecord(record)}
+                      theme='outline'
+                    >
+                      {t('查看')}
+                    </Button>
+                    <Button
+                      disabled={!record.image}
+                      icon={<Download size={15} />}
+                      onClick={() => handleHistoryDownload(record)}
+                      theme='outline'
+                    >
+                      {t('下载')}
+                    </Button>
+                    <Button
+                      icon={<Trash2 size={15} />}
+                      onClick={() => removeHistoryRecord(record)}
+                      theme='outline'
+                      type='danger'
+                    >
+                      {t('删除')}
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </Spin>
   );
 
   return (
-    <div className='mt-[60px] px-2'>
+    <div
+      className={
+        isMobile
+          ? 'mt-[60px] px-2'
+          : 'mt-[60px] flex h-[calc(100vh-108px)] flex-col overflow-hidden px-2'
+      }
+    >
       {lastError && (
         <Banner
           className='mb-4'
@@ -916,14 +1569,29 @@ const ImageStudio = () => {
       )}
 
       <div
-        className='grid gap-4'
+        className={
+          isMobile ? 'grid gap-4' : 'grid min-h-0 flex-1 gap-4 overflow-hidden'
+        }
         style={{
           gridTemplateColumns: isMobile ? '1fr' : '340px minmax(0, 1fr)',
-          alignItems: 'start',
+          alignItems: 'stretch',
         }}
       >
         <Card
           bordered
+          bodyStyle={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: isMobile ? undefined : 1,
+            minHeight: 0,
+            overflowX: 'hidden',
+            overflowY: isMobile ? undefined : 'hidden',
+          }}
+          className={
+            isMobile
+              ? undefined
+              : 'image-studio-create-card flex min-h-0 flex-col overflow-hidden'
+          }
           title={
             <div className='flex items-center gap-2'>
               <WandSparkles size={16} />
@@ -931,119 +1599,114 @@ const ImageStudio = () => {
             </div>
           }
         >
-          <Spin spinning={loadingModels}>
-            <div className='flex flex-col gap-4'>
+          <Spin
+            spinning={loadingModels}
+            wrapperClassName={isMobile ? undefined : 'image-studio-create-spin'}
+          >
+            <div
+              className={
+                isMobile
+                  ? 'flex flex-col gap-4'
+                  : 'flex h-full min-h-0 flex-col gap-4 pr-1'
+              }
+            >
               <Tabs
                 activeKey={mode}
                 onChange={(key) => setMode(key)}
                 type='button'
               >
-                {imageModelSupportsMode(currentModelSetting, 'generations') && (
-                  <Tabs.TabPane itemKey='generate' tab={t('文生图')} />
+                {(imageModelSupportsMode(currentModelSetting, 'generations') ||
+                  imageModelSupportsMode(currentModelSetting, 'edits')) && (
+                  <Tabs.TabPane itemKey='generate' tab={t('生图')} />
                 )}
-                {imageModelSupportsMode(currentModelSetting, 'edits') && (
-                  <Tabs.TabPane itemKey='edit' tab={t('图生图')} />
+                {(imageModelSupportsMode(currentModelSetting, 'generations') ||
+                  imageModelSupportsMode(currentModelSetting, 'edits')) && (
+                  <Tabs.TabPane itemKey='template' tab={t('商品图')} />
                 )}
               </Tabs>
 
-              {mode === 'edit' && (
-                <div className='flex flex-col gap-2'>
-                  <Text strong>{t('参考图')}</Text>
-                  <Upload
-                    accept='image/png,image/jpeg,image/webp'
-                    beforeUpload={() => false}
-                    fileList={imageFileList}
-                    multiple
-                    onChange={handleReferenceUploadChange}
-                    uploadTrigger='custom'
-                  >
-                    <Button
-                      disabled={generating}
-                      icon={<UploadCloud size={16} />}
-                      theme='outline'
-                    >
-                      {t('上传参考图')}
-                    </Button>
-                  </Upload>
-                  {imageFiles.length > 0 && (
-                    <Text type='tertiary' size='small'>
-                      {imageFiles.map((file) => file.name).join(', ')}
-                    </Text>
-                  )}
-                </div>
-              )}
-
               <div
-                className='grid gap-3'
-                style={{
-                  gridTemplateColumns: isMobile
-                    ? '1fr'
-                    : 'minmax(0, 1fr) minmax(0, 1fr)',
-                }}
+                className={
+                  isMobile
+                    ? 'flex flex-col gap-4'
+                    : 'image-studio-settings-scroll flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-2'
+                }
               >
-                <div className='flex flex-col gap-2'>
-                  <Text strong>{t('模型')}</Text>
-                  <Select
-                    disabled={generating || filteredModels.length === 0}
-                    filter
-                    optionList={selectOptions(filteredModels)}
-                    onChange={(value) => updateConfig('model', value)}
-                    placeholder={t('请选择模型')}
-                    value={config.model}
-                  />
-                </div>
+                {mode !== 'template' && renderModelGroupSettings()}
 
-                <div className='flex flex-col gap-2'>
-                  <Text strong>{t('分组')}</Text>
-                  <Select
-                    disabled={generating}
-                    optionList={groupOptions}
-                    onChange={(value) => updateConfig('group', value)}
-                    value={config.group}
-                  />
-                </div>
-              </div>
+                {mode === 'template' && renderTemplateWorkflow()}
 
-              <div className='flex flex-col gap-2'>
-                <Text strong>{t('提示词')}</Text>
-                <TextArea
-                  autosize={{ minRows: 5, maxRows: 10 }}
-                  disabled={generating}
-                  onChange={(value) => updateConfig('prompt', value)}
-                  placeholder={t('描述你想生成的图片')}
-                  value={config.prompt}
-                />
-              </div>
+                {mode !== 'template' && (
+                  <>
+                    <div className='flex flex-col gap-2'>
+                      <Text strong>{t('提示词')}</Text>
+                      <TextArea
+                        autosize={{ minRows: 5, maxRows: 10 }}
+                        disabled={generating}
+                        onChange={(value) => updateConfig('prompt', value)}
+                        placeholder={t('描述你想生成的图片')}
+                        value={config.prompt}
+                      />
+                    </div>
 
-              {renderRatioPicker()}
-              {renderResolutionPicker()}
+                    <div className='flex flex-col gap-2'>
+                      <Text strong>{t('参考图')}</Text>
+                      <Upload
+                        accept='image/png,image/jpeg,image/webp'
+                        beforeUpload={() => false}
+                        fileList={imageFileList}
+                        multiple
+                        onChange={handleReferenceUploadChange}
+                        uploadTrigger='custom'
+                      >
+                        <Button
+                          disabled={generating}
+                          icon={<UploadCloud size={16} />}
+                          theme='outline'
+                        >
+                          {t('上传参考图')}
+                        </Button>
+                      </Upload>
+                      {imageFiles.length > 0 && (
+                        <Text type='tertiary' size='small'>
+                          {imageFiles.map((file) => file.name).join(', ')}
+                        </Text>
+                      )}
+                    </div>
 
-              <div className='grid grid-cols-2 gap-3'>
-                <div className='flex flex-col gap-2'>
-                  <Text strong>{t('数量')}</Text>
-                  <InputNumber
-                    disabled={generating}
-                    max={maxCount}
-                    min={1}
-                    onChange={(value) =>
-                      updateConfig('count', Number(value) || 1)
-                    }
-                    value={Math.min(config.count, maxCount)}
-                  />
-                </div>
+                    {renderRatioPicker()}
+                    {renderResolutionPicker()}
 
-                <div className='flex flex-col gap-2'>
-                  <Text strong>{t('尺寸')}</Text>
-                  <div className='semi-input-default flex items-center'>
-                    <Text type={selectedSize ? 'primary' : 'tertiary'}>
-                      {selectedSize || t('自动')}
-                    </Text>
-                  </div>
-                </div>
+                    <div className='grid grid-cols-2 gap-3'>
+                      <div className='flex flex-col gap-2'>
+                        <Text strong>{t('数量')}</Text>
+                        <InputNumber
+                          disabled={generating}
+                          max={maxCount}
+                          min={1}
+                          onChange={(value) =>
+                            updateConfig('count', Number(value) || 1)
+                          }
+                          value={Math.min(config.count, maxCount)}
+                        />
+                      </div>
+
+                      <div className='flex flex-col gap-2'>
+                        <Text strong>{t('尺寸')}</Text>
+                        <div className='semi-input-default flex items-center'>
+                          <Text type={selectedSize ? 'primary' : 'tertiary'}>
+                            {selectedSize || t('自动')}
+                          </Text>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <Button
                 block
+                className='shrink-0'
                 disabled={generating || filteredModels.length === 0}
                 icon={
                   generating ? (
@@ -1057,14 +1720,30 @@ const ImageStudio = () => {
                 type='primary'
               >
                 {generating
-                  ? t('生成中') + ` ${generatedCount}/${config.count}`
+                  ? t('生成中') +
+                    ` ${generatedCount}/${
+                      mode === 'template'
+                        ? getTemplateSlots(templateForm.count).length
+                        : config.count
+                    }`
                   : t('生成')}
               </Button>
             </div>
           </Spin>
         </Card>
 
-        <Card bordered bodyStyle={{ minHeight: 480 }}>
+        <Card
+          bordered
+          bodyStyle={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: isMobile ? undefined : 1,
+            height: isMobile ? 620 : undefined,
+            minHeight: 0,
+            overflow: 'hidden',
+          }}
+          className='flex min-h-0 flex-col overflow-hidden'
+        >
           <Tabs activeKey={resultTab} onChange={setResultTab} type='button'>
             <Tabs.TabPane itemKey='current' tab={t('当前结果')} />
             <Tabs.TabPane
@@ -1073,7 +1752,7 @@ const ImageStudio = () => {
             />
           </Tabs>
 
-          <div className='mt-4'>
+          <div className='mt-4 min-h-0 flex-1 overflow-hidden'>
             {resultTab === 'history'
               ? renderHistoryRecords()
               : renderCurrentResults()}
