@@ -17,12 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Banner,
   Button,
   Card,
-  Banner,
   Empty,
   InputNumber,
   Select,
@@ -32,7 +32,6 @@ import {
   Typography,
 } from '@douyinfe/semi-ui';
 import {
-  AlertTriangle,
   Download,
   Image as ImageIcon,
   Loader2,
@@ -40,61 +39,106 @@ import {
   WandSparkles,
 } from 'lucide-react';
 import { API, showError, showSuccess } from '../../helpers';
+import { StatusContext } from '../../context/Status';
+import { setStatusData } from '../../helpers/data';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
+import {
+  getImageModelSetting,
+  imageModelSupportsMode,
+  parseImageModelSettings,
+} from '../../helpers/imageModelSettings';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 const API_ENDPOINTS = {
   IMAGE_GENERATIONS: '/pg/images/generations',
   IMAGE_EDITS: '/pg/images/edits',
-  USER_MODELS: '/api/user/models',
   USER_GROUPS: '/api/user/self/groups',
 };
 
-const DEFAULT_CONFIG = {
-  model: 'gpt-image-1',
-  group: '',
-  prompt: '',
-  n: 1,
-  size: '1024x1024',
-  quality: 'auto',
-  style: 'vivid',
-  response_format: 'b64_json',
+const RATIOS = ['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9'];
+const FIXED_RATIOS = ['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9'];
+const RESOLUTIONS = ['auto', 'standard', '2k', '4k'];
+
+const RESOLUTION_LABELS = {
+  auto: '自动',
+  standard: '标准',
+  '2k': '2K',
+  '4k': '4K',
 };
 
-const IMAGE_SIZE_OPTIONS = [
-  '1024x1024',
-  '1024x1536',
-  '1536x1024',
-  '1024x1792',
-  '1792x1024',
-  '512x512',
-  '256x256',
-];
+const SIZE_MAP = {
+  standard: {
+    '1:1': '1024x1024',
+    '2:3': '1024x1536',
+    '3:2': '1536x1024',
+    '3:4': '768x1024',
+    '4:3': '1024x768',
+    '9:16': '1008x1792',
+    '16:9': '1792x1008',
+  },
+  '2k': {
+    '1:1': '2048x2048',
+    '2:3': '1344x2016',
+    '3:2': '2016x1344',
+    '3:4': '1536x2048',
+    '4:3': '2048x1536',
+    '9:16': '1152x2048',
+    '16:9': '2048x1152',
+  },
+  '4k': {
+    '1:1': '2880x2880',
+    '2:3': '2336x3504',
+    '3:2': '3504x2336',
+    '3:4': '2448x3264',
+    '4:3': '3264x2448',
+    '9:16': '2160x3840',
+    '16:9': '3840x2160',
+  },
+};
 
-const IMAGE_QUALITY_OPTIONS = [
-  'auto',
-  'standard',
-  'hd',
-  'low',
-  'medium',
-  'high',
-];
+const DEFAULT_CONFIG = {
+  model: '',
+  group: '',
+  prompt: '',
+  count: 1,
+  ratio: '1:1',
+  resolution: 'standard',
+};
 
-const IMAGE_STYLE_OPTIONS = ['vivid', 'natural'];
+const selectOptions = (items, labels = {}) =>
+  items.map((value) => ({ label: labels[value] || value, value }));
 
-const imageModelHints = [
-  'image',
-  'dall',
-  'gpt-image',
-  'imagen',
-  'flux',
-  'wan',
-  'jimeng',
-  'midjourney',
-];
+const getImageSize = (ratio, resolution) => {
+  if (ratio === 'auto' || resolution === 'auto') return '';
+  return SIZE_MAP[resolution]?.[ratio] || '';
+};
 
-const selectOptions = (items) => items.map((value) => ({ label: value, value }));
+const getAvailableRatios = (resolution) =>
+  resolution === 'auto' ? RATIOS : FIXED_RATIOS;
+
+const getRatioPreviewStyle = (ratio) => {
+  if (ratio === 'auto') {
+    return {
+      width: 18,
+      height: 18,
+    };
+  }
+
+  const [width, height] = ratio.split(':').map(Number);
+  const maxWidth = 18;
+  const maxHeight = 18;
+  const scale = Math.min(maxWidth / width, maxHeight / height);
+  return {
+    width: Math.max(6, width * scale),
+    height: Math.max(6, height * scale),
+  };
+};
+
+const normalizeRatioForResolution = (ratio, resolution) => {
+  const available = getAvailableRatios(resolution);
+  return available.includes(ratio) ? ratio : available[0];
+};
 
 const resultSource = (result) => {
   if (result?.url) return result.url;
@@ -113,32 +157,54 @@ const extractErrorMessage = (error, fallback) =>
 const ImageStudio = () => {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const [statusState, statusDispatch] = useContext(StatusContext);
   const [mode, setMode] = useState('generate');
   const [config, setConfig] = useState(DEFAULT_CONFIG);
-  const [models, setModels] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [imageFile, setImageFile] = useState(null);
-  const [maskFile, setMaskFile] = useState(null);
+  const [imageFiles, setImageFiles] = useState([]);
   const [results, setResults] = useState([]);
   const [lastError, setLastError] = useState('');
   const [imageErrors, setImageErrors] = useState({});
   const [loadingModels, setLoadingModels] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const isDalle3Model = config.model.toLowerCase().includes('dall-e-3');
-  const isGptImageModel = config.model.toLowerCase().includes('gpt-image');
-  const supportsStyle = isDalle3Model;
+  const [generatedCount, setGeneratedCount] = useState(0);
+  const [imageModelSettingsValue, setImageModelSettingsValue] = useState(
+    statusState?.status?.image_model_settings,
+  );
 
-  const filteredModels = useMemo(() => {
-    const imageModels = models.filter((model) =>
-      imageModelHints.some((hint) => model.toLowerCase().includes(hint)),
-    );
-    return imageModels.length > 0 ? imageModels : models;
-  }, [models]);
+  const imageModelSettings = useMemo(
+    () =>
+      parseImageModelSettings(
+        imageModelSettingsValue ?? statusState?.status?.image_model_settings,
+      ),
+    [imageModelSettingsValue, statusState?.status?.image_model_settings],
+  );
+
+  const filteredModels = useMemo(
+    () => [
+      ...new Set(
+        imageModelSettings
+          .filter(
+            (setting) =>
+              Array.isArray(setting.modes) && setting.modes.length > 0,
+          )
+          .map((setting) => setting.model),
+      ),
+    ],
+    [imageModelSettings],
+  );
+
+  const currentModelSetting = useMemo(
+    () => getImageModelSetting(imageModelSettings, config.model),
+    [imageModelSettings, config.model],
+  );
+
+  const currentModeKey = mode === 'edit' ? 'edits' : 'generations';
+  const selectedSize = getImageSize(config.ratio, config.resolution);
+  const maxCount = currentModelSetting?.max_n || 1;
 
   const groupOptions = useMemo(() => {
-    if (groups.length === 0) {
-      return [{ value: '', label: t('用户默认分组') }];
-    }
+    if (groups.length === 0) return [{ value: '', label: t('用户默认分组') }];
 
     return groups.map((group) => ({
       value: group.value,
@@ -152,29 +218,30 @@ const ImageStudio = () => {
     const loadData = async () => {
       setLoadingModels(true);
       try {
-        const [modelsRes, groupsRes] = await Promise.all([
-          API.get(API_ENDPOINTS.USER_MODELS),
+        const [groupsRes, statusRes] = await Promise.all([
           API.get(API_ENDPOINTS.USER_GROUPS),
+          API.get('/api/status'),
         ]);
-
-        const nextModels =
-          modelsRes.data?.success && Array.isArray(modelsRes.data?.data)
-            ? modelsRes.data.data
-            : [];
 
         const groupData =
           groupsRes.data?.success && groupsRes.data?.data
             ? groupsRes.data.data
             : {};
-        const nextGroups = Object.entries(groupData).map(([value, info]) => ({
-          label: value,
-          value,
-          ratio: info?.ratio || 1,
-          desc: info?.desc || value,
-        }));
+        setGroups(
+          Object.entries(groupData).map(([value, info]) => ({
+            label: value,
+            value,
+            ratio: info?.ratio || 1,
+            desc: info?.desc || value,
+          })),
+        );
 
-        setModels(nextModels);
-        setGroups(nextGroups);
+        if (statusRes.data?.success && statusRes.data?.data) {
+          const nextStatus = statusRes.data.data;
+          setImageModelSettingsValue(nextStatus.image_model_settings);
+          statusDispatch({ type: 'set', payload: nextStatus });
+          setStatusData(nextStatus);
+        }
       } catch (error) {
         showError(extractErrorMessage(error, t('加载模型与分组失败')));
       } finally {
@@ -183,7 +250,7 @@ const ImageStudio = () => {
     };
 
     loadData();
-  }, [t]);
+  }, [statusDispatch, t]);
 
   useEffect(() => {
     if (filteredModels.length === 0) return;
@@ -191,6 +258,26 @@ const ImageStudio = () => {
       setConfig((current) => ({ ...current, model: filteredModels[0] }));
     }
   }, [filteredModels, config.model]);
+
+  useEffect(() => {
+    if (!currentModelSetting) return;
+
+    if (!imageModelSupportsMode(currentModelSetting, currentModeKey)) {
+      const nextMode = imageModelSupportsMode(
+        currentModelSetting,
+        'generations',
+      )
+        ? 'generate'
+        : 'edit';
+      setMode(nextMode);
+    }
+
+    setConfig((current) => ({
+      ...current,
+      count: Math.min(Math.max(Number(current.count) || 1, 1), maxCount),
+      ratio: normalizeRatioForResolution(current.ratio, current.resolution),
+    }));
+  }, [currentModelSetting, currentModeKey, maxCount]);
 
   useEffect(() => {
     if (groups.length === 0) return;
@@ -203,87 +290,202 @@ const ImageStudio = () => {
     setConfig((current) => ({ ...current, [key]: value }));
   };
 
-  const buildRequestConfig = () => {
-    const requestConfig = { ...config };
-
-    if (isDalle3Model) {
-      requestConfig.n = 1;
-    }
-
-    if (!supportsStyle) {
-      delete requestConfig.style;
-    }
-
-    return requestConfig;
+  const updateResolution = (resolution) => {
+    setConfig((current) => ({
+      ...current,
+      resolution,
+      ratio: normalizeRatioForResolution(current.ratio, resolution),
+    }));
   };
 
-  const buildFormData = () => {
-    const requestConfig = buildRequestConfig();
-    const formData = new FormData();
-    formData.append('model', requestConfig.model);
-    if (requestConfig.group) formData.append('group', requestConfig.group);
-    formData.append('prompt', requestConfig.prompt);
-    formData.append('n', String(requestConfig.n));
-    formData.append('size', requestConfig.size);
-    if (requestConfig.quality) formData.append('quality', requestConfig.quality);
-    if (requestConfig.style) formData.append('style', requestConfig.style);
-    formData.append('response_format', requestConfig.response_format);
-    formData.append('image', imageFile);
-    if (maskFile) formData.append('mask', maskFile);
-    return formData;
-  };
+  const pickerButtonStyle = (active, disabled = false) => ({
+    alignItems: 'center',
+    background: active ? 'var(--semi-color-primary)' : 'var(--semi-color-bg-2)',
+    border: `1px solid ${
+      active ? 'var(--semi-color-primary)' : 'var(--semi-color-border)'
+    }`,
+    borderRadius: 8,
+    color: active ? 'var(--semi-color-white)' : 'var(--semi-color-text-1)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    display: 'flex',
+    flexDirection: 'column',
+    fontSize: 12,
+    fontWeight: active ? 600 : 500,
+    gap: 5,
+    justifyContent: 'center',
+    minHeight: 56,
+    opacity: disabled ? 0.6 : 1,
+    padding: '8px 4px',
+    transition: 'all 120ms ease',
+  });
+
+  const renderRatioPicker = () => (
+    <div className='flex flex-col gap-2'>
+      <Text strong>{t('比例')}</Text>
+      <div
+        role='radiogroup'
+        aria-label={t('图片比例')}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gap: 8,
+        }}
+      >
+        {getAvailableRatios(config.resolution).map((ratio) => {
+          const active = ratio === config.ratio;
+          return (
+            <button
+              aria-checked={active}
+              disabled={generating}
+              key={ratio}
+              onClick={() => updateConfig('ratio', ratio)}
+              role='radio'
+              style={pickerButtonStyle(active, generating)}
+              type='button'
+            >
+              <span
+                style={{
+                  ...getRatioPreviewStyle(ratio),
+                  border: '1.7px solid currentColor',
+                  borderRadius: 3,
+                  display: 'block',
+                }}
+              />
+              <span>{ratio === 'auto' ? t('自动') : ratio}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderResolutionPicker = () => (
+    <div className='flex flex-col gap-2'>
+      <Text strong>{t('分辨率')}</Text>
+      <div
+        role='radiogroup'
+        aria-label={t('分辨率档位')}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gap: 8,
+        }}
+      >
+        {RESOLUTIONS.map((resolution) => {
+          const active = resolution === config.resolution;
+          return (
+            <button
+              aria-checked={active}
+              disabled={generating}
+              key={resolution}
+              onClick={() => updateResolution(resolution)}
+              role='radio'
+              style={{
+                ...pickerButtonStyle(active, generating),
+                fontSize: 13,
+                fontWeight: 700,
+                minHeight: 42,
+              }}
+              type='button'
+            >
+              {t(RESOLUTION_LABELS[resolution])}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   const buildGenerationPayload = () => {
-    const payload = buildRequestConfig();
-    if (!payload.group) {
-      delete payload.group;
-    }
+    const payload = {
+      model: config.model,
+      prompt: config.prompt,
+      n: 1,
+      response_format: 'b64_json',
+    };
+    if (config.group) payload.group = config.group;
+    if (selectedSize) payload.size = selectedSize;
     return payload;
   };
 
+  const buildFormData = () => {
+    const formData = new FormData();
+    formData.append('model', config.model);
+    if (config.group) formData.append('group', config.group);
+    formData.append('prompt', config.prompt);
+    formData.append('n', '1');
+    formData.append('response_format', 'b64_json');
+    if (selectedSize) formData.append('size', selectedSize);
+    imageFiles.forEach((file) => formData.append('image[]', file));
+    return formData;
+  };
+
+  const requestOneImage = async () => {
+    const res =
+      mode === 'edit'
+        ? await API.post(API_ENDPOINTS.IMAGE_EDITS, buildFormData(), {
+            skipErrorHandler: true,
+          })
+        : await API.post(
+            API_ENDPOINTS.IMAGE_GENERATIONS,
+            buildGenerationPayload(),
+            {
+              skipErrorHandler: true,
+            },
+          );
+    const data = Array.isArray(res.data?.data) ? res.data.data : [];
+    if (data.length === 0) throw new Error(t('接口未返回图片'));
+    return data[0];
+  };
+
   const handleGenerate = async () => {
+    if (!currentModelSetting) {
+      showError(t('当前模型没有生图配置'));
+      return;
+    }
+    if (!imageModelSupportsMode(currentModelSetting, currentModeKey)) {
+      showError(t('当前模型不支持该生图模式'));
+      return;
+    }
     if (!config.prompt.trim()) {
       showError(t('请输入提示词'));
       return;
     }
-
-    if (mode === 'edit' && !imageFile) {
-      showError(t('请先上传原图'));
+    if (mode === 'edit' && imageFiles.length === 0) {
+      showError(t('请先上传参考图'));
       return;
     }
 
-    setGenerating(true);
-    setLastError('');
-    try {
-      const res =
-        mode === 'edit'
-          ? await API.post(API_ENDPOINTS.IMAGE_EDITS, buildFormData(), {
-              skipErrorHandler: true,
-            })
-          : await API.post(
-              API_ENDPOINTS.IMAGE_GENERATIONS,
-              buildGenerationPayload(),
-              {
-              skipErrorHandler: true,
-              },
-            );
+    const total = Math.min(Math.max(Number(config.count) || 1, 1), maxCount);
+    const failures = [];
 
-      const data = Array.isArray(res.data?.data) ? res.data.data : [];
-      setResults(data);
-      setImageErrors({});
-      if (data.length === 0) {
-        const message = t('接口未返回图片');
+    setGenerating(true);
+    setGeneratedCount(0);
+    setLastError('');
+    setResults([]);
+    setImageErrors({});
+
+    try {
+      for (let index = 0; index < total; index += 1) {
+        try {
+          const result = await requestOneImage();
+          setResults((current) => [...current, result]);
+        } catch (error) {
+          failures.push(extractErrorMessage(error, t('生图请求失败')));
+        } finally {
+          setGeneratedCount(index + 1);
+        }
+      }
+
+      if (failures.length === total) {
+        const message = failures[0] || t('生图请求失败');
         setLastError(message);
         showError(message);
-      } else if (data.length < buildRequestConfig().n) {
+      } else if (failures.length > 0) {
         setLastError(
-          t('上游返回的图片数量少于请求数量，可能是当前模型或渠道不支持多图返回。'),
+          t('部分图片生成失败：') + [...new Set(failures)].join('；'),
         );
       }
-    } catch (error) {
-      const message = extractErrorMessage(error, t('生图请求失败'));
-      setLastError(message);
-      showError(message);
     } finally {
       setGenerating(false);
     }
@@ -302,35 +504,8 @@ const ImageStudio = () => {
     showSuccess(t('已开始下载'));
   };
 
-  const renderFileInput = (label, file, setFile, required = false) => (
-    <div className='flex flex-col gap-2'>
-      <Text strong>{label}</Text>
-      <input
-        accept='image/png,image/jpeg,image/webp'
-        className='semi-input-default'
-        onChange={(event) => setFile(event.target.files?.[0] || null)}
-        required={required}
-        type='file'
-      />
-      {file && (
-        <Text type='tertiary' size='small'>
-          {file.name}
-        </Text>
-      )}
-    </div>
-  );
-
   return (
     <div className='mt-[60px] px-2'>
-      <div className='mb-4 flex flex-col gap-1'>
-        <Title heading={3} style={{ margin: 0 }}>
-          {t('生图')}
-        </Title>
-        <Text type='tertiary'>
-          {t('使用当前账号余额与分组，通过可用模型生成或编辑图片。')}
-        </Text>
-      </div>
-
       {lastError && (
         <Banner
           className='mb-4'
@@ -363,14 +538,31 @@ const ImageStudio = () => {
                 onChange={(key) => setMode(key)}
                 type='button'
               >
-                <Tabs.TabPane itemKey='generate' tab={t('文生图')} />
-                <Tabs.TabPane itemKey='edit' tab={t('图片编辑')} />
+                {imageModelSupportsMode(currentModelSetting, 'generations') && (
+                  <Tabs.TabPane itemKey='generate' tab={t('文生图')} />
+                )}
+                {imageModelSupportsMode(currentModelSetting, 'edits') && (
+                  <Tabs.TabPane itemKey='edit' tab={t('图片编辑')} />
+                )}
               </Tabs>
 
               {mode === 'edit' && (
-                <div className='flex flex-col gap-3'>
-                  {renderFileInput(t('原图'), imageFile, setImageFile, true)}
-                  {renderFileInput(t('遮罩（可选）'), maskFile, setMaskFile)}
+                <div className='flex flex-col gap-2'>
+                  <Text strong>{t('参考图')}</Text>
+                  <input
+                    accept='image/png,image/jpeg,image/webp'
+                    className='semi-input-default'
+                    multiple
+                    onChange={(event) =>
+                      setImageFiles(Array.from(event.target.files || []))
+                    }
+                    type='file'
+                  />
+                  {imageFiles.length > 0 && (
+                    <Text type='tertiary' size='small'>
+                      {imageFiles.map((file) => file.name).join(', ')}
+                    </Text>
+                  )}
                 </div>
               )}
 
@@ -409,77 +601,31 @@ const ImageStudio = () => {
                 />
               </div>
 
-              <Banner
-                closeIcon={null}
-                description={
-                  isDalle3Model
-                    ? t('当前模型只支持一次返回 1 张图片，数量参数会自动按 1 发送。')
-                    : isGptImageModel
-                      ? t('GPT Image 支持数量、尺寸、质量等参数；风格参数仅适用于 DALL·E 3，已自动隐藏。')
-                      : t('不同上游渠道对数量、质量、风格的支持不完全一致，实际以渠道返回为准。')
-                }
-                icon={<AlertTriangle size={16} />}
-                type='info'
-              />
+              {renderRatioPicker()}
+              {renderResolutionPicker()}
 
               <div className='grid grid-cols-2 gap-3'>
-                <div className='flex flex-col gap-2'>
-                  <Text strong>{t('尺寸')}</Text>
-                  <Select
-                    disabled={generating}
-                    optionList={selectOptions(IMAGE_SIZE_OPTIONS)}
-                    onChange={(value) => updateConfig('size', value)}
-                    value={config.size}
-                  />
-                </div>
                 <div className='flex flex-col gap-2'>
                   <Text strong>{t('数量')}</Text>
                   <InputNumber
                     disabled={generating}
-                    max={10}
+                    max={maxCount}
                     min={1}
                     onChange={(value) =>
-                      updateConfig(
-                        'n',
-                        isDalle3Model ? 1 : Number(value) || 1,
-                      )
+                      updateConfig('count', Number(value) || 1)
                     }
-                    value={isDalle3Model ? 1 : config.n}
+                    value={Math.min(config.count, maxCount)}
                   />
                 </div>
-              </div>
 
-              <div className='grid grid-cols-2 gap-3'>
                 <div className='flex flex-col gap-2'>
-                  <Text strong>{t('质量')}</Text>
-                  <Select
-                    disabled={generating}
-                    optionList={selectOptions(IMAGE_QUALITY_OPTIONS)}
-                    onChange={(value) => updateConfig('quality', value)}
-                    value={config.quality}
-                  />
-                </div>
-                {supportsStyle && (
-                  <div className='flex flex-col gap-2'>
-                    <Text strong>{t('风格')}</Text>
-                    <Select
-                      disabled={generating}
-                      optionList={selectOptions(IMAGE_STYLE_OPTIONS)}
-                      onChange={(value) => updateConfig('style', value)}
-                      value={config.style}
-                    />
+                  <Text strong>{t('尺寸')}</Text>
+                  <div className='semi-input-default flex items-center'>
+                    <Text type={selectedSize ? 'primary' : 'tertiary'}>
+                      {selectedSize || t('自动')}
+                    </Text>
                   </div>
-                )}
-              </div>
-
-              <div className='flex flex-col gap-2'>
-                <Text strong>{t('返回格式')}</Text>
-                <Select
-                  disabled={generating}
-                  optionList={selectOptions(['b64_json', 'url'])}
-                  onChange={(value) => updateConfig('response_format', value)}
-                  value={config.response_format}
-                />
+                </div>
               </div>
 
               <Button
@@ -496,7 +642,9 @@ const ImageStudio = () => {
                 theme='solid'
                 type='primary'
               >
-                {generating ? t('生成中') : t('生成')}
+                {generating
+                  ? t('生成中') + ` ${generatedCount}/${config.count}`
+                  : t('生成')}
               </Button>
             </div>
           </Spin>

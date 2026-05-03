@@ -30,6 +30,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     enabled: true,
     playground: true,
     'image-studio': true,
+    'video-studio': true,
     chat: true,
   },
   console: {
@@ -50,6 +51,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     channel: true,
     models: true,
     deployment: true,
+    'image-setting': true,
     redemption: true,
     user: true,
     subscription: true,

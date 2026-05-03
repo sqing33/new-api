@@ -40,6 +40,8 @@ import Chat from './pages/Chat';
 import Chat2Link from './pages/Chat2Link';
 import Midjourney from './pages/Midjourney';
 import ImageStudio from './pages/ImageStudio';
+import ImageSetting from './pages/ImageSetting';
+import VideoStudio from './pages/VideoStudio';
 import Pricing from './pages/Pricing';
 import Task from './pages/Task';
 import ModelPage from './pages/Model';
@@ -162,6 +164,22 @@ function App() {
             <PrivateRoute>
               <ImageStudio />
             </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/video-studio'
+          element={
+            <PrivateRoute>
+              <VideoStudio />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/image-setting'
+          element={
+            <AdminRoute>
+              <ImageSetting />
+            </AdminRoute>
           }
         />
         <Route

@@ -73,6 +73,8 @@ export default function SettingsSidebarModulesUser() {
       defaultConfig.chat = {
         enabled: true,
         playground: isSidebarModuleAllowed('chat', 'playground'),
+        'image-studio': isSidebarModuleAllowed('chat', 'image-studio'),
+        'video-studio': isSidebarModuleAllowed('chat', 'video-studio'),
         chat: isSidebarModuleAllowed('chat', 'chat'),
       };
     }
@@ -105,6 +107,7 @@ export default function SettingsSidebarModulesUser() {
         channel: isSidebarModuleAllowed('admin', 'channel'),
         models: isSidebarModuleAllowed('admin', 'models'),
         deployment: isSidebarModuleAllowed('admin', 'deployment'),
+        'image-setting': isSidebarModuleAllowed('admin', 'image-setting'),
         redemption: isSidebarModuleAllowed('admin', 'redemption'),
         user: isSidebarModuleAllowed('admin', 'user'),
         setting: isSidebarModuleAllowed('admin', 'setting'),
@@ -300,6 +303,12 @@ export default function SettingsSidebarModulesUser() {
           title: t('操练场'),
           description: t('AI模型测试环境'),
         },
+        { key: 'image-studio', title: t('生图'), description: t('生图工具') },
+        {
+          key: 'video-studio',
+          title: t('视频'),
+          description: t('视频生成工具'),
+        },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
       ],
     },
@@ -343,6 +352,11 @@ export default function SettingsSidebarModulesUser() {
           key: 'deployment',
           title: t('模型部署'),
           description: t('模型部署管理'),
+        },
+        {
+          key: 'image-setting',
+          title: t('创作设置'),
+          description: t('图片与视频模型能力配置'),
         },
         {
           key: 'redemption',

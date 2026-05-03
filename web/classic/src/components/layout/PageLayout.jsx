@@ -58,6 +58,8 @@ const PageLayout = () => {
     '/console/token',
     '/console/midjourney',
     '/console/image-studio',
+    '/console/video-studio',
+    '/console/image-setting',
     '/console/task',
     '/console/models',
     '/pricing',
