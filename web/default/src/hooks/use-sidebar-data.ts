@@ -9,6 +9,7 @@ import {
   Ticket,
   User,
   Command,
+  ImageIcon,
   Radio,
   FlaskConical,
   MessageSquare,
@@ -41,6 +42,11 @@ export function useSidebarData(): SidebarData {
             title: t('Playground'),
             url: '/playground',
             icon: FlaskConical,
+          },
+          {
+            title: t('Image Studio'),
+            url: '/image-studio',
+            icon: ImageIcon,
           },
           {
             title: t('Chat'),
