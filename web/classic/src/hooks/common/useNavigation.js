@@ -41,11 +41,6 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
         to: '/',
       },
       {
-        text: t('创作台'),
-        itemKey: 'imageStudio',
-        to: '/image-studio',
-      },
-      {
         text: t('模型馆'),
         itemKey: 'pricing',
         to: '/pricing',
