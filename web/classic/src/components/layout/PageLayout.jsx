@@ -63,6 +63,7 @@ const PageLayout = () => {
     '/console/task',
     '/console/models',
     '/pricing',
+    '/image-studio',
   ];
 
   const shouldHideFooter = cardProPages.includes(location.pathname);

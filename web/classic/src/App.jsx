@@ -166,6 +166,7 @@ function App() {
             </PrivateRoute>
           }
         />
+        <Route path='/image-studio' element={<ImageStudio publicMode />} />
         <Route
           path='/console/video-studio'
           element={

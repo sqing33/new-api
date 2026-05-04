@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Banner,
@@ -51,6 +52,7 @@ import {
 } from 'lucide-react';
 import { API, copy, showError, showSuccess } from '../../helpers';
 import { StatusContext } from '../../context/Status';
+import { UserContext } from '../../context/User';
 import { setStatusData } from '../../helpers/data';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
 import {
@@ -297,10 +299,12 @@ const extractErrorMessage = (error, fallback) =>
   error?.message ||
   fallback;
 
-const ImageStudio = () => {
+const ImageStudio = ({ publicMode = false }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [statusState, statusDispatch] = useContext(StatusContext);
+  const [userState] = useContext(UserContext);
   const [mode, setMode] = useState('generate');
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [groups, setGroups] = useState([]);
@@ -384,13 +388,42 @@ const ImageStudio = () => {
     }));
   }, [groups, t]);
 
+  const isLoggedIn = Boolean(userState?.user || localStorage.getItem('user'));
+
+  const redirectToLogin = () => {
+    navigate('/login?redirect=/image-studio', {
+      state: { from: { pathname: '/image-studio' } },
+    });
+  };
+
+  const requireLoginForAction = () => {
+    if (!publicMode || isLoggedIn) return true;
+    showError(t('请先登录后再生成图片'));
+    redirectToLogin();
+    return false;
+  };
+
   useEffect(() => {
     const loadData = async () => {
       setLoadingModels(true);
       try {
-        const [groupsRes, statusRes, modelsRes] = await Promise.all([
+        const statusRes = await API.get('/api/status');
+
+        if (statusRes.data?.success && statusRes.data?.data) {
+          const nextStatus = statusRes.data.data;
+          setImageModelSettingsValue(nextStatus.image_model_settings);
+          statusDispatch({ type: 'set', payload: nextStatus });
+          setStatusData(nextStatus);
+        }
+
+        if (!isLoggedIn) {
+          setGroups([]);
+          setAllModels([]);
+          return;
+        }
+
+        const [groupsRes, modelsRes] = await Promise.all([
           API.get(API_ENDPOINTS.USER_GROUPS),
-          API.get('/api/status'),
           API.get(API_ENDPOINTS.USER_MODELS),
         ]);
 
@@ -407,13 +440,6 @@ const ImageStudio = () => {
           })),
         );
 
-        if (statusRes.data?.success && statusRes.data?.data) {
-          const nextStatus = statusRes.data.data;
-          setImageModelSettingsValue(nextStatus.image_model_settings);
-          statusDispatch({ type: 'set', payload: nextStatus });
-          setStatusData(nextStatus);
-        }
-
         if (modelsRes.data?.success && Array.isArray(modelsRes.data?.data)) {
           setAllModels(modelsRes.data.data);
         }
@@ -425,7 +451,7 @@ const ImageStudio = () => {
     };
 
     loadData();
-  }, [statusDispatch, t]);
+  }, [isLoggedIn, statusDispatch, t]);
 
   useEffect(() => {
     if (filteredModels.length === 0) return;
@@ -503,18 +529,16 @@ const ImageStudio = () => {
     setLogoFiles(nextFileList.map((item) => item.fileInstance));
   };
 
-  const getOrderedReferenceFiles = () =>
-    [
-      ...imageFiles.filter(
-        (file) =>
-          file &&
-          !String(file.name || '').startsWith('style-reference-preset'),
-      ),
-      ...imageFiles.filter(
-        (file) =>
-          file && String(file.name || '').startsWith('style-reference-preset'),
-      ),
-    ];
+  const getOrderedReferenceFiles = () => [
+    ...imageFiles.filter(
+      (file) =>
+        file && !String(file.name || '').startsWith('style-reference-preset'),
+    ),
+    ...imageFiles.filter(
+      (file) =>
+        file && String(file.name || '').startsWith('style-reference-preset'),
+    ),
+  ];
 
   const loadPromptPresets = async () => {
     setPresetLoading(true);
@@ -532,6 +556,7 @@ const ImageStudio = () => {
   };
 
   const openPromptPresetModal = async () => {
+    if (!requireLoginForAction()) return;
     setPresetModalVisible(true);
     await loadPromptPresets();
   };
@@ -554,8 +579,7 @@ const ImageStudio = () => {
     );
     const userFiles = imageFiles.filter(
       (file) =>
-        file &&
-        !String(file.name || '').startsWith('style-reference-preset'),
+        file && !String(file.name || '').startsWith('style-reference-preset'),
     );
 
     if (normalized.image) {
@@ -904,6 +928,7 @@ const ImageStudio = () => {
   };
 
   const handleGenerate = async () => {
+    if (!requireLoginForAction()) return;
     if (!currentModelSetting) {
       showError(t('当前模型没有生图配置'));
       return;
@@ -997,6 +1022,7 @@ const ImageStudio = () => {
   };
 
   const handleRegenerateResult = async (index) => {
+    if (!requireLoginForAction()) return;
     const current = results[index];
     if (!current) return;
 
@@ -1037,6 +1063,7 @@ const ImageStudio = () => {
   };
 
   const handleTemplateGenerate = async () => {
+    if (!requireLoginForAction()) return;
     const canGenerate = imageModelSupportsMode(
       currentModelSetting,
       'generations',
@@ -1874,7 +1901,9 @@ const ImageStudio = () => {
       className={
         isMobile
           ? 'mt-[60px] px-2'
-          : 'mt-[60px] flex h-[calc(100vh-108px)] flex-col overflow-hidden px-2'
+          : publicMode
+            ? 'mt-[60px] flex h-[calc(100vh-64px)] flex-col overflow-hidden px-2 py-2'
+            : 'mt-[60px] flex h-[calc(100vh-108px)] flex-col overflow-hidden px-2'
       }
     >
       {lastError && (

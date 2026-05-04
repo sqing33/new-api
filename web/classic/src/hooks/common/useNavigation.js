@@ -25,6 +25,7 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
     const defaultModules = {
       home: true,
       console: true,
+      imageStudio: true,
       pricing: true,
       docs: true,
       about: true,
@@ -40,14 +41,19 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
         to: '/',
       },
       {
-        text: t('控制台'),
-        itemKey: 'console',
-        to: '/console',
+        text: t('生图'),
+        itemKey: 'imageStudio',
+        to: '/image-studio',
       },
       {
         text: t('模型广场'),
         itemKey: 'pricing',
         to: '/pricing',
+      },
+      {
+        text: t('控制台'),
+        itemKey: 'console',
+        to: '/console',
       },
       ...(docsLink
         ? [

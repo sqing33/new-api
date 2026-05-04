@@ -38,6 +38,12 @@ import {
   IconFile,
   IconCopy,
 } from '@douyinfe/semi-icons';
+import {
+  ArrowRight,
+  Image as ImageIcon,
+  Sparkles,
+  WandSparkles,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import NoticeModal from '../../components/layout/NoticeModal';
 import {
@@ -65,12 +71,99 @@ import {
 
 const { Text } = Typography;
 
+const DEFAULT_GALLERY_IMAGES = [
+  {
+    imageUrl:
+      'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=85',
+    title: '城市黄昏',
+    prompt: '金色夕阳下的未来城市天际线，电影感光影',
+    model: 'GPT Image',
+    tag: '电影感',
+    aspect: 'landscape',
+  },
+  {
+    imageUrl:
+      'https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=900&q=85',
+    title: '霓虹雨夜',
+    prompt: '赛博朋克街区，湿润路面反射霓虹灯牌',
+    model: 'Flux',
+    tag: '赛博朋克',
+    aspect: 'portrait',
+  },
+  {
+    imageUrl:
+      'https://images.unsplash.com/photo-1495567720989-cebdbdd97913?auto=format&fit=crop&w=900&q=85',
+    title: '沙丘日出',
+    prompt: '极简沙漠与柔和日出，低饱和高级配色',
+    model: 'Imagen',
+    tag: '极简',
+    aspect: 'square',
+  },
+  {
+    imageUrl:
+      'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=85',
+    title: '山谷晨雾',
+    prompt: '高山森林、晨雾、自然纪录片式构图',
+    model: 'GPT Image',
+    tag: '自然',
+    aspect: 'landscape',
+  },
+  {
+    imageUrl:
+      'https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?auto=format&fit=crop&w=900&q=85',
+    title: '柔和彩纸',
+    prompt: '彩色纸艺装置，干净背景，商业海报质感',
+    model: 'Flux',
+    tag: '商业',
+    aspect: 'square',
+  },
+  {
+    imageUrl:
+      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=85',
+    title: '湖畔光影',
+    prompt: '静谧湖泊与远山，柔和自然光，宽幅构图',
+    model: 'Imagen',
+    tag: '风景',
+    aspect: 'landscape',
+  },
+];
+
+const aspectClassName = {
+  square: 'aspect-square',
+  portrait: 'aspect-[3/4]',
+  landscape: 'aspect-[4/3]',
+};
+
+const normalizeGalleryItem = (item = {}, index = 0) => ({
+  imageUrl: String(item.imageUrl || item.url || '').trim(),
+  title: String(item.title || `Image ${index + 1}`).trim(),
+  prompt: String(item.prompt || '').trim(),
+  model: String(item.model || '').trim(),
+  tag: String(item.tag || '').trim(),
+  aspect: ['square', 'portrait', 'landscape'].includes(item.aspect)
+    ? item.aspect
+    : 'square',
+});
+
+const parseGalleryImages = (value) => {
+  try {
+    const parsed =
+      typeof value === 'string' ? JSON.parse(value || '[]') : value;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeGalleryItem).filter((item) => item.imageUrl);
+  } catch {
+    return [];
+  }
+};
+
 const Home = () => {
   const { t, i18n } = useTranslation();
   const [statusState] = useContext(StatusContext);
   const actualTheme = useActualTheme();
   const [homePageContentLoaded, setHomePageContentLoaded] = useState(false);
   const [homePageContent, setHomePageContent] = useState('');
+  const [homePageMode, setHomePageMode] = useState('image_showcase');
+  const [galleryImages, setGalleryImages] = useState(DEFAULT_GALLERY_IMAGES);
   const [noticeVisible, setNoticeVisible] = useState(false);
   const isMobile = useIsMobile();
   const isDemoSiteMode = statusState?.status?.demo_site_enabled || false;
@@ -83,18 +176,26 @@ const Home = () => {
 
   const displayHomePageContent = async () => {
     setHomePageContent(localStorage.getItem('home_page_content') || '');
-    const res = await API.get('/api/home_page_content');
+    const res = await API.get('/api/home_page_settings');
     const { success, message, data } = res.data;
     if (success) {
-      let content = data;
-      if (!data.startsWith('https://')) {
-        content = marked.parse(data);
+      const mode = data?.mode || 'image_showcase';
+      const rawContent = data?.content || '';
+      const parsedGallery = parseGalleryImages(data?.gallery_images);
+      setHomePageMode(mode);
+      setGalleryImages(
+        parsedGallery.length > 0 ? parsedGallery : DEFAULT_GALLERY_IMAGES,
+      );
+
+      let content = rawContent;
+      if (mode === 'custom_content' && !rawContent.startsWith('https://')) {
+        content = marked.parse(rawContent);
       }
       setHomePageContent(content);
       localStorage.setItem('home_page_content', content);
 
       // 如果内容是 URL，则发送主题模式
-      if (data.startsWith('https://')) {
+      if (mode === 'custom_content' && rawContent.startsWith('https://')) {
         const iframe = document.querySelector('iframe');
         if (iframe) {
           iframe.onload = () => {
@@ -109,6 +210,113 @@ const Home = () => {
     }
     setHomePageContentLoaded(true);
   };
+
+  const renderImageShowcaseHome = () => (
+    <div className='mt-[60px] h-[calc(100vh-64px)] overflow-y-auto bg-semi-color-bg-0'>
+      <section className='px-4 py-10 md:px-8 lg:px-12'>
+        <div className='mx-auto grid max-w-7xl gap-10 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-center'>
+          <div className='flex flex-col gap-6'>
+            <div className='inline-flex w-fit items-center gap-2 rounded-full border border-semi-color-border bg-semi-color-bg-1 px-3 py-1 text-sm text-semi-color-text-1'>
+              <Sparkles size={15} />
+              <span>{t('AI 生图创作平台')}</span>
+            </div>
+            <div className='flex flex-col gap-4'>
+              <h1 className='m-0 text-4xl font-bold leading-tight text-semi-color-text-0 md:text-5xl lg:text-6xl'>
+                {t('把灵感变成可用的视觉作品')}
+              </h1>
+              <p className='m-0 max-w-2xl text-base leading-7 text-semi-color-text-1 md:text-lg'>
+                {t(
+                  '从提示词、参考图到商品图工作流，用统一模型与分组能力完成创意生成。',
+                )}
+              </p>
+            </div>
+            <div className='flex flex-wrap items-center gap-3'>
+              <Link to='/image-studio'>
+                <Button
+                  icon={<WandSparkles size={16} />}
+                  size={isMobile ? 'default' : 'large'}
+                  theme='solid'
+                  type='primary'
+                >
+                  {t('开始生图')}
+                </Button>
+              </Link>
+              <Link to='/console'>
+                <Button
+                  icon={<ArrowRight size={16} />}
+                  size={isMobile ? 'default' : 'large'}
+                  theme='outline'
+                >
+                  {t('进入控制台')}
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          <div className='grid grid-cols-2 gap-3 md:grid-cols-3'>
+            {galleryImages.slice(0, 6).map((item, index) => (
+              <div
+                className={`group relative overflow-hidden rounded-lg border border-semi-color-border bg-semi-color-bg-1 ${
+                  aspectClassName[item.aspect] || aspectClassName.square
+                } ${index === 1 || index === 4 ? 'md:translate-y-8' : ''}`}
+                key={`${item.imageUrl}-${index}`}
+              >
+                <img
+                  alt={item.title}
+                  className='h-full w-full object-cover transition duration-300 group-hover:scale-105'
+                  loading={index > 1 ? 'lazy' : 'eager'}
+                  src={item.imageUrl}
+                />
+                <div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3 text-white'>
+                  <div className='flex items-center gap-2 text-xs'>
+                    {item.tag && (
+                      <span className='rounded-full bg-white/18 px-2 py-0.5'>
+                        {item.tag}
+                      </span>
+                    )}
+                    {item.model && (
+                      <span className='opacity-80'>{item.model}</span>
+                    )}
+                  </div>
+                  <div className='mt-2 line-clamp-1 text-sm font-semibold'>
+                    {item.title}
+                  </div>
+                  {item.prompt && (
+                    <div className='mt-1 line-clamp-2 text-xs opacity-80'>
+                      {item.prompt}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className='border-t border-semi-color-border px-4 py-8 md:px-8 lg:px-12'>
+        <div className='mx-auto grid max-w-7xl grid-cols-1 gap-3 md:grid-cols-3'>
+          {[
+            [t('多模型统一'), t('复用现有用户模型、分组和余额逻辑')],
+            [t('参考图编辑'), t('支持上传参考图并自动切换编辑模式')],
+            [t('商品图工作流'), t('一键生成主图、封面、海报和头图')],
+          ].map(([title, desc]) => (
+            <div
+              className='rounded-lg border border-semi-color-border bg-semi-color-bg-1 p-5'
+              key={title}
+            >
+              <ImageIcon className='mb-4 text-semi-color-primary' size={22} />
+              <div className='text-base font-semibold text-semi-color-text-0'>
+                {title}
+              </div>
+              <div className='mt-2 text-sm leading-6 text-semi-color-text-2'>
+                {desc}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 
   const handleCopyBaseURL = async () => {
     const ok = await copy(serverAddress);
@@ -155,7 +363,9 @@ const Home = () => {
         onClose={() => setNoticeVisible(false)}
         isMobile={isMobile}
       />
-      {homePageContentLoaded && homePageContent === '' ? (
+      {homePageContentLoaded && homePageMode === 'image_showcase' ? (
+        renderImageShowcaseHome()
+      ) : homePageContentLoaded && homePageContent === '' ? (
         <div className='w-full overflow-x-hidden'>
           {/* Banner 部分 */}
           <div className='w-full border-b border-semi-color-border min-h-[500px] md:min-h-[600px] lg:min-h-[700px] relative overflow-x-hidden'>

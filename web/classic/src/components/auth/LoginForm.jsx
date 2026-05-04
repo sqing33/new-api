@@ -115,6 +115,11 @@ const LoginForm = () => {
 
   const logo = getLogo();
   const systemName = getSystemName();
+  const redirect = searchParams.get('redirect');
+  const loginRedirect =
+    redirect && redirect.startsWith('/') && !redirect.startsWith('//')
+      ? redirect
+      : '/console';
 
   let affCode = new URLSearchParams(window.location.search).get('aff');
   if (affCode) {
@@ -255,7 +260,7 @@ const LoginForm = () => {
               centered: true,
             });
           }
-          navigate('/console');
+          navigate(loginRedirect);
         } else {
           showError(message);
         }
@@ -456,7 +461,7 @@ const LoginForm = () => {
         setUserData(finish.data);
         updateAPI();
         showSuccess('登录成功！');
-        navigate('/console');
+        navigate(loginRedirect);
       } else {
         showError(finish.message || 'Passkey 登录失败，请重试');
       }
@@ -491,7 +496,7 @@ const LoginForm = () => {
     setUserData(data);
     updateAPI();
     showSuccess('登录成功！');
-    navigate('/console');
+    navigate(loginRedirect);
   };
 
   // 返回登录页面
@@ -958,8 +963,7 @@ const LoginForm = () => {
         style={{ top: '50%', left: '-120px' }}
       />
       <div className='w-full max-w-sm mt-[60px]'>
-        {showEmailLogin ||
-        !hasOAuthLoginOptions
+        {showEmailLogin || !hasOAuthLoginOptions
           ? renderEmailLoginForm()
           : renderOAuthOptions()}
         {renderWeChatLoginModal()}

@@ -31,6 +31,8 @@ const DrawingSetting = () => {
     MjForwardUrlEnabled: false,
     MjModeClearEnabled: false,
     MjActionCheckSuccessEnabled: false,
+    HomePageMode: 'image_showcase',
+    HomeGalleryImages: '',
   });
 
   let [loading, setLoading] = useState(false);
