@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Typography,
@@ -29,6 +29,7 @@ import { API, showError, copy, showSuccess } from '../../helpers';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
 import { API_ENDPOINTS } from '../../constants/common.constant';
 import { StatusContext } from '../../context/Status';
+import { UserContext } from '../../context/User';
 import { useActualTheme } from '../../context/Theme';
 import { marked } from 'marked';
 import { useTranslation } from 'react-i18next';
@@ -38,7 +39,14 @@ import {
   IconFile,
   IconCopy,
 } from '@douyinfe/semi-icons';
-import { ArrowRight, Sparkles, WandSparkles } from 'lucide-react';
+import {
+  BookOpen,
+  Compass,
+  ImageIcon,
+  Info,
+  LayoutDashboard,
+  Sparkles,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import NoticeModal from '../../components/layout/NoticeModal';
 import { getLogo, getSystemName } from '../../helpers';
@@ -67,30 +75,59 @@ import {
 
 const { Text } = Typography;
 
-const aspectClassName = {
-  square: '',
-  portrait: '',
-  landscape: '',
+const CARD_LAYOUTS = [
+  { rotate: -6.8, x: 6, y: 0, z: 3, deco: 'tape-top' },
+  { rotate: 4.6, x: -8, y: -6, z: 1, deco: 'clip' },
+  { rotate: -2.4, x: 8, y: 4, z: 4, deco: 'tape-corner' },
+  { rotate: 5.8, x: -5, y: -10, z: 2, deco: 'tape-top' },
+  { rotate: -4.2, x: 10, y: -18, z: 5, deco: 'clip' },
+  { rotate: 2.8, x: -10, y: -8, z: 1, deco: 'tape-corner' },
+];
+
+const ASPECT_HEIGHT_WEIGHTS = {
+  landscape: 0.68,
+  square: 1,
+  portrait: 1.34,
+};
+const PROMPT_PRESETS_OPTION_KEY = 'ImagePromptPresets';
+
+const getGalleryItemHeightWeight = (item) => {
+  if (item.width > 0 && item.height > 0) {
+    return item.height / item.width;
+  }
+  return ASPECT_HEIGHT_WEIGHTS[item.aspect] || ASPECT_HEIGHT_WEIGHTS.square;
 };
 
-const CARD_TRANSFORMS = [
-  { rotate: -7.5, x: 8, y: 0, z: 3 },
-  { rotate: 5.8, x: -10, y: -12, z: 1 },
-  { rotate: -2.2, x: 12, y: 8, z: 4 },
-  { rotate: 8.4, x: -6, y: -6, z: 2 },
-  { rotate: -5.1, x: 15, y: -16, z: 5 },
-  { rotate: 3.2, x: -14, y: 10, z: 1 },
-  { rotate: -8.8, x: 4, y: -10, z: 4 },
-  { rotate: 6.6, x: -8, y: 6, z: 2 },
-  { rotate: -3.6, x: 11, y: -14, z: 3 },
-  { rotate: 9.2, x: -12, y: 12, z: 5 },
-  { rotate: -6.4, x: 6, y: -4, z: 1 },
-  { rotate: 2.7, x: -16, y: -9, z: 4 },
-];
-const PROMPT_PRESETS_OPTION_KEY = 'ImagePromptPresets';
+const buildMasonryColumns = (items, columnCount) => {
+  const safeColumnCount = Math.max(
+    1,
+    Math.min(columnCount, items.length || columnCount),
+  );
+  const columns = Array.from({ length: safeColumnCount }, () => []);
+  const columnHeights = Array.from({ length: safeColumnCount }, () => 0);
+
+  items.forEach((item, index) => {
+    const shortestColumnIndex = columnHeights.indexOf(
+      Math.min(...columnHeights),
+    );
+    const layout = CARD_LAYOUTS[index % CARD_LAYOUTS.length];
+    const heightWeight = getGalleryItemHeightWeight(item);
+
+    columns[shortestColumnIndex].push({
+      ...item,
+      originalIndex: index,
+      layout,
+    });
+    columnHeights[shortestColumnIndex] += heightWeight;
+  });
+
+  return columns;
+};
 
 const normalizeGalleryItem = (item = {}, index = 0) => ({
   imageUrl: String(item.imageUrl || item.url || '').trim(),
+  width: Number(item.width || item.w || 0),
+  height: Number(item.height || item.h || 0),
   title: String(item.title || `Image ${index + 1}`).trim(),
   prompt: String(item.prompt || '').trim(),
   model: String(item.model || '').trim(),
@@ -113,6 +150,8 @@ const parseGalleryImages = (value) => {
 
 const normalizePromptPresetGalleryItem = (item = {}, index = 0) => ({
   imageUrl: String(item.image || item.imageUrl || '').trim(),
+  width: Number(item.width || item.w || 0),
+  height: Number(item.height || item.h || 0),
   title: String(item.name || `Preset ${index + 1}`).trim(),
   prompt: String(item.prompt || '').trim(),
   model: '',
@@ -136,13 +175,16 @@ const parsePromptPresetImages = (value) => {
 const Home = () => {
   const { t, i18n } = useTranslation();
   const [statusState] = useContext(StatusContext);
+  const [userState] = useContext(UserContext);
   const actualTheme = useActualTheme();
   const [homePageContentLoaded, setHomePageContentLoaded] = useState(false);
   const [homePageContent, setHomePageContent] = useState('');
   const [homePageMode, setHomePageMode] = useState('image_showcase');
   const [galleryImages, setGalleryImages] = useState([]);
+  const [galleryImageSizes, setGalleryImageSizes] = useState({});
   const [noticeVisible, setNoticeVisible] = useState(false);
   const isMobile = useIsMobile();
+  const masonryColumnCount = isMobile ? 2 : 3;
   const isDemoSiteMode = statusState?.status?.demo_site_enabled || false;
   const docsLink = statusState?.status?.docs_link || '';
   const serverAddress =
@@ -152,6 +194,111 @@ const Home = () => {
   const endpointItems = API_ENDPOINTS.map((e) => ({ value: e }));
   const [endpointIndex, setEndpointIndex] = useState(0);
   const isChinese = i18n.language.startsWith('zh');
+  const defaultHeaderNavModules = {
+    console: true,
+    imageStudio: true,
+    pricing: true,
+    docs: true,
+    about: true,
+  };
+  let headerNavModules = defaultHeaderNavModules;
+  let pricingRequireAuth = false;
+  if (statusState?.status?.HeaderNavModules) {
+    try {
+      headerNavModules = JSON.parse(statusState.status.HeaderNavModules);
+      if (typeof headerNavModules.pricing === 'boolean') {
+        headerNavModules.pricing = {
+          enabled: headerNavModules.pricing,
+          requireAuth: false,
+        };
+      }
+      if (headerNavModules.imageStudio === undefined) {
+        headerNavModules.imageStudio = true;
+      }
+      pricingRequireAuth =
+        typeof headerNavModules.pricing === 'object' &&
+        headerNavModules.pricing?.requireAuth === true;
+    } catch {
+      pricingRequireAuth = false;
+    }
+  }
+  const cabinNavItems = [
+    {
+      text: t('创作台'),
+      description: t('进入生图工作流'),
+      to: '/image-studio',
+      icon: ImageIcon,
+      visible: headerNavModules.imageStudio === true,
+    },
+    {
+      text: t('模型馆'),
+      description: t('查看模型与价格'),
+      to: pricingRequireAuth && !userState.user ? '/login' : '/pricing',
+      icon: Compass,
+      visible:
+        typeof headerNavModules.pricing === 'object'
+          ? headerNavModules.pricing.enabled
+          : headerNavModules.pricing === true,
+    },
+    {
+      text: t('工作台'),
+      description: t('管理密钥和任务'),
+      to: userState.user ? '/console' : '/login',
+      icon: LayoutDashboard,
+      visible: headerNavModules.console === true,
+    },
+    ...(docsLink
+      ? [
+          {
+            text: t('指南'),
+            description: t('查看使用说明'),
+            externalLink: docsLink,
+            icon: BookOpen,
+            visible: headerNavModules.docs === true,
+          },
+        ]
+      : []),
+    {
+      text: t('关于'),
+      description: t('了解平台信息'),
+      to: '/about',
+      icon: Info,
+      visible: headerNavModules.about === true,
+    },
+  ].filter((item) => item.visible);
+  const masonryColumns = useMemo(
+    () =>
+      buildMasonryColumns(
+        galleryImages.map((item) => ({
+          ...item,
+          ...(galleryImageSizes[item.imageUrl] || {}),
+        })),
+        masonryColumnCount,
+      ),
+    [galleryImages, galleryImageSizes, masonryColumnCount],
+  );
+
+  const handleGalleryImageLoad = (item, event) => {
+    const { naturalWidth, naturalHeight } = event.currentTarget;
+    if (!naturalWidth || !naturalHeight) return;
+
+    setGalleryImageSizes((prev) => {
+      const current = prev[item.imageUrl];
+      if (
+        current?.width === naturalWidth &&
+        current?.height === naturalHeight
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [item.imageUrl]: {
+          width: naturalWidth,
+          height: naturalHeight,
+        },
+      };
+    });
+  };
 
   const displayHomePageContent = async () => {
     setHomePageContent(localStorage.getItem('home_page_content') || '');
@@ -197,12 +344,13 @@ const Home = () => {
   };
 
   const renderImageShowcaseHome = () => (
-    <div className='home-showcase-page mt-[60px] h-[calc(100vh-64px)] overflow-hidden bg-semi-color-bg-0'>
-      <section className='grid h-full grid-rows-[auto_minmax(0,1fr)] gap-5 px-4 py-5 md:grid-cols-[minmax(280px,34%)_minmax(0,1fr)] md:grid-rows-1 md:gap-8 md:px-8 md:py-8 lg:px-12'>
+    <div className='home-showcase-page h-screen overflow-hidden bg-semi-color-bg-0'>
+      <div className='home-showcase-forest' aria-hidden='true' />
+      <section className='grid h-full grid-rows-[auto_minmax(0,1fr)] gap-5 px-4 py-5 md:grid-cols-[minmax(300px,38%)_minmax(0,1fr)] md:grid-rows-1 md:gap-8 md:px-8 md:py-8 lg:px-12'>
         <div className='flex min-h-0 flex-col items-center justify-center text-center md:items-start md:text-left'>
-          <div className='flex w-full max-w-lg flex-col items-center gap-6 md:items-start'>
+          <div className='home-showcase-copy flex w-full max-w-lg flex-col items-center gap-6 md:items-start'>
             <div className='flex items-center gap-4'>
-              <div className='flex h-48 w-48 items-center justify-center overflow-hidden rounded-2xl border border-semi-color-border bg-semi-color-bg-1 shadow-sm md:h-60 md:w-60'>
+              <div className='home-showcase-logo flex h-48 w-48 items-center justify-center overflow-hidden rounded-2xl border border-semi-color-border bg-semi-color-bg-1 shadow-sm md:h-60 md:w-60'>
                 {logo ? (
                   <img
                     alt={systemName}
@@ -213,7 +361,7 @@ const Home = () => {
                   <Sparkles className='text-semi-color-primary' size={30} />
                 )}
               </div>
-              <div className='hidden flex-col md:flex'>
+              <div className='home-showcase-brand hidden flex-col md:flex'>
                 <span className='text-sm text-semi-color-text-2'>
                   {t('AI 生图创作平台')}
                 </span>
@@ -223,8 +371,8 @@ const Home = () => {
               </div>
             </div>
 
-            <div className='flex flex-col gap-4'>
-              <div className='inline-flex w-fit items-center gap-2 rounded-full border border-semi-color-border bg-semi-color-bg-1 px-3 py-1 text-sm text-semi-color-text-1 md:hidden'>
+            <div className='home-showcase-text flex flex-col gap-4'>
+              <div className='home-showcase-pill inline-flex w-fit items-center gap-2 rounded-full border border-semi-color-border bg-semi-color-bg-1 px-3 py-1 text-sm text-semi-color-text-1 md:hidden'>
                 <Sparkles size={15} />
                 <span>{t('AI 生图创作平台')}</span>
               </div>
@@ -238,26 +386,48 @@ const Home = () => {
               </p>
             </div>
 
-            <div className='flex flex-wrap items-center justify-center gap-3 md:justify-start'>
-              <Link to='/image-studio'>
-                <Button
-                  icon={<WandSparkles size={16} />}
-                  size={isMobile ? 'default' : 'large'}
-                  theme='solid'
-                  type='primary'
-                >
-                  {t('开始生图')}
-                </Button>
-              </Link>
-              <Link to='/console'>
-                <Button
-                  icon={<ArrowRight size={16} />}
-                  size={isMobile ? 'default' : 'large'}
-                  theme='outline'
-                >
-                  {t('进入控制台')}
-                </Button>
-              </Link>
+            <div
+              className='home-showcase-entry-board'
+              aria-label={t('首页入口')}
+            >
+              {cabinNavItems.map((item) => {
+                const Icon = item.icon;
+                const content = (
+                  <>
+                    <span className='home-showcase-entry-icon'>
+                      <Icon size={18} />
+                    </span>
+                    <span className='min-w-0'>
+                      <span className='home-showcase-entry-title'>
+                        {item.text}
+                      </span>
+                      <span className='home-showcase-entry-desc'>
+                        {item.description}
+                      </span>
+                    </span>
+                  </>
+                );
+
+                return item.externalLink ? (
+                  <a
+                    className='home-showcase-entry'
+                    href={item.externalLink}
+                    key={item.text}
+                    rel='noopener noreferrer'
+                    target='_blank'
+                  >
+                    {content}
+                  </a>
+                ) : (
+                  <Link
+                    className='home-showcase-entry'
+                    key={item.text}
+                    to={item.to}
+                  >
+                    {content}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -266,39 +436,46 @@ const Home = () => {
           {galleryImages.length > 0 ? (
             <div className='home-showcase-track'>
               {[0, 1].map((copyIndex) => (
-                <div className='home-showcase-grid' key={copyIndex}>
-                  {galleryImages.map((item, index) =>
-                    (() => {
-                      const cardTransform =
-                        CARD_TRANSFORMS[
-                          (index + copyIndex * 5) % CARD_TRANSFORMS.length
-                        ];
-                      return (
-                        <div
-                          className={`home-showcase-card ${
-                            aspectClassName[item.aspect] ||
-                            aspectClassName.square
-                          }`}
-                          key={`${copyIndex}-${item.imageUrl}-${index}`}
-                          style={{
-                            '--home-card-rotate': `${cardTransform.rotate}deg`,
-                            '--home-card-x': `${cardTransform.x}px`,
-                            '--home-card-y': `${cardTransform.y}px`,
-                            '--home-card-z': cardTransform.z,
-                          }}
-                        >
-                          <img
-                            alt={item.title}
-                            className='block h-auto w-full rounded-sm'
-                            loading={
-                              copyIndex === 0 && index < 3 ? 'eager' : 'lazy'
-                            }
-                            src={item.imageUrl}
-                          />
-                        </div>
-                      );
-                    })(),
-                  )}
+                <div className='home-showcase-masonry' key={copyIndex}>
+                  {masonryColumns.map((column, columnIndex) => (
+                    <div
+                      className='home-showcase-masonry-column'
+                      key={`${copyIndex}-${columnIndex}`}
+                    >
+                      {column.map((item) => {
+                        const cardTransform = item.layout;
+                        return (
+                          <div
+                            className={`home-showcase-card home-showcase-card-${cardTransform.deco}`}
+                            key={`${copyIndex}-${item.imageUrl}-${item.originalIndex}`}
+                            style={{
+                              '--home-card-rotate': `${cardTransform.rotate}deg`,
+                              '--home-card-x': `${cardTransform.x}px`,
+                              '--home-card-y': `${cardTransform.y}px`,
+                              '--home-card-z': cardTransform.z,
+                            }}
+                          >
+                            <img
+                              alt={item.title}
+                              className='block h-auto w-full rounded-sm'
+                              decoding='async'
+                              height={item.height > 0 ? item.height : undefined}
+                              loading='eager'
+                              onLoad={(event) =>
+                                handleGalleryImageLoad(item, event)
+                              }
+                              src={item.imageUrl}
+                              width={item.width > 0 ? item.width : undefined}
+                            />
+                            <span
+                              className='home-showcase-card-deco'
+                              aria-hidden='true'
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -546,10 +723,7 @@ const Home = () => {
               className='w-full h-screen border-none'
             />
           ) : (
-            <div
-              className='mt-[60px]'
-              dangerouslySetInnerHTML={{ __html: homePageContent }}
-            />
+            <div dangerouslySetInnerHTML={{ __html: homePageContent }} />
           )}
         </div>
       )}

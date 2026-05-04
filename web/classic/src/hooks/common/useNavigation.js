@@ -36,29 +36,29 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
 
     const allLinks = [
       {
-        text: t('首页'),
+        text: t('清影'),
         itemKey: 'home',
         to: '/',
       },
       {
-        text: t('生图'),
+        text: t('创作台'),
         itemKey: 'imageStudio',
         to: '/image-studio',
       },
       {
-        text: t('模型广场'),
+        text: t('模型馆'),
         itemKey: 'pricing',
         to: '/pricing',
       },
       {
-        text: t('控制台'),
+        text: t('工作台'),
         itemKey: 'console',
         to: '/console',
       },
       ...(docsLink
         ? [
             {
-              text: t('文档'),
+              text: t('指南'),
               itemKey: 'docs',
               isExternal: true,
               externalLink: docsLink,
