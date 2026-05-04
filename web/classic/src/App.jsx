@@ -41,7 +41,7 @@ import Chat2Link from './pages/Chat2Link';
 import Midjourney from './pages/Midjourney';
 import ImageLogs from './pages/ImageLogs';
 import ImageStudio from './pages/ImageStudio';
-import ImageSetting from './pages/ImageSetting';
+import ImagePresets from './pages/ImagePresets';
 import VideoStudio from './pages/VideoStudio';
 import Pricing from './pages/Pricing';
 import Task from './pages/Task';
@@ -177,11 +177,11 @@ function App() {
           }
         />
         <Route
-          path='/console/image-setting'
+          path='/console/image-presets'
           element={
-            <AdminRoute>
-              <ImageSetting />
-            </AdminRoute>
+            <PrivateRoute>
+              <ImagePresets />
+            </PrivateRoute>
           }
         />
         <Route

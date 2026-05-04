@@ -299,6 +299,17 @@ const extractErrorMessage = (error, fallback) =>
   error?.message ||
   fallback;
 
+const isQwenImageRequiredError = (message, model) => {
+  const normalizedMessage = String(message || '').toLowerCase();
+  const normalizedModel = String(model || '').toLowerCase();
+  return (
+    normalizedModel.includes('qwen') &&
+    normalizedMessage.includes('image') &&
+    (normalizedMessage.includes('required') ||
+      normalizedMessage.includes('必填'))
+  );
+};
+
 const ImageStudio = ({ publicMode = false }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -748,6 +759,14 @@ const ImageStudio = ({ publicMode = false }) => {
     return userPrompt || templatePrompt;
   };
 
+  const formatGenerationErrorMessage = (error, fallback) => {
+    const message = extractErrorMessage(error, fallback);
+    if (isQwenImageRequiredError(message, config.model)) {
+      return `${message}。${t('qwen系图像暂只支持上传一张图片，请移除预设参考图')}`;
+    }
+    return message;
+  };
+
   const buildGenerationPayload = ({
     prompt = buildEffectivePrompt(),
     size = selectedSize,
@@ -993,7 +1012,7 @@ const ImageStudio = ({ publicMode = false }) => {
           }
           return result;
         } catch (error) {
-          failures.push(extractErrorMessage(error, t('生图请求失败')));
+          failures.push(formatGenerationErrorMessage(error, t('生图请求失败')));
         } finally {
           setGeneratedCount((current) => current + 1);
         }
@@ -1054,7 +1073,7 @@ const ImageStudio = ({ publicMode = false }) => {
       await loadHistory();
       showSuccess(t('重新生成成功'));
     } catch (error) {
-      const message = extractErrorMessage(error, t('生图请求失败'));
+      const message = formatGenerationErrorMessage(error, t('生图请求失败'));
       setLastError(message);
       showError(message);
     } finally {
@@ -1120,7 +1139,10 @@ const ImageStudio = ({ publicMode = false }) => {
           return result;
         } catch (error) {
           failures.push(
-            `${t(slot.title)}: ${extractErrorMessage(error, t('生图请求失败'))}`,
+            `${t(slot.title)}: ${formatGenerationErrorMessage(
+              error,
+              t('生图请求失败'),
+            )}`,
           );
         } finally {
           setGeneratedCount((current) => current + 1);
@@ -1581,9 +1603,9 @@ const ImageStudio = ({ publicMode = false }) => {
       return (
         <div className='flex h-full min-h-[420px] items-center justify-center'>
           <Empty
-            description={t('生成的图片会显示在这里')}
+            description={lastError || t('生成的图片会显示在这里')}
             image={<ImageIcon size={44} color='var(--semi-color-text-2)' />}
-            title={t('暂无图片')}
+            title={lastError ? t('生图请求失败') : t('暂无图片')}
           />
         </div>
       );
@@ -1906,15 +1928,6 @@ const ImageStudio = ({ publicMode = false }) => {
             : 'mt-[60px] px-2'
       }
     >
-      {lastError && (
-        <Banner
-          className='mb-4'
-          closeIcon={null}
-          description={lastError}
-          type='error'
-        />
-      )}
-
       <div
         className={
           isMobile

@@ -60,8 +60,8 @@ const PageLayout = () => {
     '/console/midjourney',
     '/console/image-logs',
     '/console/image-studio',
+    '/console/image-presets',
     '/console/video-studio',
-    '/console/image-setting',
     '/console/task',
     '/console/models',
     '/pricing',
@@ -182,7 +182,10 @@ const PageLayout = () => {
         </Header>
       )}
       <Layout
-        className={clsx(isConsoleRoute && 'console-bg-shell')}
+        className={clsx(
+          isConsoleRoute && 'console-bg-shell',
+          location.pathname === '/pricing' && 'pricing-bg-shell',
+        )}
         style={{
           overflow: isMobile ? 'visible' : 'auto',
           display: 'flex',

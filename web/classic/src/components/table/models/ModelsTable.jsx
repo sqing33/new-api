@@ -43,6 +43,9 @@ const ModelsTable = (modelsData) => {
     setShowEdit,
     refresh,
     vendorMap,
+    imageModelSettingsMap,
+    MODEL_COLUMN_KEYS,
+    visibleColumns,
     t,
   } = modelsData;
 
@@ -55,21 +58,39 @@ const ModelsTable = (modelsData) => {
       setShowEdit,
       refresh,
       vendorMap,
+      imageModelSettingsMap,
+      MODEL_COLUMN_KEYS,
     });
-  }, [t, manageModel, setEditingModel, setShowEdit, refresh, vendorMap]);
+  }, [
+    t,
+    manageModel,
+    setEditingModel,
+    setShowEdit,
+    refresh,
+    vendorMap,
+    imageModelSettingsMap,
+    MODEL_COLUMN_KEYS,
+  ]);
+
+  const visibleColumnsList = useMemo(() => {
+    if (!visibleColumns || Object.keys(visibleColumns).length === 0) {
+      return columns;
+    }
+    return columns.filter((column) => visibleColumns[column.key]);
+  }, [visibleColumns, columns]);
 
   // Handle compact mode by removing fixed positioning
   const tableColumns = useMemo(() => {
     return compactMode
-      ? columns.map((col) => {
+      ? visibleColumnsList.map((col) => {
           if (col.dataIndex === 'operate') {
             const { fixed, ...rest } = col;
             return rest;
           }
           return col;
         })
-      : columns;
-  }, [compactMode, columns]);
+      : visibleColumnsList;
+  }, [compactMode, visibleColumnsList]);
 
   return (
     <CardTable
@@ -101,6 +122,7 @@ const ModelsTable = (modelsData) => {
       }
       className='rounded-xl overflow-hidden'
       size='middle'
+      visibleColumns={visibleColumns}
     />
   );
 };

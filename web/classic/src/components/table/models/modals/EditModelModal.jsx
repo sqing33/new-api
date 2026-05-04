@@ -20,7 +20,6 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import JSONEditor from '../../../common/ui/JSONEditor';
 import {
-  Banner,
   SideSheet,
   Form,
   Button,
@@ -32,12 +31,22 @@ import {
   Avatar,
   Col,
   Row,
+  Checkbox,
 } from '@douyinfe/semi-ui';
 import { Save, X, FileText } from 'lucide-react';
-import { IconAlertTriangle, IconLink } from '@douyinfe/semi-icons';
-import { API, showError, showSuccess } from '../../../../helpers';
+import {
+  API,
+  getLobeHubIcon,
+  showError,
+  showSuccess,
+} from '../../../../helpers';
 import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
+import {
+  IMAGE_MODEL_MODE_OPTIONS,
+  normalizeImageModelSetting,
+  normalizeVideoModelConfig,
+} from '../../../../helpers/imageModelSettings';
 
 const { Text, Title } = Typography;
 
@@ -59,6 +68,71 @@ const nameRuleOptions = [
   { label: '后缀名称匹配', value: 3 },
 ];
 
+const MODEL_ICON_PRESETS = [
+  'OpenAI.Color',
+  'Claude.Color',
+  'Gemini.Color',
+  'DeepSeek.Color',
+  'Qwen.Color',
+  'Doubao.Color',
+  'Zhipu.Color',
+  'Moonshot.Color',
+  'Minimax.Color',
+  'Wenxin.Color',
+  'Spark.Color',
+  'XAI.Color',
+  'OpenRouter.Color',
+  'SiliconCloud.Color',
+  'Mistral.Color',
+  'Perplexity.Color',
+  'Cohere.Color',
+  'Jina.Color',
+  'Cloudflare.Color',
+  'Ollama.Color',
+  'Replicate.Color',
+  'Midjourney.Color',
+  'Kling.Color',
+  'Jimeng.Color',
+  'Suno.Color',
+  'Hunyuan.Color',
+];
+
+const modelIconOptions = MODEL_ICON_PRESETS.map((value) => ({
+  label: (
+    <div className='flex items-center gap-2'>
+      <span className='inline-flex h-5 w-5 items-center justify-center'>
+        {getLobeHubIcon(value, 18)}
+      </span>
+      <span>{value}</span>
+    </div>
+  ),
+  value,
+}));
+
+const splitCsv = (value) =>
+  String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const qingyingSettingToFormValues = (setting) => {
+  const normalized = setting ? normalizeImageModelSetting(setting) : null;
+  const video = normalizeVideoModelConfig(normalized?.video);
+
+  return {
+    qingying_image_enabled: (normalized?.modes || []).length > 0,
+    qingying_image_modes:
+      (normalized?.modes || []).length > 0 ? normalized.modes : ['generations'],
+    qingying_video_enabled: (normalized?.video_modes || []).includes(
+      'text_to_video',
+    ),
+    qingying_video_durations: video.durations.join(', '),
+    qingying_video_default_seconds: video.default_seconds,
+    qingying_video_sizes: video.sizes.join(', '),
+    qingying_video_default_size: video.default_size,
+  };
+};
+
 const EditModelModal = (props) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
@@ -69,6 +143,9 @@ const EditModelModal = (props) => {
 
   // 供应商列表
   const [vendors, setVendors] = useState([]);
+  const [imageModelSettings, setImageModelSettings] = useState(
+    props.imageModelSettings || [],
+  );
 
   // 预填组（标签、端点）
   const [tagGroups, setTagGroups] = useState([]);
@@ -124,7 +201,21 @@ const EditModelModal = (props) => {
     name_rule: props.editingModel?.model_name ? 0 : undefined, // 通过未配置模型过来的固定为精确匹配
     status: true,
     sync_official: true,
+    ...qingyingSettingToFormValues(null),
   });
+
+  const findQingyingSetting = (modelName, settings = imageModelSettings) =>
+    settings.find((setting) => setting.model === modelName);
+
+  const applyQingyingFormValues = (
+    modelName,
+    settings = imageModelSettings,
+  ) => {
+    if (!formApiRef.current) return;
+    formApiRef.current.setValues(
+      qingyingSettingToFormValues(findQingyingSetting(modelName, settings)),
+    );
+  };
 
   const handleCancel = () => {
     props.handleClose();
@@ -153,6 +244,7 @@ const EditModelModal = (props) => {
         data.sync_official = (data.sync_official ?? 1) === 1;
         if (formApiRef.current) {
           formApiRef.current.setValues({ ...getInitValues(), ...data });
+          applyQingyingFormValues(data.model_name);
         }
       } else {
         showError(message);
@@ -176,6 +268,17 @@ const EditModelModal = (props) => {
 
   useEffect(() => {
     if (props.visiable) {
+      (async () => {
+        const settings = await props.loadImageModelSettings?.();
+        if (Array.isArray(settings)) {
+          setImageModelSettings(settings);
+          const currentModel =
+            formApiRef.current?.getValue('model_name') ||
+            props.editingModel?.model_name ||
+            '';
+          applyQingyingFormValues(currentModel, settings);
+        }
+      })();
       if (isEdit) {
         loadModel();
       } else {
@@ -189,9 +292,61 @@ const EditModelModal = (props) => {
     }
   }, [props.visiable, props.editingModel?.id, props.editingModel?.model_name]);
 
+  useEffect(() => {
+    setImageModelSettings(props.imageModelSettings || []);
+  }, [props.imageModelSettings]);
+
+  const buildQingyingSettingFromValues = (values, modelName) => {
+    const modes = values.qingying_image_enabled
+      ? values.qingying_image_modes?.length > 0
+        ? values.qingying_image_modes
+        : ['generations']
+      : [];
+    const videoModes = values.qingying_video_enabled ? ['text_to_video'] : [];
+    const setting = {
+      model: modelName,
+      modes,
+      max_n: 1,
+    };
+
+    if (values.qingying_video_enabled) {
+      setting.video_modes = videoModes;
+      setting.video = normalizeVideoModelConfig({
+        durations: splitCsv(values.qingying_video_durations),
+        default_seconds: values.qingying_video_default_seconds,
+        sizes: splitCsv(values.qingying_video_sizes),
+        default_size: values.qingying_video_default_size,
+      });
+    }
+
+    return normalizeImageModelSetting(setting);
+  };
+
+  const syncQingyingSettings = async (values, oldModelName, nextModelName) => {
+    const nextSetting = buildQingyingSettingFromValues(values, nextModelName);
+    const shouldKeep =
+      nextSetting.modes.length > 0 ||
+      (nextSetting.video_modes || []).length > 0;
+    const nextSettings = imageModelSettings.filter(
+      (setting) =>
+        setting.model !== oldModelName && setting.model !== nextModelName,
+    );
+
+    if (shouldKeep) {
+      nextSettings.push(nextSetting);
+    }
+
+    const saved = await props.saveImageModelSettings?.(nextSettings);
+    if (Array.isArray(saved)) {
+      setImageModelSettings(saved);
+    }
+  };
+
   const submit = async (values) => {
     setLoading(true);
     try {
+      const originalModelName = props.editingModel?.model_name || '';
+      const nextModelName = values.model_name;
       const submitData = {
         ...values,
         tags: Array.isArray(values.tags) ? values.tags.join(',') : values.tags,
@@ -199,6 +354,13 @@ const EditModelModal = (props) => {
         status: values.status ? 1 : 0,
         sync_official: values.sync_official ? 1 : 0,
       };
+      delete submitData.qingying_image_enabled;
+      delete submitData.qingying_image_modes;
+      delete submitData.qingying_video_enabled;
+      delete submitData.qingying_video_durations;
+      delete submitData.qingying_video_default_seconds;
+      delete submitData.qingying_video_sizes;
+      delete submitData.qingying_video_default_size;
 
       if (isEdit) {
         submitData.id = props.editingModel.id;
@@ -206,6 +368,15 @@ const EditModelModal = (props) => {
         const { success, message } = res.data;
         if (success) {
           showSuccess(t('模型更新成功！'));
+          try {
+            await syncQingyingSettings(
+              values,
+              originalModelName,
+              nextModelName,
+            );
+          } catch (error) {
+            showError(error.message || t('清影模型配置同步失败'));
+          }
           props.refresh();
           props.handleClose();
         } else {
@@ -216,6 +387,11 @@ const EditModelModal = (props) => {
         const { success, message } = res.data;
         if (success) {
           showSuccess(t('模型创建成功！'));
+          try {
+            await syncQingyingSettings(values, '', nextModelName);
+          } catch (error) {
+            showError(error.message || t('清影模型配置同步失败'));
+          }
           props.refresh();
           props.handleClose();
         } else {
@@ -331,29 +507,163 @@ const EditModelModal = (props) => {
                   </Col>
 
                   <Col span={24}>
-                    <Form.Input
+                    <Form.Select
+                      field='vendor_id'
+                      label={t('供应商')}
+                      placeholder={t('选择模型供应商')}
+                      optionList={vendors.map((v) => ({
+                        label: v.name,
+                        value: v.id,
+                      }))}
+                      filter
+                      showClear
+                      onChange={(value) => {
+                        const vendorInfo = vendors.find((v) => v.id === value);
+                        if (vendorInfo && formApiRef.current) {
+                          formApiRef.current.setValue(
+                            'vendor',
+                            vendorInfo.name,
+                          );
+                        }
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                  </Col>
+
+                  <Col span={24}>
+                    <Form.Select
                       field='icon'
                       label={t('模型图标')}
-                      placeholder={t('请输入图标名称')}
-                      extraText={
-                        <span>
-                          {t(
-                            "图标使用@lobehub/icons库，如：OpenAI、Claude.Color，支持链式参数：OpenAI.Avatar.type={'platform'}、OpenRouter.Avatar.shape={'square'}，查询所有可用图标请 ",
-                          )}
-                          <Typography.Text
-                            link={{
-                              href: 'https://icons.lobehub.com/components/lobe-hub',
-                              target: '_blank',
-                            }}
-                            icon={<IconLink />}
-                            underline
-                          >
-                            {t('请点击我')}
-                          </Typography.Text>
-                        </span>
+                      placeholder={t('选择预设图标或手动输入')}
+                      optionList={modelIconOptions}
+                      filter={(inputValue, option) =>
+                        String(option.value || '')
+                          .toLowerCase()
+                          .includes(String(inputValue || '').toLowerCase())
                       }
+                      allowCreate
                       showClear
+                      renderSelectedItem={(option) => option.value}
+                      extraText={t(
+                        '可选择常见模型图标，也可输入自定义 LobeHub 图标名后回车',
+                      )}
+                      style={{ width: '100%' }}
                     />
+                  </Col>
+
+                  <Col span={24}>
+                    <Card
+                      className='!rounded-xl border border-gray-100 bg-gray-50/60'
+                      bodyStyle={{ padding: 14 }}
+                    >
+                      <div className='mb-3'>
+                        <Text className='text-base font-medium'>
+                          {t('清影能力')}
+                        </Text>
+                        <div className='text-xs text-gray-600'>
+                          {t('控制该模型是否用于清影工作台的图片或视频生成')}
+                        </div>
+                      </div>
+                      <Row gutter={12}>
+                        <Col span={24}>
+                          <div className='mb-2 flex flex-col gap-3 md:flex-row md:items-center'>
+                            <div className='md:w-[140px] md:flex-shrink-0'>
+                              <Form.Switch
+                                field='qingying_image_enabled'
+                                label={t('启用生图')}
+                                fieldStyle={{ marginBottom: 0 }}
+                                onChange={(checked) => {
+                                  if (
+                                    checked &&
+                                    !formApiRef.current?.getValue(
+                                      'qingying_image_modes',
+                                    )?.length
+                                  ) {
+                                    formApiRef.current?.setValue(
+                                      'qingying_image_modes',
+                                      ['generations'],
+                                    );
+                                  }
+                                }}
+                              />
+                            </div>
+                            {values.qingying_image_enabled && (
+                              <Checkbox.Group
+                                onChange={(value) =>
+                                  formApiRef.current?.setValue(
+                                    'qingying_image_modes',
+                                    value,
+                                  )
+                                }
+                                value={values.qingying_image_modes || []}
+                              >
+                                <div className='flex flex-wrap gap-x-4 gap-y-2'>
+                                  {IMAGE_MODEL_MODE_OPTIONS.map((item) => (
+                                    <Checkbox
+                                      key={item.value}
+                                      value={item.value}
+                                    >
+                                      {t(item.label)}
+                                    </Checkbox>
+                                  ))}
+                                </div>
+                              </Checkbox.Group>
+                            )}
+                          </div>
+                        </Col>
+                        <Col span={24}>
+                          <Form.Switch
+                            field='qingying_video_enabled'
+                            label={t('启用生视频')}
+                            fieldStyle={{ marginBottom: 0 }}
+                          />
+                        </Col>
+                        {values.qingying_video_enabled && (
+                          <>
+                            <Col span={12}>
+                              <Form.Input
+                                field='qingying_video_durations'
+                                label={t('视频时长选项')}
+                                placeholder='4,8'
+                              />
+                            </Col>
+                            <Col span={12}>
+                              <Form.Select
+                                field='qingying_video_default_seconds'
+                                label={t('默认视频时长')}
+                                optionList={splitCsv(
+                                  values.qingying_video_durations,
+                                ).map((value) => ({
+                                  label: `${value}s`,
+                                  value,
+                                }))}
+                                style={{ width: '100%' }}
+                              />
+                            </Col>
+                            <Col span={12}>
+                              <Form.Input
+                                field='qingying_video_sizes'
+                                label={t('视频尺寸选项')}
+                                placeholder='720x1280,1280x720'
+                              />
+                            </Col>
+                            <Col span={12}>
+                              <Form.Select
+                                field='qingying_video_default_size'
+                                label={t('默认视频尺寸')}
+                                optionList={splitCsv(
+                                  values.qingying_video_sizes,
+                                ).map((value) => ({
+                                  label: value,
+                                  value,
+                                }))}
+                                style={{ width: '100%' }}
+                              />
+                            </Col>
+                          </>
+                        )}
+                      </Row>
+                    </Card>
                   </Col>
 
                   <Col span={24}>
@@ -424,43 +734,6 @@ const EditModelModal = (props) => {
                     />
                   </Col>
                   <Col span={24}>
-                    <Form.Select
-                      field='vendor_id'
-                      label={t('供应商')}
-                      placeholder={t('选择模型供应商')}
-                      optionList={vendors.map((v) => ({
-                        label: v.name,
-                        value: v.id,
-                      }))}
-                      filter
-                      showClear
-                      onChange={(value) => {
-                        const vendorInfo = vendors.find((v) => v.id === value);
-                        if (vendorInfo && formApiRef.current) {
-                          formApiRef.current.setValue(
-                            'vendor',
-                            vendorInfo.name,
-                          );
-                        }
-                      }}
-                      style={{ width: '100%' }}
-                    />
-                  </Col>
-                  <Col span={24}>
-                    <Banner
-                      type='warning'
-                      closeIcon={null}
-                      icon={
-                        <IconAlertTriangle
-                          size='large'
-                          style={{ color: 'var(--semi-color-warning)' }}
-                        />
-                      }
-                      description={t(
-                        '提示：此处配置仅用于控制「模型广场」对用户的展示效果，不会影响模型的实际调用与路由。若需配置真实调用行为，请前往「渠道管理」进行设置。',
-                      )}
-                      style={{ marginBottom: 12 }}
-                    />
                     <JSONEditor
                       field='endpoints'
                       label={t('在模型广场向用户展示的端点')}

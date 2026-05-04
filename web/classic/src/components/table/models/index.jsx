@@ -27,6 +27,7 @@ import ModelsFilters from './ModelsFilters';
 import ModelsTabs from './ModelsTabs';
 import EditModelModal from './modals/EditModelModal';
 import EditVendorModal from './modals/EditVendorModal';
+import ColumnSelectorModal from './modals/ColumnSelectorModal';
 import { useModelsData } from '../../../hooks/models/useModelsData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -71,6 +72,10 @@ const ModelsPage = () => {
     editingVendor,
     setEditingVendor,
     loadVendors,
+    loadImageModelSettings,
+    saveImageModelSettings,
+    showColumnSelector,
+    setShowColumnSelector,
 
     // Translation
     t,
@@ -114,7 +119,12 @@ const ModelsPage = () => {
         editingModel={editingModel}
         visiable={showEdit}
         handleClose={closeEdit}
+        imageModelSettings={modelsData.imageModelSettings}
+        loadImageModelSettings={loadImageModelSettings}
+        saveImageModelSettings={saveImageModelSettings}
       />
+
+      <ColumnSelectorModal {...modelsData} />
 
       <EditVendorModal
         visible={showAddVendor || showEditVendor}
@@ -175,6 +185,7 @@ const ModelsPage = () => {
               applyUpstreamOverwrite={modelsData.applyUpstreamOverwrite}
               compactMode={compactMode}
               setCompactMode={setCompactMode}
+              setShowColumnSelector={setShowColumnSelector}
               t={t}
             />
 

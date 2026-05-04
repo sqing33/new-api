@@ -26,6 +26,7 @@ import {
   Modal,
   Tooltip,
 } from '@douyinfe/semi-ui';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import {
   timestamp2string,
   getLobeHubIcon,
@@ -174,6 +175,43 @@ const renderBoundChannels = (channels) => {
   });
 };
 
+const renderCapabilityIcon = (enabled, tooltip) => {
+  const icon = enabled ? (
+    <CheckCircle2 size={17} color='var(--semi-color-success)' />
+  ) : (
+    <XCircle size={17} color='var(--semi-color-text-2)' />
+  );
+
+  return (
+    <Tooltip content={tooltip} showArrow>
+      <span className='inline-flex items-center justify-center'>{icon}</span>
+    </Tooltip>
+  );
+};
+
+const renderImageCapability = (modelName, imageModelSettingsMap, t) => {
+  const setting = imageModelSettingsMap?.[modelName];
+  const modes = setting?.modes || [];
+  const enabled = modes.length > 0;
+  const labels = modes.map((mode) =>
+    mode === 'edits' ? t('图生图') : t('文生图'),
+  );
+  return renderCapabilityIcon(
+    enabled,
+    enabled ? labels.join(' / ') : t('未启用生图'),
+  );
+};
+
+const renderVideoCapability = (modelName, imageModelSettingsMap, t) => {
+  const setting = imageModelSettingsMap?.[modelName];
+  const modes = setting?.video_modes || [];
+  const enabled = modes.includes('text_to_video');
+  return renderCapabilityIcon(
+    enabled,
+    enabled ? t('文生视频') : t('未启用生视频'),
+  );
+};
+
 // Render operations column
 const renderOperations = (
   text,
@@ -280,9 +318,12 @@ export const getModelsColumns = ({
   setShowEdit,
   refresh,
   vendorMap,
+  imageModelSettingsMap,
+  MODEL_COLUMN_KEYS,
 }) => {
   return [
     {
+      key: MODEL_COLUMN_KEYS.ICON,
       title: t('图标'),
       dataIndex: 'icon',
       width: 70,
@@ -290,6 +331,7 @@ export const getModelsColumns = ({
       render: (text, record) => renderModelIconCol(record, vendorMap),
     },
     {
+      key: MODEL_COLUMN_KEYS.MODEL_NAME,
       title: t('模型名称'),
       dataIndex: 'model_name',
       render: (text) => (
@@ -299,11 +341,31 @@ export const getModelsColumns = ({
       ),
     },
     {
+      key: MODEL_COLUMN_KEYS.IMAGE,
+      title: t('生图'),
+      dataIndex: 'model_name',
+      align: 'center',
+      width: 80,
+      render: (modelName) =>
+        renderImageCapability(modelName, imageModelSettingsMap, t),
+    },
+    {
+      key: MODEL_COLUMN_KEYS.VIDEO,
+      title: t('生视频'),
+      dataIndex: 'model_name',
+      align: 'center',
+      width: 90,
+      render: (modelName) =>
+        renderVideoCapability(modelName, imageModelSettingsMap, t),
+    },
+    {
+      key: MODEL_COLUMN_KEYS.NAME_RULE,
       title: t('匹配类型'),
       dataIndex: 'name_rule',
       render: (val, record) => renderNameRule(val, record, t),
     },
     {
+      key: MODEL_COLUMN_KEYS.SYNC_OFFICIAL,
       title: t('参与官方同步'),
       dataIndex: 'sync_official',
       render: (val) => (
@@ -313,41 +375,49 @@ export const getModelsColumns = ({
       ),
     },
     {
+      key: MODEL_COLUMN_KEYS.DESCRIPTION,
       title: t('描述'),
       dataIndex: 'description',
       render: (text) => renderDescription(text, 200),
     },
     {
+      key: MODEL_COLUMN_KEYS.VENDOR,
       title: t('供应商'),
       dataIndex: 'vendor_id',
       render: (vendorId, record) => renderVendorTag(vendorId, vendorMap, t),
     },
     {
+      key: MODEL_COLUMN_KEYS.TAGS,
       title: t('标签'),
       dataIndex: 'tags',
       render: renderTags,
     },
     {
+      key: MODEL_COLUMN_KEYS.ENDPOINTS,
       title: t('端点'),
       dataIndex: 'endpoints',
       render: renderEndpoints,
     },
     {
+      key: MODEL_COLUMN_KEYS.BOUND_CHANNELS,
       title: t('已绑定渠道'),
       dataIndex: 'bound_channels',
       render: renderBoundChannels,
     },
     {
+      key: MODEL_COLUMN_KEYS.ENABLE_GROUPS,
       title: t('可用分组'),
       dataIndex: 'enable_groups',
       render: renderGroups,
     },
     {
+      key: MODEL_COLUMN_KEYS.QUOTA_TYPES,
       title: t('计费类型'),
       dataIndex: 'quota_types',
       render: (qts) => renderQuotaTypes(qts, t),
     },
     {
+      key: MODEL_COLUMN_KEYS.CREATED_TIME,
       title: t('创建时间'),
       dataIndex: 'created_time',
       render: (text, record, index) => {
@@ -355,6 +425,7 @@ export const getModelsColumns = ({
       },
     },
     {
+      key: MODEL_COLUMN_KEYS.UPDATED_TIME,
       title: t('更新时间'),
       dataIndex: 'updated_time',
       render: (text, record, index) => {
@@ -362,6 +433,7 @@ export const getModelsColumns = ({
       },
     },
     {
+      key: MODEL_COLUMN_KEYS.OPERATE,
       title: '',
       dataIndex: 'operate',
       fixed: 'right',

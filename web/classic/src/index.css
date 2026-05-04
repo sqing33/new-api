@@ -18,6 +18,13 @@
   --sidebar-width: 180px;
   --sidebar-width-collapsed: 60px;
   --sidebar-current-width: var(--sidebar-width);
+  --console-glass-bg: rgba(255, 255, 255, 0.36);
+  --console-glass-bg-strong: rgba(255, 255, 255, 0.52);
+  --console-glass-bg-soft: rgba(255, 255, 255, 0.24);
+  --console-table-glass-bg: rgba(255, 255, 255, 0.22);
+  --console-glass-border: rgba(116, 94, 54, 0.14);
+  --console-glass-hover: rgba(255, 255, 255, 0.42);
+  --console-glass-selected: rgba(235, 245, 255, 0.5);
 }
 
 body.sidebar-collapsed {
@@ -64,25 +71,49 @@ body {
   background:
     linear-gradient(
       90deg,
-      rgba(255, 255, 255, 0.72),
-      rgba(255, 255, 255, 0.36) 22%,
-      rgba(255, 255, 255, 0.2)
+      rgba(255, 255, 255, 0.34),
+      rgba(255, 255, 255, 0.16) 22%,
+      rgba(255, 255, 255, 0.08)
     ),
     url('/classic-bg-console.png') center / cover no-repeat,
     #f8f4ea;
 }
 
+.pricing-bg-shell {
+  position: relative;
+  isolation: isolate;
+  background: transparent !important;
+}
+
+.pricing-bg-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(255, 255, 255, 0.12) 24%,
+      rgba(255, 255, 255, 0.06)
+    ),
+    url('/classic-bg-pricing.png') center / cover no-repeat,
+    #f8f4ea;
+}
+
 .console-bg-sider {
-  background: var(--semi-color-bg-0) !important;
+  background: var(--console-glass-bg) !important;
   border-top-right-radius: 18px;
-  backdrop-filter: none;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   overflow: hidden;
 }
 
 .console-bg-sider .sidebar-container {
-  background: var(--semi-color-bg-0) !important;
-  border-top: 1px solid var(--semi-color-border);
-  border-right: 1px solid var(--semi-color-border);
+  background: var(--console-glass-bg) !important;
+  border-top: 1px solid var(--console-glass-border);
+  border-right: 1px solid var(--console-glass-border);
   border-top-right-radius: 18px;
   box-sizing: border-box;
   overflow: hidden;
@@ -90,39 +121,221 @@ body {
 
 .console-bg-sider .sidebar-nav,
 .console-bg-sider .semi-navigation,
-.console-bg-sider .semi-navigation-list-wrapper {
-  background: var(--semi-color-bg-0) !important;
+.console-bg-sider .semi-navigation-list-wrapper,
+.console-bg-sider .semi-navigation-sub-wrap {
+  background: transparent !important;
+}
+
+.console-bg-sider .semi-navigation-item:hover,
+.console-bg-sider .semi-navigation-sub-title:hover {
+  background: var(--console-glass-hover) !important;
+}
+
+.console-bg-sider .semi-navigation-item-selected,
+.console-bg-sider .semi-navigation-sub-title-selected {
+  background: var(--console-glass-selected) !important;
 }
 
 .console-bg-sider .sidebar-collapse-button {
-  background: var(--semi-color-bg-0) !important;
-  background-color: var(--semi-color-bg-0) !important;
+  background: transparent !important;
+  background-color: transparent !important;
   backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   box-shadow: none !important;
-  border-top-color: transparent !important;
+  border-top-color: var(--console-glass-border) !important;
 }
 
 .console-bg-sider .sidebar-collapse-button .semi-button {
-  background: var(--semi-color-bg-0) !important;
-  border-color: var(--semi-color-border) !important;
-  backdrop-filter: none;
+  background: var(--console-glass-bg-soft) !important;
+  border-color: var(--console-glass-border) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .console-bg-sider .sidebar-collapse-button .semi-button:hover,
 .console-bg-sider .sidebar-collapse-button .semi-button:focus {
-  background: var(--semi-color-fill-0) !important;
+  background: var(--console-glass-bg-strong) !important;
 }
 
 .console-bg-content .semi-card,
 .console-bg-content .semi-table-wrapper,
 .console-bg-content .semi-tabs-content,
 .console-bg-content .semi-tabs-bar {
-  background-color: rgba(255, 255, 255, 0.76) !important;
-  backdrop-filter: blur(10px);
+  background-color: var(--console-glass-bg) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .console-bg-content .semi-card {
-  border-color: rgba(116, 94, 54, 0.12) !important;
+  border-color: var(--console-glass-border) !important;
+}
+
+.console-bg-content .semi-card[class*='bg-'] {
+  background-color: var(--console-glass-bg) !important;
+}
+
+.console-bg-content .semi-card-header,
+.console-bg-content .semi-card-body,
+.console-bg-content .semi-table,
+.console-bg-content .semi-table-container,
+.console-bg-content .semi-table-thead,
+.console-bg-content .semi-table-tbody,
+.console-bg-content .semi-table-row,
+.console-bg-content .semi-table-cell,
+.console-bg-content .semi-table-placeholder,
+.console-bg-content .semi-tabs-pane {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.console-bg-content .semi-table-thead > .semi-table-row > .semi-table-row-head,
+.console-bg-content .semi-table-thead > .semi-table-row > .semi-table-cell {
+  background: var(--console-glass-bg-strong) !important;
+  background-color: var(--console-glass-bg-strong) !important;
+}
+
+.console-bg-content .semi-table-row:hover > .semi-table-cell {
+  background: var(--console-glass-hover) !important;
+  background-color: var(--console-glass-hover) !important;
+}
+
+.console-bg-content .table-scroll-card,
+.console-bg-content .table-scroll-card.semi-card {
+  background: var(--console-table-glass-bg) !important;
+  background-color: var(--console-table-glass-bg) !important;
+}
+
+.console-bg-content .table-scroll-card .semi-card-header,
+.console-bg-content .table-scroll-card .semi-card-body {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.console-bg-content .semi-table-wrapper,
+.console-bg-content .semi-table,
+.console-bg-content .semi-table-container,
+.console-bg-content .semi-table-header,
+.console-bg-content .semi-table-body,
+.console-bg-content .semi-table-tbody,
+.console-bg-content .semi-table-fixed,
+.console-bg-content .semi-table-pagination-outer,
+.console-bg-content .semi-table-placeholder {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.console-bg-content .semi-table-tbody > .semi-table-row {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.console-bg-content .semi-table-tbody > .semi-table-row > .semi-table-row-cell {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+.console-bg-content .semi-table-thead > .semi-table-row > .semi-table-row-head {
+  background: rgba(255, 255, 255, 0.18) !important;
+  background-color: rgba(255, 255, 255, 0.18) !important;
+  background-image: none !important;
+}
+
+.console-bg-content
+  .semi-table-tbody
+  > .semi-table-row:hover
+  > .semi-table-row-cell {
+  background: var(--console-glass-hover) !important;
+  background-color: var(--console-glass-hover) !important;
+  background-image: none !important;
+}
+
+.console-bg-content
+  .semi-table-thead
+  > .semi-table-row
+  > .semi-table-row-head.semi-table-cell-fixed-left::before,
+.console-bg-content
+  .semi-table-thead
+  > .semi-table-row
+  > .semi-table-row-head.semi-table-cell-fixed-right::before,
+.console-bg-content
+  .semi-table-tbody
+  > .semi-table-row:hover
+  > .semi-table-row-cell.semi-table-cell-fixed-left::before,
+.console-bg-content
+  .semi-table-tbody
+  > .semi-table-row:hover
+  > .semi-table-row-cell.semi-table-cell-fixed-right::before {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.console-bg-content .dashboard-trend-chart-surface,
+.console-bg-content .dashboard-chart-surface {
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.console-bg-content .dashboard-trend-chart-surface {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.console-bg-content .dashboard-chart-surface {
+  margin: 8px;
+  height: calc(24rem - 16px);
+}
+
+.console-bg-content .dashboard-vchart,
+.console-bg-content .dashboard-vchart > div,
+.console-bg-content .dashboard-vchart canvas {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.console-bg-content .dashboard-chart-tabs,
+.console-bg-content .dashboard-chart-tabs .semi-tabs-bar,
+.console-bg-content .dashboard-chart-tabs .semi-tabs-tab,
+.console-bg-content .dashboard-chart-tabs .semi-tabs-tab-button,
+.console-bg-content .dashboard-chart-tabs .semi-tabs-tab-single,
+.console-bg-content .dashboard-chart-tabs .semi-tabs-tab-line {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.console-bg-content .dashboard-chart-tabs .semi-tabs-tab-button:hover,
+.console-bg-content
+  .dashboard-chart-tabs
+  .semi-tabs-tab-active
+  .semi-tabs-tab-button,
+.console-bg-content .dashboard-chart-tabs .semi-tabs-tab-active,
+.console-bg-content .dashboard-chart-tabs .semi-tabs-tab-active:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.console-bg-content .semi-tabs > .semi-tabs-bar,
+.console-bg-content .semi-tabs > .semi-tabs-bar::before,
+.console-bg-content .semi-tabs .semi-tabs-bar-overflow-list,
+.console-bg-content .semi-tabs .semi-overflow-list,
+.console-bg-content .semi-tabs .semi-overflow-list-scroll-wrapper,
+.console-bg-content .semi-tabs .semi-tabs-tab,
+.console-bg-content .semi-tabs .semi-tabs-tab:hover,
+.console-bg-content .semi-tabs .semi-tabs-tab:active,
+.console-bg-content .semi-tabs .semi-tabs-tab-active,
+.console-bg-content .semi-tabs .semi-tabs-tab-active:hover,
+.console-bg-content .semi-tabs .semi-tabs-tab-single,
+.console-bg-content .semi-tabs .semi-tabs-tab-single:hover,
+.console-bg-content .semi-tabs .semi-tabs-tab-single:active,
+.console-bg-content .semi-tabs .semi-tabs-tab-single.semi-tabs-tab-active,
+.console-bg-content
+  .semi-tabs
+  .semi-tabs-tab-single.semi-tabs-tab-active:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
 }
 
 .console-bg-content > .mt-\[60px\] {
@@ -892,6 +1105,27 @@ code {
   }
 }
 
+.console-bg-sider .sidebar-container,
+.console-bg-sider .sidebar-nav {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.console-bg-sider .sidebar-collapse-button {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-top-color: var(--console-glass-border) !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.console-bg-sider .sidebar-collapse-button .semi-button {
+  background: var(--console-glass-bg-soft) !important;
+  background-color: var(--console-glass-bg-soft) !important;
+  border-color: var(--console-glass-border) !important;
+}
+
 /* ==================== 聊天界面样式 ==================== */
 .semi-chat {
   padding-top: 0 !important;
@@ -1302,6 +1536,66 @@ html.dark .sbg-variant-green {
   background: transparent;
 }
 
+.console-bg-content .image-studio-create-card,
+.console-bg-content .image-studio-result-card {
+  background: var(--console-glass-bg) !important;
+  background-color: var(--console-glass-bg) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.console-bg-content .image-studio-create-card .semi-tabs,
+.console-bg-content .image-studio-create-card .semi-tabs-bar,
+.console-bg-content .image-studio-create-card .semi-tabs-content,
+.console-bg-content .image-studio-create-card .semi-tabs-pane,
+.console-bg-content .image-studio-result-card .semi-tabs,
+.console-bg-content .image-studio-result-card .semi-tabs-bar,
+.console-bg-content .image-studio-result-card .semi-tabs-content,
+.console-bg-content .image-studio-result-card .semi-tabs-pane {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.console-bg-content
+  .image-studio-create-card
+  .semi-tabs-bar-button
+  .semi-tabs-tab,
+.console-bg-content
+  .image-studio-result-card
+  .semi-tabs-bar-button
+  .semi-tabs-tab {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.console-bg-content
+  .image-studio-create-card
+  .semi-tabs-bar-button
+  .semi-tabs-tab:hover,
+.console-bg-content
+  .image-studio-create-card
+  .semi-tabs-bar-button
+  .semi-tabs-tab-active,
+.console-bg-content
+  .image-studio-create-card
+  .semi-tabs-bar-button
+  .semi-tabs-tab-active:hover,
+.console-bg-content
+  .image-studio-result-card
+  .semi-tabs-bar-button
+  .semi-tabs-tab:hover,
+.console-bg-content
+  .image-studio-result-card
+  .semi-tabs-bar-button
+  .semi-tabs-tab-active,
+.console-bg-content
+  .image-studio-result-card
+  .semi-tabs-bar-button
+  .semi-tabs-tab-active:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
 .image-studio-color-picker input[type='color'] {
   width: 28px;
   height: 28px;
@@ -1602,10 +1896,15 @@ html.dark .with-pastel-balls::before {
 }
 
 /* ==================== 模型定价页面布局 ==================== */
+.pricing-page-bg {
+  background: transparent;
+}
+
 .pricing-layout {
   height: calc(100vh - 60px);
   overflow: hidden;
   margin-top: 60px;
+  background: transparent !important;
 }
 
 .pricing-sidebar {
@@ -1613,13 +1912,18 @@ html.dark .with-pastel-balls::before {
   min-width: clamp(280px, 24vw, 520px) !important;
   max-width: clamp(280px, 24vw, 520px) !important;
   height: calc(100vh - 60px);
-  background-color: var(--semi-color-bg-0);
+  background: var(--console-glass-bg) !important;
+  background-color: var(--console-glass-bg) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-right: 1px solid var(--console-glass-border);
   overflow: auto;
 }
 
 .pricing-content {
   height: calc(100vh - 60px);
-  background-color: var(--semi-color-bg-0);
+  background: transparent !important;
+  background-color: transparent !important;
   display: flex;
   flex-direction: column;
 }
@@ -1637,7 +1941,10 @@ html.dark .with-pastel-balls::before {
 
 .pricing-search-header {
   padding: 0.5rem;
-  background-color: var(--semi-color-bg-0);
+  background: rgba(255, 255, 255, 0.18) !important;
+  background-color: rgba(255, 255, 255, 0.18) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   flex-shrink: 0;
   position: sticky;
   top: 0;
@@ -1653,6 +1960,90 @@ html.dark .with-pastel-balls::before {
   flex: 1;
   overflow: auto;
   min-height: 0;
+}
+
+.pricing-bg-shell .pricing-page-bg {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.pricing-bg-shell .semi-card {
+  background: var(--console-glass-bg) !important;
+  background-color: var(--console-glass-bg) !important;
+  border-color: var(--console-glass-border) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: none;
+}
+
+.pricing-bg-shell .pricing-view-container .semi-card,
+.pricing-bg-shell .pricing-view-container-mobile .semi-card {
+  background: rgba(255, 255, 255, 0.3) !important;
+  background-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.pricing-bg-shell .pricing-view-container .semi-card:hover,
+.pricing-bg-shell .pricing-view-container-mobile .semi-card:hover {
+  background: var(--console-glass-hover) !important;
+  background-color: var(--console-glass-hover) !important;
+}
+
+.pricing-bg-shell .pricing-view-container .semi-card.bg-blue-50,
+.pricing-bg-shell .pricing-view-container-mobile .semi-card.bg-blue-50 {
+  background: var(--console-glass-selected) !important;
+  background-color: var(--console-glass-selected) !important;
+  border-color: rgba(59, 130, 246, 0.55) !important;
+}
+
+.pricing-bg-shell .semi-card-header,
+.pricing-bg-shell .semi-card-body,
+.pricing-bg-shell .semi-table,
+.pricing-bg-shell .semi-table-wrapper,
+.pricing-bg-shell .semi-table-container,
+.pricing-bg-shell .semi-table-header,
+.pricing-bg-shell .semi-table-body,
+.pricing-bg-shell .semi-table-tbody,
+.pricing-bg-shell .semi-table-row,
+.pricing-bg-shell .semi-table-row-cell,
+.pricing-bg-shell .semi-table-cell,
+.pricing-bg-shell .semi-table-pagination-outer,
+.pricing-bg-shell .semi-table-placeholder {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.pricing-bg-shell .semi-table-thead > .semi-table-row > .semi-table-row-head {
+  background: rgba(255, 255, 255, 0.2) !important;
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.pricing-bg-shell .semi-table-tbody > .semi-table-row:hover > .semi-table-row-cell {
+  background: var(--console-glass-hover) !important;
+  background-color: var(--console-glass-hover) !important;
+}
+
+.pricing-bg-shell .pricing-sidebar .sbg-button {
+  background: var(--console-glass-bg-soft) !important;
+  background-color: var(--console-glass-bg-soft) !important;
+  border-color: var(--console-glass-border) !important;
+}
+
+.pricing-bg-shell .pricing-sidebar .sbg-button:hover {
+  background: var(--console-glass-hover) !important;
+  background-color: var(--console-glass-hover) !important;
+}
+
+.pricing-bg-shell .pricing-sidebar .sbg-button.semi-button-light {
+  background: var(--console-glass-selected) !important;
+  background-color: var(--console-glass-selected) !important;
+}
+
+.pricing-bg-shell .semi-input-wrapper,
+.pricing-bg-shell .semi-select,
+.pricing-bg-shell .semi-select-selection {
+  background: rgba(255, 255, 255, 0.34) !important;
+  background-color: rgba(255, 255, 255, 0.34) !important;
+  border-color: var(--console-glass-border) !important;
 }
 
 /* ==================== semi-ui 组件自定义样式 ==================== */

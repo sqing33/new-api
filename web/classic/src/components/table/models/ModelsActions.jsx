@@ -41,6 +41,7 @@ const ModelsActions = ({
   applyUpstreamOverwrite,
   compactMode,
   setCompactMode,
+  setShowColumnSelector,
   t,
 }) => {
   // Modal states
@@ -177,6 +178,15 @@ const ModelsActions = ({
           setCompactMode={setCompactMode}
           t={t}
         />
+
+        <Button
+          type='secondary'
+          className='flex-1 md:flex-initial'
+          size='small'
+          onClick={() => setShowColumnSelector(true)}
+        >
+          {t('列设置')}
+        </Button>
       </div>
 
       <SelectionNotification

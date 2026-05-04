@@ -38,6 +38,7 @@ const buildDefaultSidebarModules = () => ({
     enabled: true,
     playground: true,
     'image-studio': true,
+    'image-presets': true,
     'video-studio': true,
     chat: true,
   },
@@ -60,7 +61,6 @@ const buildDefaultSidebarModules = () => ({
     channel: true,
     models: true,
     deployment: true,
-    'image-setting': true,
     redemption: true,
     user: true,
     subscription: true,
@@ -71,12 +71,14 @@ const buildDefaultSidebarModules = () => ({
 const mergeSidebarModules = (modules) => {
   const defaults = buildDefaultSidebarModules();
   if (!modules || typeof modules !== 'object') return defaults;
-  return Object.fromEntries(
+  const merged = Object.fromEntries(
     Object.entries(defaults).map(([sectionKey, sectionConfig]) => [
       sectionKey,
       { ...sectionConfig, ...(modules[sectionKey] || {}) },
     ]),
   );
+  delete merged.admin?.['image-setting'];
+  return merged;
 };
 
 export default function SettingsSidebarModulesAdmin(props) {
@@ -188,6 +190,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           description: t('生图工具'),
         },
         {
+          key: 'image-presets',
+          title: t('预设提示词'),
+          description: t('清影预设模板'),
+        },
+        {
           key: 'video-studio',
           title: t('视频'),
           description: t('视频生成工具'),
@@ -240,11 +247,6 @@ export default function SettingsSidebarModulesAdmin(props) {
           key: 'deployment',
           title: t('模型部署'),
           description: t('模型部署管理'),
-        },
-        {
-          key: 'image-setting',
-          title: t('清影管理'),
-          description: t('图片与视频模型能力配置'),
         },
         {
           key: 'subscription',

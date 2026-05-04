@@ -69,6 +69,7 @@ import {
   MessageSquare,
   Key,
   BarChart3,
+  BookMarked,
   Image as ImageIcon,
   Video,
   CheckSquare,
@@ -127,8 +128,9 @@ export function getLucideIcon(key, selected = false) {
     case 'playground':
       return <TerminalSquare {...commonProps} color={iconColor} />;
     case 'image-studio':
-    case 'image-setting':
       return <ImageIcon {...commonProps} color={iconColor} />;
+    case 'image-presets':
+      return <BookMarked {...commonProps} color={iconColor} />;
     case 'video-studio':
       return <Video {...commonProps} color={iconColor} />;
     case 'chat':

@@ -67,6 +67,9 @@ const NotificationSettings = ({
     chat: {
       enabled: true,
       playground: true,
+      'image-studio': true,
+      'image-presets': true,
+      'video-studio': true,
       chat: true,
     },
     console: {
@@ -157,7 +160,14 @@ const NotificationSettings = ({
 
   const resetSidebarModules = () => {
     const defaultConfig = {
-      chat: { enabled: true, playground: true, chat: true },
+      chat: {
+        enabled: true,
+        playground: true,
+        'image-studio': true,
+        'image-presets': true,
+        'video-studio': true,
+        chat: true,
+      },
       console: {
         enabled: true,
         detail: true,
@@ -255,6 +265,21 @@ const NotificationSettings = ({
           key: 'playground',
           title: t('操练场'),
           description: t('AI模型测试环境'),
+        },
+        {
+          key: 'image-studio',
+          title: t('清影工作台'),
+          description: t('生图工具'),
+        },
+        {
+          key: 'image-presets',
+          title: t('预设提示词'),
+          description: t('清影预设模板'),
+        },
+        {
+          key: 'video-studio',
+          title: t('视频'),
+          description: t('视频生成工具'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
       ],

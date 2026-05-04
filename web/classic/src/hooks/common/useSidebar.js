@@ -30,6 +30,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     enabled: true,
     playground: true,
     'image-studio': true,
+    'image-presets': true,
     'video-studio': true,
     chat: true,
   },
@@ -52,7 +53,6 @@ export const DEFAULT_ADMIN_CONFIG = {
     channel: true,
     models: true,
     deployment: true,
-    'image-setting': true,
     redemption: true,
     user: true,
     subscription: true,
@@ -76,6 +76,8 @@ export const mergeAdminConfig = (savedConfig) => {
 
     merged[sectionKey] = { ...merged[sectionKey], ...sectionConfig };
   }
+
+  delete merged.admin?.['image-setting'];
 
   return merged;
 };

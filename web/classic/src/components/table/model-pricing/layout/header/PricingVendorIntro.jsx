@@ -50,15 +50,15 @@ const THEME_COLORS = {
 
 const COMPONENT_STYLES = {
   tag: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: 'rgba(255,255,255,0.42)',
     color: '#1f2937',
-    border: '1px solid rgba(255,255,255,0.8)',
+    border: '1px solid rgba(116,94,54,0.14)',
     fontWeight: '500',
   },
   avatarContainer:
     'w-16 h-16 rounded-2xl bg-white/90 shadow-md backdrop-blur-sm flex items-center justify-center',
-  titleText: { color: 'white' },
-  descriptionText: { color: 'rgba(255,255,255,0.9)' },
+  titleText: { color: '#1f2937' },
+  descriptionText: { color: 'rgba(31,41,55,0.72)' },
 };
 
 const CONTENT_TEXTS = {
@@ -262,10 +262,11 @@ const PricingVendorIntro = memo(
     const createCoverStyle = useCallback(
       (primaryColor) => ({
         '--palette-primary-darkerChannel': primaryColor,
-        backgroundImage: `linear-gradient(0deg, rgba(var(--palette-primary-darkerChannel) / 80%), rgba(var(--palette-primary-darkerChannel) / 80%)), url('/cover-4.webp')`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
+        background:
+          'linear-gradient(135deg, rgba(255,255,255,0.36), rgba(255,255,255,0.2))',
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+        borderBottom: '1px solid rgba(116,94,54,0.14)',
       }),
       [],
     );

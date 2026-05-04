@@ -49,6 +49,7 @@ const ChartsPanel = ({
             {t('模型数据分析')}
           </div>
           <Tabs
+            className='dashboard-chart-tabs'
             type='slash'
             activeKey={activeChartTab}
             onChange={setActiveChartTab}
@@ -68,24 +69,54 @@ const ChartsPanel = ({
       }
       bodyStyle={{ padding: 0 }}
     >
-      <div className='h-96 p-2'>
+      <div className='dashboard-chart-surface h-96 p-2'>
         {activeChartTab === '1' && (
-          <VChart spec={spec_line} option={CHART_CONFIG} />
+          <VChart
+            className='dashboard-vchart'
+            style={{ background: 'transparent' }}
+            spec={spec_line}
+            option={CHART_CONFIG}
+          />
         )}
         {activeChartTab === '2' && (
-          <VChart spec={spec_model_line} option={CHART_CONFIG} />
+          <VChart
+            className='dashboard-vchart'
+            style={{ background: 'transparent' }}
+            spec={spec_model_line}
+            option={CHART_CONFIG}
+          />
         )}
         {activeChartTab === '3' && (
-          <VChart spec={spec_pie} option={CHART_CONFIG} />
+          <VChart
+            className='dashboard-vchart'
+            style={{ background: 'transparent' }}
+            spec={spec_pie}
+            option={CHART_CONFIG}
+          />
         )}
         {activeChartTab === '4' && (
-          <VChart spec={spec_rank_bar} option={CHART_CONFIG} />
+          <VChart
+            className='dashboard-vchart'
+            style={{ background: 'transparent' }}
+            spec={spec_rank_bar}
+            option={CHART_CONFIG}
+          />
         )}
         {activeChartTab === '5' && isAdminUser && (
-          <VChart spec={spec_user_rank} option={CHART_CONFIG} />
+          <VChart
+            className='dashboard-vchart'
+            style={{ background: 'transparent' }}
+            spec={spec_user_rank}
+            option={CHART_CONFIG}
+          />
         )}
         {activeChartTab === '6' && isAdminUser && (
-          <VChart spec={spec_user_trend} option={CHART_CONFIG} />
+          <VChart
+            className='dashboard-vchart'
+            style={{ background: 'transparent' }}
+            spec={spec_user_trend}
+            option={CHART_CONFIG}
+          />
         )}
       </div>
     </Card>

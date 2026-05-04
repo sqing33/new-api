@@ -95,8 +95,10 @@ const StatsCards = ({
                   ) : (
                     (loading ||
                       (item.trendData && item.trendData.length > 0)) && (
-                      <div className='w-24 h-10'>
+                      <div className='dashboard-trend-chart-surface w-24 h-10'>
                         <VChart
+                          className='dashboard-vchart dashboard-trend-chart'
+                          style={{ background: 'transparent' }}
                           spec={getTrendSpec(item.trendData, item.trendColor)}
                           option={CHART_CONFIG}
                         />

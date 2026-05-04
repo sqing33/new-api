@@ -74,6 +74,7 @@ export default function SettingsSidebarModulesUser() {
         enabled: true,
         playground: isSidebarModuleAllowed('chat', 'playground'),
         'image-studio': isSidebarModuleAllowed('chat', 'image-studio'),
+        'image-presets': isSidebarModuleAllowed('chat', 'image-presets'),
         'video-studio': isSidebarModuleAllowed('chat', 'video-studio'),
         chat: isSidebarModuleAllowed('chat', 'chat'),
       };
@@ -108,7 +109,6 @@ export default function SettingsSidebarModulesUser() {
         channel: isSidebarModuleAllowed('admin', 'channel'),
         models: isSidebarModuleAllowed('admin', 'models'),
         deployment: isSidebarModuleAllowed('admin', 'deployment'),
-        'image-setting': isSidebarModuleAllowed('admin', 'image-setting'),
         redemption: isSidebarModuleAllowed('admin', 'redemption'),
         user: isSidebarModuleAllowed('admin', 'user'),
         setting: isSidebarModuleAllowed('admin', 'setting'),
@@ -310,6 +310,11 @@ export default function SettingsSidebarModulesUser() {
           description: t('生图工具'),
         },
         {
+          key: 'image-presets',
+          title: t('预设提示词'),
+          description: t('清影预设模板'),
+        },
+        {
           key: 'video-studio',
           title: t('视频'),
           description: t('视频生成工具'),
@@ -362,11 +367,6 @@ export default function SettingsSidebarModulesUser() {
           key: 'deployment',
           title: t('模型部署'),
           description: t('模型部署管理'),
-        },
-        {
-          key: 'image-setting',
-          title: t('清影管理'),
-          description: t('图片与视频模型能力配置'),
         },
         {
           key: 'redemption',

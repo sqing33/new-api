@@ -17,14 +17,42 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { API, showError, showSuccess } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
+import {
+  buildImageModelSettingsMap,
+  loadImageModelSettingsOption,
+  saveImageModelSettingsOption,
+} from '../../helpers/imageModelSettingsOption';
+import { StatusContext } from '../../context/Status';
+
+const MODEL_COLUMN_KEYS = {
+  ICON: 'icon',
+  MODEL_NAME: 'model_name',
+  IMAGE: 'qingying_image',
+  VIDEO: 'qingying_video',
+  NAME_RULE: 'name_rule',
+  SYNC_OFFICIAL: 'sync_official',
+  DESCRIPTION: 'description',
+  VENDOR: 'vendor_id',
+  TAGS: 'tags',
+  ENDPOINTS: 'endpoints',
+  BOUND_CHANNELS: 'bound_channels',
+  ENABLE_GROUPS: 'enable_groups',
+  QUOTA_TYPES: 'quota_types',
+  CREATED_TIME: 'created_time',
+  UPDATED_TIME: 'updated_time',
+  OPERATE: 'operate',
+};
+
+const MODELS_COLUMNS_STORAGE_KEY = 'models-table-columns-admin';
 
 export const useModelsData = () => {
   const { t } = useTranslation();
+  const [statusState, statusDispatch] = useContext(StatusContext);
   const [compactMode, setCompactMode] = useTableCompactMode('models');
 
   // State management
@@ -34,6 +62,40 @@ export const useModelsData = () => {
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
   const [searching, setSearching] = useState(false);
   const [modelCount, setModelCount] = useState(0);
+  const [imageModelSettings, setImageModelSettings] = useState([]);
+  const [showColumnSelector, setShowColumnSelector] = useState(false);
+
+  const getDefaultColumnVisibility = () => ({
+    [MODEL_COLUMN_KEYS.ICON]: true,
+    [MODEL_COLUMN_KEYS.MODEL_NAME]: true,
+    [MODEL_COLUMN_KEYS.IMAGE]: true,
+    [MODEL_COLUMN_KEYS.VIDEO]: true,
+    [MODEL_COLUMN_KEYS.NAME_RULE]: false,
+    [MODEL_COLUMN_KEYS.SYNC_OFFICIAL]: false,
+    [MODEL_COLUMN_KEYS.DESCRIPTION]: false,
+    [MODEL_COLUMN_KEYS.VENDOR]: true,
+    [MODEL_COLUMN_KEYS.TAGS]: true,
+    [MODEL_COLUMN_KEYS.ENDPOINTS]: true,
+    [MODEL_COLUMN_KEYS.BOUND_CHANNELS]: false,
+    [MODEL_COLUMN_KEYS.ENABLE_GROUPS]: true,
+    [MODEL_COLUMN_KEYS.QUOTA_TYPES]: true,
+    [MODEL_COLUMN_KEYS.CREATED_TIME]: false,
+    [MODEL_COLUMN_KEYS.UPDATED_TIME]: false,
+    [MODEL_COLUMN_KEYS.OPERATE]: true,
+  });
+
+  const getInitialVisibleColumns = () => {
+    const defaults = getDefaultColumnVisibility();
+    try {
+      const saved = localStorage.getItem(MODELS_COLUMNS_STORAGE_KEY);
+      if (saved) return { ...defaults, ...JSON.parse(saved) };
+    } catch (_) {}
+    return defaults;
+  };
+
+  const [visibleColumns, setVisibleColumns] = useState(
+    getInitialVisibleColumns,
+  );
 
   // Modal states
   const [showEdit, setShowEdit] = useState(false);
@@ -105,6 +167,36 @@ export const useModelsData = () => {
     });
     return map;
   }, [vendors]);
+
+  const imageModelSettingsMap = useMemo(
+    () => buildImageModelSettingsMap(imageModelSettings),
+    [imageModelSettings],
+  );
+
+  const loadImageModelSettings = async () => {
+    try {
+      const settings = await loadImageModelSettingsOption();
+      setImageModelSettings(settings);
+      return settings;
+    } catch (error) {
+      showError(error.message || t('加载清影模型配置失败'));
+      return [];
+    }
+  };
+
+  const saveImageModelSettings = async (nextSettings) => {
+    const { settings, value } =
+      await saveImageModelSettingsOption(nextSettings);
+    setImageModelSettings(settings);
+    statusDispatch({
+      type: 'set',
+      payload: {
+        ...(statusState?.status || {}),
+        image_model_settings: value,
+      },
+    });
+    return settings;
+  };
 
   // Load vendor list
   const loadVendors = async () => {
@@ -311,6 +403,17 @@ export const useModelsData = () => {
     if (success) {
       showSuccess(t('操作成功完成！'));
       if (action === 'delete') {
+        if (record?.model_name) {
+          try {
+            await saveImageModelSettings(
+              imageModelSettings.filter(
+                (setting) => setting.model !== record.model_name,
+              ),
+            );
+          } catch (error) {
+            showError(error.message || t('清影模型配置同步失败'));
+          }
+        }
         await refresh();
       } else {
         // Update local state for enable/disable
@@ -387,10 +490,14 @@ export const useModelsData = () => {
 
       const results = await Promise.all(deletePromises);
       let successCount = 0;
+      const deletedModelNames = [];
 
       results.forEach((res, index) => {
         if (res.data.success) {
           successCount++;
+          if (selectedKeys[index].model_name) {
+            deletedModelNames.push(selectedKeys[index].model_name);
+          }
         } else {
           showError(
             `删除模型 ${selectedKeys[index].model_name} 失败: ${res.data.message}`,
@@ -399,6 +506,18 @@ export const useModelsData = () => {
       });
 
       if (successCount > 0) {
+        try {
+          const deletedModelNameSet = new Set(deletedModelNames);
+          if (deletedModelNameSet.size > 0) {
+            await saveImageModelSettings(
+              imageModelSettings.filter(
+                (setting) => !deletedModelNameSet.has(setting.model),
+              ),
+            );
+          }
+        } catch (error) {
+          showError(error.message || t('清影模型配置同步失败'));
+        }
         showSuccess(t(`成功删除 ${successCount} 个模型`));
         setSelectedKeys([]);
         await refresh();
@@ -423,9 +542,38 @@ export const useModelsData = () => {
   useEffect(() => {
     (async () => {
       await loadVendors();
+      await loadImageModelSettings();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (Object.keys(visibleColumns).length > 0) {
+      localStorage.setItem(
+        MODELS_COLUMNS_STORAGE_KEY,
+        JSON.stringify(visibleColumns),
+      );
+    }
+  }, [visibleColumns]);
+
+  const handleColumnVisibilityChange = (columnKey, checked) => {
+    if (columnKey === MODEL_COLUMN_KEYS.OPERATE) return;
+    setVisibleColumns((current) => ({ ...current, [columnKey]: checked }));
+  };
+
+  const handleSelectAllColumns = (checked) => {
+    const next = { ...visibleColumns };
+    Object.keys(MODEL_COLUMN_KEYS).forEach((key) => {
+      const columnKey = MODEL_COLUMN_KEYS[key];
+      next[columnKey] =
+        columnKey === MODEL_COLUMN_KEYS.OPERATE ? true : checked;
+    });
+    setVisibleColumns(next);
+  };
+
+  const initDefaultColumns = () => {
+    setVisibleColumns(getDefaultColumnVisibility());
+  };
 
   return {
     // Data state
@@ -435,6 +583,15 @@ export const useModelsData = () => {
     activePage,
     pageSize,
     modelCount,
+    imageModelSettings,
+    imageModelSettingsMap,
+    MODEL_COLUMN_KEYS,
+    visibleColumns,
+    showColumnSelector,
+    setShowColumnSelector,
+    handleColumnVisibilityChange,
+    handleSelectAllColumns,
+    initDefaultColumns,
 
     // Selection state
     selectedKeys,
@@ -460,6 +617,8 @@ export const useModelsData = () => {
     manageModel,
     batchDeleteModels,
     copyText,
+    loadImageModelSettings,
+    saveImageModelSettings,
 
     // Pagination
     setActivePage,

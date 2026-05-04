@@ -50,8 +50,8 @@ const routerMap = {
   deployment: '/console/deployment',
   playground: '/console/playground',
   'image-studio': '/console/image-studio',
+  'image-presets': '/console/image-presets',
   'video-studio': '/console/video-studio',
-  'image-setting': '/console/image-setting',
   personal: '/console/personal',
 };
 
@@ -181,12 +181,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {
-        text: t('清影管理'),
-        itemKey: 'image-setting',
-        to: '/image-setting',
-        className: isRoot() ? '' : 'tableHiddle',
-      },
-      {
         text: t('兑换码管理'),
         itemKey: 'redemption',
         to: '/redemption',
@@ -226,6 +220,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('清影工作台'),
         itemKey: 'image-studio',
         to: '/image-studio',
+      },
+      {
+        text: t('预设提示词'),
+        itemKey: 'image-presets',
+        to: '/image-presets',
       },
       {
         text: t('视频'),

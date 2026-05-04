@@ -42,6 +42,8 @@ const USER_COLORS = [
   '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6',
 ];
 
+const DASHBOARD_CHART_BACKGROUND = 'transparent';
+
 export const useDashboardCharts = (
   dataExportDefaultTime,
   setTrendData,
@@ -56,6 +58,7 @@ export const useDashboardCharts = (
   // ========== 图表规格状态 ==========
   const [spec_pie, setSpecPie] = useState({
     type: 'pie',
+    background: DASHBOARD_CHART_BACKGROUND,
     data: [
       {
         id: 'id0',
@@ -113,6 +116,7 @@ export const useDashboardCharts = (
 
   const [spec_line, setSpecLine] = useState({
     type: 'bar',
+    background: DASHBOARD_CHART_BACKGROUND,
     data: [
       {
         id: 'barData',
@@ -187,6 +191,7 @@ export const useDashboardCharts = (
 
   const [spec_model_line, setSpecModelLine] = useState({
     type: 'line',
+    background: DASHBOARD_CHART_BACKGROUND,
     data: [
       {
         id: 'lineData',
@@ -245,6 +250,7 @@ export const useDashboardCharts = (
 
   const [spec_rank_bar, setSpecRankBar] = useState({
     type: 'bar',
+    background: DASHBOARD_CHART_BACKGROUND,
     data: [
       {
         id: 'rankData',
@@ -289,6 +295,7 @@ export const useDashboardCharts = (
   // ========== Admin: 用户消耗排行 ==========
   const [spec_user_rank, setSpecUserRank] = useState({
     type: 'bar',
+    background: DASHBOARD_CHART_BACKGROUND,
     data: [{ id: 'userRankData', values: [] }],
     xField: 'rawQuota',
     yField: 'User',
@@ -331,6 +338,7 @@ export const useDashboardCharts = (
   // ========== Admin: 用户消耗趋势 ==========
   const [spec_user_trend, setSpecUserTrend] = useState({
     type: 'area',
+    background: DASHBOARD_CHART_BACKGROUND,
     data: [{ id: 'userTrendData', values: [] }],
     xField: 'Time',
     yField: 'rawQuota',
