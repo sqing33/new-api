@@ -43,6 +43,88 @@ body {
   height: 100dvh;
 }
 
+.console-bg-layout,
+.console-bg-shell,
+.console-bg-main,
+.console-bg-content {
+  background: transparent !important;
+}
+
+.console-bg-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.console-bg-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.72),
+      rgba(255, 255, 255, 0.36) 22%,
+      rgba(255, 255, 255, 0.2)
+    ),
+    url('/classic-bg-console.png') center / cover no-repeat,
+    #f8f4ea;
+}
+
+.console-bg-sider {
+  background: var(--semi-color-bg-0) !important;
+  border-top-right-radius: 18px;
+  backdrop-filter: none;
+  overflow: hidden;
+}
+
+.console-bg-sider .sidebar-container {
+  background: var(--semi-color-bg-0) !important;
+  border-top: 1px solid var(--semi-color-border);
+  border-right: 1px solid var(--semi-color-border);
+  border-top-right-radius: 18px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.console-bg-sider .sidebar-nav,
+.console-bg-sider .semi-navigation,
+.console-bg-sider .semi-navigation-list-wrapper {
+  background: var(--semi-color-bg-0) !important;
+}
+
+.console-bg-sider .sidebar-collapse-button {
+  background: var(--semi-color-bg-0) !important;
+  background-color: var(--semi-color-bg-0) !important;
+  backdrop-filter: none;
+  box-shadow: none !important;
+  border-top-color: transparent !important;
+}
+
+.console-bg-sider .sidebar-collapse-button .semi-button {
+  background: var(--semi-color-bg-0) !important;
+  border-color: var(--semi-color-border) !important;
+  backdrop-filter: none;
+}
+
+.console-bg-sider .sidebar-collapse-button .semi-button:hover,
+.console-bg-sider .sidebar-collapse-button .semi-button:focus {
+  background: var(--semi-color-fill-0) !important;
+}
+
+.console-bg-content .semi-card,
+.console-bg-content .semi-table-wrapper,
+.console-bg-content .semi-tabs-content,
+.console-bg-content .semi-tabs-bar {
+  background-color: rgba(255, 255, 255, 0.76) !important;
+  backdrop-filter: blur(10px);
+}
+
+.console-bg-content .semi-card {
+  border-color: rgba(116, 94, 54, 0.12) !important;
+}
+
 .app-sider {
   height: calc(100vh - 64px);
   height: calc(100dvh - 64px);

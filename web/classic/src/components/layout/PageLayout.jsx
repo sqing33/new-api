@@ -39,6 +39,7 @@ import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 import { useLocation } from 'react-router-dom';
 import { normalizeLanguage } from '../../i18n/language';
+import clsx from 'clsx';
 const { Sider, Content, Header } = Layout;
 
 const PageLayout = () => {
@@ -154,7 +155,7 @@ const PageLayout = () => {
 
   return (
     <Layout
-      className='app-layout'
+      className={clsx('app-layout', isConsoleRoute && 'console-bg-layout')}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -180,6 +181,7 @@ const PageLayout = () => {
         </Header>
       )}
       <Layout
+        className={clsx(isConsoleRoute && 'console-bg-shell')}
         style={{
           overflow: isMobile ? 'visible' : 'auto',
           display: 'flex',
@@ -188,7 +190,7 @@ const PageLayout = () => {
       >
         {showSider && (
           <Sider
-            className='app-sider'
+            className='app-sider console-bg-sider'
             style={{
               position: 'fixed',
               left: 0,
@@ -207,6 +209,7 @@ const PageLayout = () => {
           </Sider>
         )}
         <Layout
+          className={clsx(isConsoleRoute && 'console-bg-main')}
           style={{
             marginLeft: isMobile
               ? '0'
@@ -219,6 +222,7 @@ const PageLayout = () => {
           }}
         >
           <Content
+            className={clsx(isConsoleRoute && 'console-bg-content')}
             style={{
               flex: '1 0 auto',
               overflowY: isMobile ? 'visible' : 'hidden',
