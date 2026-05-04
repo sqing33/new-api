@@ -125,6 +125,26 @@ body {
   border-color: rgba(116, 94, 54, 0.12) !important;
 }
 
+.console-bg-content > .mt-\[60px\] {
+  margin-top: 40px !important;
+}
+
+@media (min-width: 769px) {
+  .console-bg-content > .mt-\[60px\]:has(> .table-scroll-card) {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 88px);
+    min-height: 0;
+  }
+
+  .console-bg-content > .mt-\[60px\] > .table-scroll-card {
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+  }
+}
+
 .app-sider {
   height: calc(100vh - 64px);
   height: calc(100dvh - 64px);
@@ -1230,6 +1250,24 @@ html.dark .sbg-variant-green {
 /* Image Studio settings scrollbar */
 .image-studio-create-card .semi-card-body {
   min-height: 0;
+}
+
+.image-studio-create-card,
+.image-studio-result-card {
+  border-radius: 1rem !important;
+}
+
+@media (min-width: 769px) {
+  .image-studio-create-card {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
+
+  .image-studio-result-card {
+    margin-left: -1px;
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+  }
 }
 
 .image-studio-create-spin,

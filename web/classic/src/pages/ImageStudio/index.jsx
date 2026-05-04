@@ -1903,7 +1903,7 @@ const ImageStudio = ({ publicMode = false }) => {
           ? 'mt-[60px] px-2'
           : publicMode
             ? 'mt-[60px] flex h-[calc(100vh-64px)] flex-col overflow-hidden px-2 py-2'
-            : 'mt-[60px] flex h-[calc(100vh-108px)] flex-col overflow-hidden px-2'
+            : 'mt-[60px] px-2'
       }
     >
       {lastError && (
@@ -1917,7 +1917,9 @@ const ImageStudio = ({ publicMode = false }) => {
 
       <div
         className={
-          isMobile ? 'grid gap-4' : 'grid min-h-0 flex-1 gap-4 overflow-hidden'
+          isMobile
+            ? 'grid gap-4'
+            : 'grid h-[calc(100vh-88px)] min-h-0 gap-0 overflow-hidden'
         }
         style={{
           gridTemplateColumns: isMobile ? '1fr' : '340px minmax(0, 1fr)',
@@ -1936,14 +1938,8 @@ const ImageStudio = ({ publicMode = false }) => {
           }}
           className={
             isMobile
-              ? undefined
+              ? 'image-studio-create-card'
               : 'image-studio-create-card flex min-h-0 flex-col overflow-hidden'
-          }
-          title={
-            <div className='flex items-center gap-2'>
-              <WandSparkles size={16} />
-              <span>{t('创建')}</span>
-            </div>
           }
         >
           <Spin
@@ -2135,7 +2131,7 @@ const ImageStudio = ({ publicMode = false }) => {
             minHeight: 0,
             overflow: 'hidden',
           }}
-          className='flex min-h-0 flex-col overflow-hidden'
+          className='image-studio-result-card flex min-h-0 flex-col overflow-hidden'
         >
           <Tabs activeKey={resultTab} onChange={setResultTab} type='button'>
             <Tabs.TabPane itemKey='current' tab={t('当前结果')} />
