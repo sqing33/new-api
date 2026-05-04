@@ -104,7 +104,7 @@ export const useLogsData = ({
   const formInitValues = {
     username: '',
     token_name: '',
-    model_name: imageOnly ? imageModelOptions[0] || '' : '',
+    model_name: imageOnly ? imageModelOptions : '',
     channel: '',
     group: '',
     request_id: '',
@@ -257,11 +257,18 @@ export const useLogsData = ({
       end_timestamp = formValues.dateRange[1];
     }
 
+    const modelNameValue = formValues.model_name;
+
     return {
       username: formValues.username || '',
       token_name: formValues.token_name || '',
-      model_name:
-        formValues.model_name || (imageOnly ? imageModelOptions[0] || '' : ''),
+      model_name: imageOnly
+        ? Array.isArray(modelNameValue)
+          ? modelNameValue
+          : modelNameValue
+            ? [modelNameValue]
+            : imageModelOptions
+        : modelNameValue || '',
       start_timestamp,
       end_timestamp,
       channel: formValues.channel || '',
@@ -273,6 +280,21 @@ export const useLogsData = ({
           ? 2
           : 0,
     };
+  };
+
+  const buildLogQueryString = (params) => {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      if (Array.isArray(value)) {
+        value
+          .filter((item) => item !== undefined && item !== null && item !== '')
+          .forEach((item) => searchParams.append(key, item));
+        return;
+      }
+      searchParams.set(key, value);
+    });
+    return searchParams.toString();
   };
 
   // Statistics functions
@@ -288,8 +310,16 @@ export const useLogsData = ({
     const currentLogType = formLogType !== undefined ? formLogType : logType;
     let localStartTimestamp = Date.parse(start_timestamp) / 1000;
     let localEndTimestamp = Date.parse(end_timestamp) / 1000;
-    let url = `/api/log/self/stat?type=${currentLogType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&group=${group}`;
-    url = encodeURI(url);
+    let url = `/api/log/self/stat?${buildLogQueryString({
+      type: currentLogType,
+      token_name,
+      model_name: Array.isArray(model_name) ? '' : model_name,
+      model_names: Array.isArray(model_name) ? model_name : [],
+      image_only: imageOnly ? 'true' : '',
+      start_timestamp: localStartTimestamp,
+      end_timestamp: localEndTimestamp,
+      group,
+    })}`;
     let res = await API.get(url);
     const { success, message, data } = res.data;
     if (success) {
@@ -313,8 +343,18 @@ export const useLogsData = ({
     const currentLogType = formLogType !== undefined ? formLogType : logType;
     let localStartTimestamp = Date.parse(start_timestamp) / 1000;
     let localEndTimestamp = Date.parse(end_timestamp) / 1000;
-    let url = `/api/log/stat?type=${currentLogType}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${group}`;
-    url = encodeURI(url);
+    let url = `/api/log/stat?${buildLogQueryString({
+      type: currentLogType,
+      username,
+      token_name,
+      model_name: Array.isArray(model_name) ? '' : model_name,
+      model_names: Array.isArray(model_name) ? model_name : [],
+      image_only: imageOnly ? 'true' : '',
+      start_timestamp: localStartTimestamp,
+      end_timestamp: localEndTimestamp,
+      channel,
+      group,
+    })}`;
     let res = await API.get(url);
     const { success, message, data } = res.data;
     if (success) {
@@ -802,11 +842,36 @@ export const useLogsData = ({
     let localStartTimestamp = Date.parse(start_timestamp) / 1000;
     let localEndTimestamp = Date.parse(end_timestamp) / 1000;
     if (isAdminUser) {
-      url = `/api/log/?p=${startIdx}&page_size=${pageSize}&type=${currentLogType}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${group}&request_id=${request_id}`;
+      url = `/api/log/?${buildLogQueryString({
+        p: startIdx,
+        page_size: pageSize,
+        type: currentLogType,
+        username,
+        token_name,
+        model_name: Array.isArray(model_name) ? '' : model_name,
+        model_names: Array.isArray(model_name) ? model_name : [],
+        image_only: imageOnly ? 'true' : '',
+        start_timestamp: localStartTimestamp,
+        end_timestamp: localEndTimestamp,
+        channel,
+        group,
+        request_id,
+      })}`;
     } else {
-      url = `/api/log/self/?p=${startIdx}&page_size=${pageSize}&type=${currentLogType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&group=${group}&request_id=${request_id}`;
+      url = `/api/log/self/?${buildLogQueryString({
+        p: startIdx,
+        page_size: pageSize,
+        type: currentLogType,
+        token_name,
+        model_name: Array.isArray(model_name) ? '' : model_name,
+        model_names: Array.isArray(model_name) ? model_name : [],
+        image_only: imageOnly ? 'true' : '',
+        start_timestamp: localStartTimestamp,
+        end_timestamp: localEndTimestamp,
+        group,
+        request_id,
+      })}`;
     }
-    url = encodeURI(url);
     const res = await API.get(url);
     const { success, message, data } = res.data;
     if (success) {
@@ -872,8 +937,9 @@ export const useLogsData = ({
   useEffect(() => {
     if (!canLoadLogs || !imageOnly || !formApi) return;
     const values = formApi.getValues();
-    if (values.model_name) return;
-    formApi.setValue('model_name', imageModelOptions[0]);
+    if (Array.isArray(values.model_name) && values.model_name.length > 0)
+      return;
+    formApi.setValue('model_name', imageModelOptions);
     setLogType(2);
     setTimeout(() => {
       loadLogs(1, pageSize, 2).catch((reason) => {

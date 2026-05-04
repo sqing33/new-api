@@ -295,7 +295,21 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string) (logs []*Log, total int64, err error) {
+func applyLogModelFilter(tx *gorm.DB, column string, modelName string, modelNames []string) (*gorm.DB, error) {
+	if len(modelNames) > 0 {
+		return tx.Where(column+" IN ?", modelNames), nil
+	}
+	if modelName != "" {
+		modelNamePattern, err := sanitizeLikePattern(modelName)
+		if err != nil {
+			return nil, err
+		}
+		return tx.Where(column+" LIKE ? ESCAPE '!'", modelNamePattern), nil
+	}
+	return tx, nil
+}
+
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, modelNames []string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -303,8 +317,9 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		tx = LOG_DB.Where("logs.type = ?", logType)
 	}
 
-	if modelName != "" {
-		tx = tx.Where("logs.model_name like ?", modelName)
+	tx, err = applyLogModelFilter(tx, "logs.model_name", modelName, modelNames)
+	if err != nil {
+		return nil, 0, err
 	}
 	if username != "" {
 		tx = tx.Where("logs.username = ?", username)
@@ -381,7 +396,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 
 const logSearchCountLimit = 10000
 
-func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string) (logs []*Log, total int64, err error) {
+func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, modelNames []string, tokenName string, startIdx int, num int, group string, requestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
@@ -389,12 +404,9 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 		tx = LOG_DB.Where("logs.user_id = ? and logs.type = ?", userId, logType)
 	}
 
-	if modelName != "" {
-		modelNamePattern, err := sanitizeLikePattern(modelName)
-		if err != nil {
-			return nil, 0, err
-		}
-		tx = tx.Where("logs.model_name LIKE ? ESCAPE '!'", modelNamePattern)
+	tx, err = applyLogModelFilter(tx, "logs.model_name", modelName, modelNames)
+	if err != nil {
+		return nil, 0, err
 	}
 	if tokenName != "" {
 		tx = tx.Where("logs.token_name = ?", tokenName)
@@ -432,7 +444,7 @@ type Stat struct {
 	Tpm   int `json:"tpm"`
 }
 
-func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
+func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, modelNames []string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
 	tx := LOG_DB.Table("logs").Select("sum(quota) quota")
 
 	// 为rpm和tpm创建单独的查询
@@ -452,13 +464,13 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	if endTimestamp != 0 {
 		tx = tx.Where("created_at <= ?", endTimestamp)
 	}
-	if modelName != "" {
-		modelNamePattern, err := sanitizeLikePattern(modelName)
-		if err != nil {
-			return stat, err
-		}
-		tx = tx.Where("model_name LIKE ? ESCAPE '!'", modelNamePattern)
-		rpmTpmQuery = rpmTpmQuery.Where("model_name LIKE ? ESCAPE '!'", modelNamePattern)
+	tx, err = applyLogModelFilter(tx, "model_name", modelName, modelNames)
+	if err != nil {
+		return stat, err
+	}
+	rpmTpmQuery, err = applyLogModelFilter(rpmTpmQuery, "model_name", modelName, modelNames)
+	if err != nil {
+		return stat, err
 	}
 	if channel != 0 {
 		tx = tx.Where("channel_id = ?", channel)

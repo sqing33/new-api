@@ -80,7 +80,7 @@ const LogsFilters = ({
             formApi.reset();
             setLogType(imageOnly ? 2 : 0);
             if (imageOnly && imageModelOptions.length > 0) {
-              formApi.setValue('model_name', imageModelOptions[0]);
+              formApi.setValue('model_name', imageModelOptions);
             }
             setTimeout(() => {
               refresh();
@@ -149,8 +149,10 @@ const LogsFilters = ({
               field='model_name'
               placeholder={t('生图模型')}
               showClear={false}
+              multiple
               pure
               size='small'
+              maxTagCount={2}
               optionList={imageModelOptions.map((model) => ({
                 label: model,
                 value: model,
