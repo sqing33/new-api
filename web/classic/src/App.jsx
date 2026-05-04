@@ -39,6 +39,7 @@ import Log from './pages/Log';
 import Chat from './pages/Chat';
 import Chat2Link from './pages/Chat2Link';
 import Midjourney from './pages/Midjourney';
+import ImageLogs from './pages/ImageLogs';
 import ImageStudio from './pages/ImageStudio';
 import ImageSetting from './pages/ImageSetting';
 import VideoStudio from './pages/VideoStudio';
@@ -329,6 +330,16 @@ function App() {
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <Midjourney />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/image-logs'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <ImageLogs />
               </Suspense>
             </PrivateRoute>
           }

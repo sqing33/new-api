@@ -17,10 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
+  Card,
   Checkbox,
   Empty,
   Form,
@@ -144,7 +145,7 @@ const ImageSetting = () => {
   const [editingPresetIndex, setEditingPresetIndex] = useState(null);
   const [editingPreset, setEditingPreset] = useState(null);
   const [presetFileList, setPresetFileList] = useState([]);
-  const [analysisModels, setAnalysisModels] = useState([]);
+  const [supportedModels, setSupportedModels] = useState([]);
   const [analysisModel, setAnalysisModel] = useState('');
   const [analyzingPreset, setAnalyzingPreset] = useState(false);
 
@@ -165,7 +166,7 @@ const ImageSetting = () => {
     }
   };
 
-  const loadAnalysisModels = async () => {
+  const loadModelOptions = async () => {
     try {
       const res = await API.get(USER_MODELS_ENDPOINT);
       const { success, data, message } = res.data || {};
@@ -173,14 +174,11 @@ const ImageSetting = () => {
         showError(t(message || '加载模型失败'));
         return;
       }
-      const { modelOptions, selectedModel } = processModelsData(
+      const { modelOptions } = processModelsData(
         Array.isArray(data) ? data : [],
-        analysisModel,
+        '',
       );
-      setAnalysisModels(modelOptions);
-      if (selectedModel && selectedModel !== analysisModel) {
-        setAnalysisModel(selectedModel);
-      }
+      setSupportedModels(modelOptions);
     } catch {
       showError(t('加载模型失败'));
     }
@@ -214,8 +212,54 @@ const ImageSetting = () => {
   }, []);
 
   useEffect(() => {
-    loadAnalysisModels();
+    loadModelOptions();
   }, []);
+
+  const editingModelOptions = useMemo(() => {
+    const currentModel = editingSetting?.model;
+    const configuredModels = new Set(
+      settings
+        .filter((_, index) => index !== editingIndex)
+        .map((setting) => setting.model),
+    );
+    const availableModels = supportedModels.filter(
+      (option) => !configuredModels.has(option.value),
+    );
+
+    if (
+      currentModel &&
+      !availableModels.some((option) => option.value === currentModel)
+    ) {
+      return [{ label: currentModel, value: currentModel }, ...availableModels];
+    }
+    return availableModels;
+  }, [editingIndex, editingSetting?.model, settings, supportedModels]);
+
+  const analysisModelOptions = useMemo(() => {
+    const qingyingModels = new Set(
+      settings
+        .filter(
+          (setting) =>
+            (setting.modes || []).length > 0 ||
+            (setting.video_modes || []).length > 0,
+        )
+        .map((setting) => setting.model),
+    );
+
+    return supportedModels.filter(
+      (option) => !qingyingModels.has(option.value),
+    );
+  }, [settings, supportedModels]);
+
+  useEffect(() => {
+    if (
+      analysisModel &&
+      analysisModelOptions.some((option) => option.value === analysisModel)
+    ) {
+      return;
+    }
+    setAnalysisModel(analysisModelOptions[0]?.value || '');
+  }, [analysisModel, analysisModelOptions]);
 
   const saveSettings = async (nextSettings) => {
     setLoading(true);
@@ -275,7 +319,7 @@ const ImageSetting = () => {
   const upsertSetting = async () => {
     const nextSetting = normalizeImageModelSetting(editingSetting);
     if (!nextSetting.model) {
-      showError(t('请输入模型名称'));
+      showError(t('请选择模型'));
       return;
     }
     if (
@@ -310,7 +354,7 @@ const ImageSetting = () => {
     const nextSettings = settings.filter((_, itemIndex) => itemIndex !== index);
     Modal.confirm({
       title: t('确认删除'),
-      content: t('删除后会立即保存创作设置。'),
+      content: t('删除后会立即保存清影设置。'),
       okText: t('删除'),
       cancelText: t('取消'),
       okButtonProps: { type: 'danger' },
@@ -532,10 +576,6 @@ const ImageSetting = () => {
       },
     },
     {
-      title: t('图片最大数量'),
-      dataIndex: 'max_n',
-    },
-    {
       title: t('操作'),
       render: (_, record, index) => (
         <Space>
@@ -568,7 +608,7 @@ const ImageSetting = () => {
       onChange={setActiveTab}
       type='card'
     >
-      <TabPane itemKey='models' tab={t('创作模型')} />
+      <TabPane itemKey='models' tab={t('清影模型')} />
       <TabPane itemKey='presets' tab={t('预设提示词')} />
     </Tabs>
   );
@@ -598,7 +638,7 @@ const ImageSetting = () => {
           size='small'
           type='primary'
         >
-          {t('添加创作模型')}
+          {t('添加清影模型')}
         </Button>
       </Space>
     );
@@ -628,14 +668,29 @@ const ImageSetting = () => {
     }
 
     return (
-      <div className='grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
+      <div
+        className='grid content-start gap-4'
+        style={{
+          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+        }}
+      >
         {promptPresets.map((preset, index) => (
-          <div
+          <Card
+            bordered
+            bodyStyle={{ padding: 12 }}
+            className='overflow-hidden'
             key={preset.id || index}
-            className='flex min-h-0 flex-col overflow-hidden rounded-lg border'
-            style={{ borderColor: 'var(--semi-color-border)' }}
           >
-            <div className='aspect-video bg-semi-color-fill-0'>
+            <button
+              className='mb-3 flex w-full items-center justify-center overflow-hidden rounded border-0 p-0'
+              onClick={() => openEditPresetModal(preset, index)}
+              style={{
+                aspectRatio: '1 / 1',
+                background: 'var(--semi-color-fill-0)',
+                cursor: 'pointer',
+              }}
+              type='button'
+            >
               {preset.image ? (
                 <img
                   alt={preset.name}
@@ -647,43 +702,39 @@ const ImageSetting = () => {
                   <IconImage size='extra-large' />
                 </div>
               )}
+            </button>
+
+            <div className='mb-3 flex flex-col gap-1'>
+              <Text strong ellipsis={{ showTooltip: true }}>
+                {preset.name || t('未命名预设')}
+              </Text>
+              <Text
+                ellipsis={{ rows: 2, showTooltip: true }}
+                size='small'
+                type='tertiary'
+              >
+                {preset.prompt}
+              </Text>
             </div>
-            <div className='flex flex-1 flex-col gap-3 p-4'>
-              <div className='flex flex-col gap-1'>
-                <Text strong ellipsis={{ showTooltip: true }}>
-                  {preset.name || t('未命名预设')}
-                </Text>
-                <Text
-                  className='min-h-[44px]'
-                  ellipsis={{ rows: 2, showTooltip: true }}
-                  size='small'
-                  type='tertiary'
-                >
-                  {preset.prompt}
-                </Text>
-              </div>
-              <div className='mt-auto flex gap-2'>
-                <Button
-                  block
-                  icon={<IconEdit />}
-                  onClick={() => openEditPresetModal(preset, index)}
-                  size='small'
-                  type='primary'
-                >
-                  {t('编辑')}
-                </Button>
-                <Button
-                  block
-                  icon={<IconDelete />}
-                  onClick={() => deletePromptPreset(index)}
-                  size='small'
-                  type='danger'
-                >
-                  {t('删除')}
-                </Button>
-              </div>
+
+            <div className='grid grid-cols-2 gap-2'>
+              <Button
+                icon={<IconEdit />}
+                onClick={() => openEditPresetModal(preset, index)}
+                theme='outline'
+              >
+                {t('编辑')}
+              </Button>
+              <Button
+                icon={<IconDelete />}
+                onClick={() => deletePromptPreset(index)}
+                theme='outline'
+                type='danger'
+              >
+                {t('删除')}
+              </Button>
             </div>
-          </div>
+          </Card>
         ))}
       </div>
     );
@@ -691,13 +742,13 @@ const ImageSetting = () => {
 
   return (
     <div className='mt-[60px] px-2'>
-      <Spin spinning={loading}>
-        <CardPro
-          type='type3'
-          tabsArea={renderTabsArea()}
-          actionsArea={renderActionsArea()}
-          t={t}
-        >
+      <CardPro
+        type='type3'
+        tabsArea={renderTabsArea()}
+        actionsArea={renderActionsArea()}
+        t={t}
+      >
+        <Spin spinning={loading}>
           {activeTab === 'models' ? (
             <Table
               columns={columns}
@@ -708,11 +759,11 @@ const ImageSetting = () => {
           ) : (
             renderPromptPresets()
           )}
-        </CardPro>
-      </Spin>
+        </Spin>
+      </CardPro>
 
       <Modal
-        title={editingIndex === null ? t('添加创作模型') : t('编辑创作模型')}
+        title={editingIndex === null ? t('添加清影模型') : t('编辑清影模型')}
         visible={modalVisible}
         onCancel={closeModal}
         onOk={upsertSetting}
@@ -720,11 +771,14 @@ const ImageSetting = () => {
       >
         {editingSetting && (
           <Form>
-            <Form.Input
+            <Form.Select
+              className='w-full'
               field='model'
-              label={t('模型名称')}
+              filter
+              label={t('模型')}
               onChange={(value) => updateEditingSetting({ model: value })}
-              placeholder='gpt-image-2'
+              optionList={editingModelOptions}
+              placeholder={t('请选择模型')}
               value={editingSetting.model}
             />
             <div className='mb-4 flex flex-col gap-2'>
@@ -771,6 +825,7 @@ const ImageSetting = () => {
                   value={(editingSetting.video?.durations || []).join(', ')}
                 />
                 <Form.Select
+                  className='w-full'
                   field='video_default_seconds'
                   label={t('默认视频时长')}
                   onChange={(value) =>
@@ -791,6 +846,7 @@ const ImageSetting = () => {
                   value={(editingSetting.video?.sizes || []).join(', ')}
                 />
                 <Form.Select
+                  className='w-full'
                   field='video_default_size'
                   label={t('默认视频尺寸')}
                   onChange={(value) =>
@@ -869,7 +925,7 @@ const ImageSetting = () => {
                     disabled={analyzingPreset}
                     filter
                     onChange={setAnalysisModel}
-                    optionList={analysisModels}
+                    optionList={analysisModelOptions}
                     placeholder={t('请选择分析模型')}
                     value={analysisModel}
                   />

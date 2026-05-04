@@ -40,6 +40,7 @@ const routerMap = {
   subscription: '/console/subscription',
   log: '/console/log',
   midjourney: '/console/midjourney',
+  'image-log': '/console/image-logs',
   setting: '/console/setting',
   about: '/about',
   detail: '/console',
@@ -83,14 +84,19 @@ const SiderBar = ({ onNavigate = () => {} }) => {
             : 'tableHiddle',
       },
       {
-        text: t('令牌管理'),
-        itemKey: 'token',
-        to: '/token',
+        text: t('清影日志'),
+        itemKey: 'image-log',
+        to: '/image-logs',
       },
       {
         text: t('使用日志'),
         itemKey: 'log',
         to: '/log',
+      },
+      {
+        text: t('令牌管理'),
+        itemKey: 'token',
+        to: '/token',
       },
       {
         text: t('绘图日志'),
@@ -175,7 +181,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {
-        text: t('创作设置'),
+        text: t('清影管理'),
         itemKey: 'image-setting',
         to: '/image-setting',
         className: isRoot() ? '' : 'tableHiddle',
@@ -217,7 +223,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/playground',
       },
       {
-        text: t('生图'),
+        text: t('清影工作台'),
         itemKey: 'image-studio',
         to: '/image-studio',
       },
@@ -458,11 +464,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
             setOpenedKeys(data.openKeys);
           }}
         >
-          {/* 聊天区域 */}
+          {/* 工作台区域 */}
           {hasSectionVisibleModules('chat') && (
             <div className='sidebar-section'>
               {!collapsed && (
-                <div className='sidebar-group-label'>{t('聊天')}</div>
+                <div className='sidebar-group-label'>{t('工作台')}</div>
               )}
               {chatMenuItems.map((item) => renderSubItem(item))}
             </div>

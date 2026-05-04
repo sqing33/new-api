@@ -68,7 +68,7 @@ export default function SettingsSidebarModulesUser() {
   const generateDefaultConfig = () => {
     const defaultConfig = {};
 
-    // 聊天区域 - 所有用户都可以访问
+    // 工作台区域 - 所有用户都可以访问
     if (isSidebarSectionAllowed('chat')) {
       defaultConfig.chat = {
         enabled: true,
@@ -87,6 +87,7 @@ export default function SettingsSidebarModulesUser() {
         token: isSidebarModuleAllowed('console', 'token'),
         log: isSidebarModuleAllowed('console', 'log'),
         midjourney: isSidebarModuleAllowed('console', 'midjourney'),
+        'image-log': isSidebarModuleAllowed('console', 'image-log'),
         task: isSidebarModuleAllowed('console', 'task'),
       };
     }
@@ -295,15 +296,19 @@ export default function SettingsSidebarModulesUser() {
   const sectionConfigs = [
     {
       key: 'chat',
-      title: t('聊天区域'),
-      description: t('操练场和聊天功能'),
+      title: t('工作台区域'),
+      description: t('操练场和清影工作台'),
       modules: [
         {
           key: 'playground',
           title: t('操练场'),
           description: t('AI模型测试环境'),
         },
-        { key: 'image-studio', title: t('生图'), description: t('生图工具') },
+        {
+          key: 'image-studio',
+          title: t('清影工作台'),
+          description: t('生图工具'),
+        },
         {
           key: 'video-studio',
           title: t('视频'),
@@ -324,6 +329,11 @@ export default function SettingsSidebarModulesUser() {
           key: 'midjourney',
           title: t('绘图日志'),
           description: t('绘图任务记录'),
+        },
+        {
+          key: 'image-log',
+          title: t('清影日志'),
+          description: t('生图调用记录'),
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
       ],
@@ -355,7 +365,7 @@ export default function SettingsSidebarModulesUser() {
         },
         {
           key: 'image-setting',
-          title: t('创作设置'),
+          title: t('清影管理'),
           description: t('图片与视频模型能力配置'),
         },
         {

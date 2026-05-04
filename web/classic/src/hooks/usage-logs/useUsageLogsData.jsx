@@ -43,7 +43,11 @@ import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
 import ParamOverrideEntry from '../../components/table/usage-logs/components/ParamOverrideEntry';
 
-export const useLogsData = () => {
+export const useLogsData = ({
+  imageOnly = false,
+  imageModelOptions = [],
+  enabled = true,
+} = {}) => {
   const { t } = useTranslation();
 
   // Define column keys for selection
@@ -73,7 +77,8 @@ export const useLogsData = () => {
   const [activePage, setActivePage] = useState(1);
   const [logCount, setLogCount] = useState(0);
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
-  const [logType, setLogType] = useState(0);
+  const [logType, setLogType] = useState(imageOnly ? 2 : 0);
+  const imageModelOptionsKey = imageModelOptions.join('|');
 
   // User and admin
   const isAdminUser = isAdmin();
@@ -93,11 +98,13 @@ export const useLogsData = () => {
 
   // Form state
   const [formApi, setFormApi] = useState(null);
+  const canLoadLogs =
+    enabled && (!imageOnly || (formApi && imageModelOptions.length > 0));
   let now = new Date();
   const formInitValues = {
     username: '',
     token_name: '',
-    model_name: '',
+    model_name: imageOnly ? imageModelOptions[0] || '' : '',
     channel: '',
     group: '',
     request_id: '',
@@ -105,7 +112,7 @@ export const useLogsData = () => {
       timestamp2string(getTodayStartTimestamp()),
       timestamp2string(now.getTime() / 1000 + 3600),
     ],
-    logType: '0',
+    logType: imageOnly ? '2' : '0',
   };
 
   // Get default column visibility based on user role
@@ -164,7 +171,9 @@ export const useLogsData = () => {
   };
 
   // Column visibility state
-  const [visibleColumns, setVisibleColumns] = useState(getInitialVisibleColumns);
+  const [visibleColumns, setVisibleColumns] = useState(
+    getInitialVisibleColumns,
+  );
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [billingDisplayMode, setBillingDisplayMode] = useState(
     getInitialBillingDisplayMode,
@@ -251,13 +260,18 @@ export const useLogsData = () => {
     return {
       username: formValues.username || '',
       token_name: formValues.token_name || '',
-      model_name: formValues.model_name || '',
+      model_name:
+        formValues.model_name || (imageOnly ? imageModelOptions[0] || '' : ''),
       start_timestamp,
       end_timestamp,
       channel: formValues.channel || '',
       group: formValues.group || '',
       request_id: formValues.request_id || '',
-      logType: formValues.logType ? parseInt(formValues.logType) : 0,
+      logType: formValues.logType
+        ? parseInt(formValues.logType)
+        : imageOnly
+          ? 2
+          : 0,
     };
   };
 
@@ -311,6 +325,13 @@ export const useLogsData = () => {
   };
 
   const handleEyeClick = async () => {
+    if (!canLoadLogs) {
+      setStat({
+        quota: 0,
+        token: 0,
+      });
+      return;
+    }
     if (loadingStat) {
       return;
     }
@@ -383,7 +404,10 @@ export const useLogsData = () => {
       let other = getLogOther(logs[i].other);
       let expandDataLocal = [];
 
-      if (isAdminUser && (logs[i].type === 0 || logs[i].type === 2 || logs[i].type === 6)) {
+      if (
+        isAdminUser &&
+        (logs[i].type === 0 || logs[i].type === 2 || logs[i].type === 6)
+      ) {
         expandDataLocal.push({
           key: t('渠道信息'),
           value: `${logs[i].channel} - ${logs[i].channel_name || '[未知]'}`,
@@ -430,7 +454,10 @@ export const useLogsData = () => {
           expandDataLocal.push({
             key: t('日志详情'),
             value: other?.claude
-              ? renderClaudeLogContent({ ...other, displayMode: billingDisplayMode })
+              ? renderClaudeLogContent({
+                  ...other,
+                  displayMode: billingDisplayMode,
+                })
               : renderLogContent({ ...other, displayMode: billingDisplayMode }),
           });
         }
@@ -520,7 +547,14 @@ export const useLogsData = () => {
           expandDataLocal.push({
             key: t('失败原因'),
             value: (
-              <div style={{ maxWidth: 600, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.6 }}>
+              <div
+                style={{
+                  maxWidth: 600,
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-word',
+                  lineHeight: 1.6,
+                }}
+              >
                 {other.reason}
               </div>
             ),
@@ -537,7 +571,8 @@ export const useLogsData = () => {
         const ss = other.stream_status;
         const isOk = ss.status === 'ok';
         const statusLabel = isOk ? '✓ ' + t('正常') : '✗ ' + t('异常');
-        let streamValue = statusLabel + ' (' + (ss.end_reason || 'unknown') + ')';
+        let streamValue =
+          statusLabel + ' (' + (ss.end_reason || 'unknown') + ')';
         if (ss.error_count > 0) {
           streamValue += ` [${t('软错误')}: ${ss.error_count}]`;
         }
@@ -552,7 +587,14 @@ export const useLogsData = () => {
           expandDataLocal.push({
             key: t('流错误详情'),
             value: (
-              <div style={{ maxWidth: 600, whiteSpace: 'pre-line', wordBreak: 'break-word', lineHeight: 1.6 }}>
+              <div
+                style={{
+                  maxWidth: 600,
+                  whiteSpace: 'pre-line',
+                  wordBreak: 'break-word',
+                  lineHeight: 1.6,
+                }}
+              >
                 {ss.errors.join('\n')}
               </div>
             ),
@@ -727,6 +769,14 @@ export const useLogsData = () => {
 
   // Load logs function
   const loadLogs = async (startIdx, pageSize, customLogType = null) => {
+    if (!canLoadLogs) {
+      setLogs([]);
+      setExpandData({});
+      setLogCount(0);
+      setActivePage(1);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
 
     let url = '';
@@ -808,6 +858,7 @@ export const useLogsData = () => {
 
   // Initialize data
   useEffect(() => {
+    if (!canLoadLogs) return;
     const localPageSize =
       parseInt(localStorage.getItem('page-size')) || ITEMS_PER_PAGE;
     setPageSize(localPageSize);
@@ -816,14 +867,27 @@ export const useLogsData = () => {
       .catch((reason) => {
         showError(reason);
       });
-  }, []);
+  }, [canLoadLogs]);
+
+  useEffect(() => {
+    if (!canLoadLogs || !imageOnly || !formApi) return;
+    const values = formApi.getValues();
+    if (values.model_name) return;
+    formApi.setValue('model_name', imageModelOptions[0]);
+    setLogType(2);
+    setTimeout(() => {
+      loadLogs(1, pageSize, 2).catch((reason) => {
+        showError(reason);
+      });
+    }, 0);
+  }, [canLoadLogs, imageOnly, formApi, imageModelOptionsKey]);
 
   // Initialize statistics when formApi is available
   useEffect(() => {
-    if (formApi) {
+    if (formApi && canLoadLogs) {
       handleEyeClick();
     }
-  }, [formApi]);
+  }, [formApi, canLoadLogs]);
 
   // Check if any record has expandable content
   const hasExpandableRows = () => {
@@ -850,6 +914,9 @@ export const useLogsData = () => {
     formApi,
     setFormApi,
     formInitValues,
+    imageOnly,
+    imageModelOptions,
+    enabled,
     getFormValues,
 
     // Column visibility

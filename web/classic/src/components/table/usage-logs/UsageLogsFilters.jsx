@@ -32,8 +32,77 @@ const LogsFilters = ({
   setLogType,
   loading,
   isAdminUser,
+  imageOnly,
+  imageModelOptions,
   t,
 }) => {
+  const operationControls = (
+    <div
+      className={`flex w-full min-w-0 items-center gap-1 ${imageOnly ? 'justify-end' : ''}`}
+    >
+      {!imageOnly && (
+        <Form.Select
+          field='logType'
+          placeholder={t('日志类型')}
+          className='min-w-0 flex-1'
+          showClear
+          pure
+          onChange={() => {
+            // 延迟执行搜索，让表单值先更新
+            setTimeout(() => {
+              refresh();
+            }, 0);
+          }}
+          size='small'
+        >
+          <Form.Select.Option value='0'>{t('全部')}</Form.Select.Option>
+          <Form.Select.Option value='1'>{t('充值')}</Form.Select.Option>
+          <Form.Select.Option value='2'>{t('消费')}</Form.Select.Option>
+          <Form.Select.Option value='3'>{t('管理')}</Form.Select.Option>
+          <Form.Select.Option value='4'>{t('系统')}</Form.Select.Option>
+          <Form.Select.Option value='5'>{t('错误')}</Form.Select.Option>
+          <Form.Select.Option value='6'>{t('退款')}</Form.Select.Option>
+        </Form.Select>
+      )}
+      <Button
+        type='tertiary'
+        htmlType='submit'
+        loading={loading}
+        size='small'
+        className='shrink-0'
+      >
+        {t('查询')}
+      </Button>
+      <Button
+        type='tertiary'
+        onClick={() => {
+          if (formApi) {
+            formApi.reset();
+            setLogType(imageOnly ? 2 : 0);
+            if (imageOnly && imageModelOptions.length > 0) {
+              formApi.setValue('model_name', imageModelOptions[0]);
+            }
+            setTimeout(() => {
+              refresh();
+            }, 100);
+          }
+        }}
+        size='small'
+        className='shrink-0'
+      >
+        {t('重置')}
+      </Button>
+      <Button
+        type='tertiary'
+        onClick={() => setShowColumnSelector(true)}
+        size='small'
+        className='shrink-0'
+      >
+        {t('列设置')}
+      </Button>
+    </div>
+  );
+
   return (
     <Form
       initValues={formInitValues}
@@ -48,7 +117,7 @@ const LogsFilters = ({
       <div className='flex flex-col gap-2'>
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2'>
           {/* 时间选择器 */}
-          <div className='col-span-1 lg:col-span-2'>
+          <div>
             <Form.DatePicker
               field='dateRange'
               className='w-full'
@@ -75,35 +144,54 @@ const LogsFilters = ({
             size='small'
           />
 
-          <Form.Input
-            field='model_name'
-            prefix={<IconSearch />}
-            placeholder={t('模型名称')}
-            showClear
-            pure
-            size='small'
-          />
-
-          <Form.Input
-            field='group'
-            prefix={<IconSearch />}
-            placeholder={t('分组')}
-            showClear
-            pure
-            size='small'
-          />
-
-          <Form.Input
-            field='request_id'
-            prefix={<IconSearch />}
-            placeholder={t('Request ID')}
-            showClear
-            pure
-            size='small'
-          />
+          {imageOnly ? (
+            <Form.Select
+              field='model_name'
+              placeholder={t('生图模型')}
+              showClear={false}
+              pure
+              size='small'
+              optionList={imageModelOptions.map((model) => ({
+                label: model,
+                value: model,
+              }))}
+              onChange={() => {
+                setTimeout(() => {
+                  refresh();
+                }, 0);
+              }}
+            />
+          ) : (
+            <Form.Input
+              field='model_name'
+              prefix={<IconSearch />}
+              placeholder={t('模型名称')}
+              showClear
+              pure
+              size='small'
+            />
+          )}
 
           {isAdminUser && (
             <>
+              <Form.Input
+                field='request_id'
+                prefix={<IconSearch />}
+                placeholder={t('Request ID')}
+                showClear
+                pure
+                size='small'
+              />
+
+              <Form.Input
+                field='group'
+                prefix={<IconSearch />}
+                placeholder={t('分组')}
+                showClear
+                pure
+                size='small'
+              />
+
               <Form.Input
                 field='channel'
                 prefix={<IconSearch />}
@@ -122,68 +210,8 @@ const LogsFilters = ({
               />
             </>
           )}
-        </div>
 
-        {/* 操作按钮区域 */}
-        <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3'>
-          {/* 日志类型选择器 */}
-          <div className='w-full sm:w-auto'>
-            <Form.Select
-              field='logType'
-              placeholder={t('日志类型')}
-              className='w-full sm:w-auto min-w-[120px]'
-              showClear
-              pure
-              onChange={() => {
-                // 延迟执行搜索，让表单值先更新
-                setTimeout(() => {
-                  refresh();
-                }, 0);
-              }}
-              size='small'
-            >
-              <Form.Select.Option value='0'>{t('全部')}</Form.Select.Option>
-              <Form.Select.Option value='1'>{t('充值')}</Form.Select.Option>
-              <Form.Select.Option value='2'>{t('消费')}</Form.Select.Option>
-              <Form.Select.Option value='3'>{t('管理')}</Form.Select.Option>
-              <Form.Select.Option value='4'>{t('系统')}</Form.Select.Option>
-              <Form.Select.Option value='5'>{t('错误')}</Form.Select.Option>
-              <Form.Select.Option value='6'>{t('退款')}</Form.Select.Option>
-            </Form.Select>
-          </div>
-
-          <div className='flex gap-2 w-full sm:w-auto justify-end'>
-            <Button
-              type='tertiary'
-              htmlType='submit'
-              loading={loading}
-              size='small'
-            >
-              {t('查询')}
-            </Button>
-            <Button
-              type='tertiary'
-              onClick={() => {
-                if (formApi) {
-                  formApi.reset();
-                  setLogType(0);
-                  setTimeout(() => {
-                    refresh();
-                  }, 100);
-                }
-              }}
-              size='small'
-            >
-              {t('重置')}
-            </Button>
-            <Button
-              type='tertiary'
-              onClick={() => setShowColumnSelector(true)}
-              size='small'
-            >
-              {t('列设置')}
-            </Button>
-          </div>
+          {operationControls}
         </div>
       </div>
     </Form>

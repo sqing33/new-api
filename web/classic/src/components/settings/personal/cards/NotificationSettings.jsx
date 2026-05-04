@@ -75,6 +75,7 @@ const NotificationSettings = ({
       token: true,
       log: true,
       midjourney: true,
+      'image-log': true,
       task: true,
     },
     personal: {
@@ -163,6 +164,7 @@ const NotificationSettings = ({
         token: true,
         log: true,
         midjourney: true,
+        'image-log': true,
         task: true,
       },
       personal: { enabled: true, topup: true, personal: true },
@@ -246,8 +248,8 @@ const NotificationSettings = ({
   const sectionConfigs = [
     {
       key: 'chat',
-      title: t('聊天区域'),
-      description: t('操练场和聊天功能'),
+      title: t('工作台区域'),
+      description: t('操练场和清影工作台'),
       modules: [
         {
           key: 'playground',
@@ -269,6 +271,11 @@ const NotificationSettings = ({
           key: 'midjourney',
           title: t('绘图日志'),
           description: t('绘图任务记录'),
+        },
+        {
+          key: 'image-log',
+          title: t('清影日志'),
+          description: t('生图调用记录'),
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
       ],
@@ -478,7 +485,10 @@ const NotificationSettings = ({
                     checkedText={t('开')}
                     uncheckedText={t('关')}
                     onChange={(value) =>
-                      handleFormChange('upstreamModelUpdateNotifyEnabled', value)
+                      handleFormChange(
+                        'upstreamModelUpdateNotifyEnabled',
+                        value,
+                      )
                     }
                     extraText={t(
                       '仅管理员可用。开启后，当系统定时检测全部渠道发现上游模型变更或检测异常时，将按你选择的通知方式发送汇总通知；渠道或模型过多时会自动省略部分明细。',
