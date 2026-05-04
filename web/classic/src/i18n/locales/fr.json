@@ -3787,6 +3787,18 @@
     "输入预设提示词": "Saisissez le prompt prédéfini",
     "请输入预设名称": "Veuillez saisir un nom de préréglage",
     "请上传预设图片": "Veuillez téléverser une image de préréglage",
-    "请输入提示词内容": "Veuillez saisir le contenu du prompt"
+    "请输入提示词内容": "Veuillez saisir le contenu du prompt",
+    "分析模型": "Modèle d’analyse",
+    "请选择分析模型": "Veuillez sélectionner un modèle d’analyse",
+    "分析图片": "Analyser l’image",
+    "请先上传预设图片": "Veuillez d’abord téléverser une image de préréglage",
+    "模型未返回可用的分析结果": "Le modèle n’a pas renvoyé de résultat d’analyse exploitable",
+    "图片分析完成": "Analyse de l’image terminée",
+    "图片分析失败": "Échec de l’analyse de l’image",
+    "选择预设提示词": "Sélectionner un préréglage de prompt",
+    "使用预设": "Utiliser le préréglage",
+    "已应用预设提示词": "Préréglage de prompt appliqué",
+    "加载预设提示词失败": "Échec du chargement des préréglages de prompts",
+    "该预设图片无效": "Cette image de préréglage est invalide"
   }
 }

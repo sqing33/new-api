@@ -73,6 +73,7 @@ const API_ENDPOINTS = {
   CHAT_COMPLETIONS: '/pg/chat/completions',
   USER_GROUPS: '/api/user/self/groups',
   USER_MODELS: '/api/user/models',
+  OPTIONS: '/api/option/',
 };
 
 const RATIOS = ['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9'];
@@ -181,8 +182,69 @@ const IMAGE_MODEL_HINTS = [
   'midjourney',
 ];
 
+const PROMPT_PRESETS_OPTION_KEY = 'ImagePromptPresets';
+const PROMPT_PRESET_USAGE_PREFIX =
+  '这不是原图修复、抠图、高清化或轻微调色任务。请把用户上传的图片或用户输入的主体作为最终画面的核心，不要原样复刻参考图；如果用户上传了主体图，请保留主体身份、外观、颜色、材质和关键结构，并根据预设重新组织画面风格、版式、构图、光影、空间、装饰元素和视觉层次；如果没有主体图，则按用户文字生成主体，但仍只借鉴预设的风格和版式。';
+const PROMPT_PRESET_STYLE_PREFIX =
+  '下面的预设提示词和最后一张名为 style-reference-preset 的参考图只作为风格/版式模板参考，请只学习其中的画面类型、主体位置、构图、配色倾向、光影、材质质感、标注方式、信息框、细节展示、三视图、物品介绍、文字层级和设计语言；不要复刻预设里的具体商品、人物、动物、角色、Logo、品牌、地点、场景主体、元素主题或原有文案。最终主体必须以用户上传图片或用户文字为准。';
+
 const selectOptions = (items, labels = {}) =>
   items.map((value) => ({ label: labels[value] || value, value }));
+
+const normalizePromptPreset = (preset = {}) => ({
+  id:
+    preset.id ||
+    `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  name: String(preset.name || '').trim(),
+  image: String(preset.image || ''),
+  prompt: String(preset.prompt || '').trim(),
+});
+
+const parsePromptPresets = (value) => {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map(normalizePromptPreset)
+      .filter((item) => item.name || item.prompt || item.image);
+  } catch {
+    return [];
+  }
+};
+
+const isPromptPresetFileItem = (item) =>
+  String(item?.uid || '').startsWith('prompt-preset-') ||
+  String(item?.name || '').startsWith('style-reference-preset');
+
+const getPresetImageExtension = (mime) => {
+  if (mime === 'image/jpeg') return 'jpg';
+  if (mime === 'image/webp') return 'webp';
+  if (mime === 'image/gif') return 'gif';
+  return 'png';
+};
+
+const dataUrlToFile = (dataUrl, name) => {
+  const match = String(dataUrl || '').match(
+    /^data:(image\/[^;]+);base64,(.+)$/,
+  );
+  if (!match) return null;
+
+  const [, mime, base64] = match;
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  const safeName = String(name || 'style-reference-preset')
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '-');
+  return new File(
+    [bytes],
+    `${safeName || 'style-reference-preset'}.${getPresetImageExtension(mime)}`,
+    { type: mime },
+  );
+};
 
 const getImageSize = (ratio, resolution) => {
   if (ratio === 'auto' || resolution === 'auto') return '';
@@ -261,6 +323,11 @@ const ImageStudio = () => {
   const [historyRecords, setHistoryRecords] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyImageErrors, setHistoryImageErrors] = useState({});
+  const [promptPresets, setPromptPresets] = useState([]);
+  const [presetLoading, setPresetLoading] = useState(false);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const [presetPrompt, setPresetPrompt] = useState('');
+  const [presetName, setPresetName] = useState('');
   const [imageModelSettingsValue, setImageModelSettingsValue] = useState(
     statusState?.status?.image_model_settings,
   );
@@ -436,6 +503,89 @@ const ImageStudio = () => {
     setLogoFiles(nextFileList.map((item) => item.fileInstance));
   };
 
+  const getOrderedReferenceFiles = () =>
+    [
+      ...imageFiles.filter(
+        (file) =>
+          file &&
+          !String(file.name || '').startsWith('style-reference-preset'),
+      ),
+      ...imageFiles.filter(
+        (file) =>
+          file && String(file.name || '').startsWith('style-reference-preset'),
+      ),
+    ];
+
+  const loadPromptPresets = async () => {
+    setPresetLoading(true);
+    try {
+      const res = await API.get(API_ENDPOINTS.OPTIONS);
+      const option = res.data?.data?.find(
+        (item) => item.key === PROMPT_PRESETS_OPTION_KEY,
+      );
+      setPromptPresets(parsePromptPresets(option?.value));
+    } catch (error) {
+      showError(extractErrorMessage(error, t('加载预设提示词失败')));
+    } finally {
+      setPresetLoading(false);
+    }
+  };
+
+  const openPromptPresetModal = async () => {
+    setPresetModalVisible(true);
+    await loadPromptPresets();
+  };
+
+  const buildPresetPrompt = (preset) =>
+    [
+      PROMPT_PRESET_USAGE_PREFIX,
+      PROMPT_PRESET_STYLE_PREFIX,
+      preset.prompt && `预设风格模板：\n${preset.prompt}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+  const applyPromptPreset = (preset) => {
+    const normalized = normalizePromptPreset(preset);
+    setPresetPrompt(buildPresetPrompt(normalized));
+    setPresetName(normalized.name || '');
+    const userFileList = imageFileList.filter(
+      (item) => !isPromptPresetFileItem(item),
+    );
+    const userFiles = imageFiles.filter(
+      (file) =>
+        file &&
+        !String(file.name || '').startsWith('style-reference-preset'),
+    );
+
+    if (normalized.image) {
+      const presetFile = dataUrlToFile(
+        normalized.image,
+        'style-reference-preset',
+      );
+      if (!presetFile) {
+        showError(t('该预设图片无效'));
+        return;
+      }
+
+      const presetFileItem = {
+        uid: `prompt-preset-${normalized.id || Date.now()}`,
+        name: presetFile.name,
+        status: 'success',
+        fileInstance: presetFile,
+      };
+      setImageFileList([...userFileList, presetFileItem]);
+      setImageFiles([...userFiles, presetFile]);
+    } else {
+      setImageFileList(userFileList);
+      setImageFiles(userFiles);
+    }
+
+    setMode('generate');
+    setPresetModalVisible(false);
+    showSuccess(t('已应用预设提示词'));
+  };
+
   const loadHistory = async () => {
     setHistoryLoading(true);
     try {
@@ -557,8 +707,25 @@ const ImageStudio = () => {
     </div>
   );
 
-  const buildGenerationPayload = ({
+  const buildEffectivePrompt = ({
     prompt = config.prompt,
+    preset = presetPrompt,
+  } = {}) => {
+    const userPrompt = String(prompt || '').trim();
+    const templatePrompt = String(preset || '').trim();
+
+    if (userPrompt && templatePrompt) {
+      return [
+        `用户创作需求：\n${userPrompt}`,
+        `预设风格模板与参考图说明：\n${templatePrompt}`,
+      ].join('\n\n');
+    }
+
+    return userPrompt || templatePrompt;
+  };
+
+  const buildGenerationPayload = ({
+    prompt = buildEffectivePrompt(),
     size = selectedSize,
   } = {}) => {
     const payload = {
@@ -573,9 +740,9 @@ const ImageStudio = () => {
   };
 
   const buildFormData = ({
-    prompt = config.prompt,
+    prompt = buildEffectivePrompt(),
     size = selectedSize,
-    files = imageFiles,
+    files = getOrderedReferenceFiles(),
   } = {}) => {
     const formData = new FormData();
     formData.append('model', config.model);
@@ -584,14 +751,14 @@ const ImageStudio = () => {
     formData.append('n', '1');
     formData.append('response_format', 'b64_json');
     if (size) formData.append('size', size);
-    files.forEach((file) => formData.append('image[]', file));
+    files.forEach((file) => formData.append('image', file));
     return formData;
   };
 
   const requestOneImage = async ({
-    prompt = config.prompt,
+    prompt = buildEffectivePrompt(),
     size = selectedSize,
-    files = imageFiles,
+    files = getOrderedReferenceFiles(),
     requestMode,
   } = {}) => {
     const effectiveMode =
@@ -625,7 +792,7 @@ const ImageStudio = () => {
       mode: result.mode || mode,
       model: config.model,
       group: config.group,
-      prompt: result.prompt || config.prompt,
+      prompt: result.prompt || buildEffectivePrompt(),
       ratio: result.ratio || config.ratio,
       resolution: result.resolution || config.resolution,
       size: result.size || selectedSize,
@@ -745,11 +912,13 @@ const ImageStudio = () => {
       await handleTemplateGenerate();
       return;
     }
-    if (!config.prompt.trim()) {
+    const effectivePrompt = buildEffectivePrompt();
+    if (!effectivePrompt) {
       showError(t('请输入提示词'));
       return;
     }
-    const requestMode = imageFiles.length > 0 ? 'edit' : 'generate';
+    const referenceFiles = getOrderedReferenceFiles();
+    const requestMode = referenceFiles.length > 0 ? 'edit' : 'generate';
     if (
       requestMode === 'edit' &&
       !imageModelSupportsMode(currentModelSetting, 'edits')
@@ -780,9 +949,13 @@ const ImageStudio = () => {
       const tasks = Array.from({ length: total }, async () => {
         try {
           const result = {
-            ...(await requestOneImage({ requestMode })),
+            ...(await requestOneImage({
+              prompt: effectivePrompt,
+              files: referenceFiles,
+              requestMode,
+            })),
             mode: requestMode,
-            prompt: config.prompt,
+            prompt: effectivePrompt,
             ratio: config.ratio,
             resolution: config.resolution,
             size: selectedSize,
@@ -982,30 +1155,112 @@ const ImageStudio = () => {
   };
 
   const previewHistoryRecord = (record) => {
-    Modal.info({
+    const promptText = record.revised_prompt || record.prompt || '';
+    let modalRef;
+
+    modalRef = Modal.info({
       title: t('查看历史图片'),
-      width: 720,
+      width: 980,
+      bodyStyle: { overflow: 'hidden' },
       content: (
-        <div className='flex flex-col gap-3'>
+        <div
+          className={
+            isMobile
+              ? 'flex max-h-[68vh] flex-col gap-4 overflow-y-auto'
+              : 'grid h-[68vh] overflow-hidden grid-cols-[minmax(0,1fr)_380px] gap-4'
+          }
+        >
           <div
             className='flex items-center justify-center overflow-hidden rounded'
             style={{
               background: 'var(--semi-color-fill-0)',
-              maxHeight: 520,
+              minHeight: isMobile ? 280 : 520,
             }}
           >
-            <img
-              alt={record.revised_prompt || record.prompt}
-              className='max-h-[520px] max-w-full object-contain'
-              src={record.image}
+            {record.image ? (
+              <img
+                alt={promptText}
+                className='max-h-full max-w-full object-contain'
+                src={record.image}
+              />
+            ) : (
+              <Text type='tertiary'>{t('图片加载失败')}</Text>
+            )}
+          </div>
+          <div className='flex min-h-0 flex-col gap-3 overflow-hidden'>
+            <div className='flex flex-col gap-1'>
+              <Text strong>{record.model || t('未知模型')}</Text>
+              <Text size='small' type='tertiary'>
+                {record.template_slot
+                  ? t(record.template_slot)
+                  : record.mode === 'edit'
+                    ? t('图生图')
+                    : t('文生图')}{' '}
+                · {record.size || t('自动')}
+              </Text>
+              <Text size='small' type='tertiary'>
+                {formatHistoryTime(record.created_at)}
+              </Text>
+            </div>
+            <div className='flex items-center justify-between gap-2'>
+              <Text strong>{t('提示词')}</Text>
+              <Button
+                disabled={!promptText}
+                onClick={() => handleCopyPrompt(promptText)}
+                size='small'
+                theme='outline'
+              >
+                {t('复制提示词')}
+              </Button>
+            </div>
+            <textarea
+              className='w-full flex-1 rounded border p-3 text-sm leading-6 outline-none'
+              readOnly
+              style={{
+                background: 'var(--semi-color-fill-0)',
+                borderColor: 'var(--semi-color-border)',
+                color: 'var(--semi-color-text-0)',
+                minHeight: isMobile ? 260 : 0,
+                overflow: 'auto',
+                resize: 'none',
+              }}
+              value={promptText}
             />
           </div>
-          <Text ellipsis={{ showTooltip: true, rows: 4 }} type='tertiary'>
-            {record.revised_prompt || record.prompt}
-          </Text>
         </div>
       ),
-      okText: t('关闭'),
+      footer: (
+        <div className='flex justify-end gap-2'>
+          <Button
+            disabled={!record.image}
+            icon={<Download size={15} />}
+            onClick={() => handleHistoryDownload(record)}
+            theme='outline'
+          >
+            {t('下载')}
+          </Button>
+          <Button
+            icon={<Trash2 size={15} />}
+            onClick={() => {
+              modalRef?.destroy?.();
+              removeHistoryRecord(record);
+            }}
+            theme='outline'
+            type='danger'
+          >
+            {t('删除')}
+          </Button>
+          <Button
+            onClick={() => modalRef?.destroy?.()}
+            theme='solid'
+            type='primary'
+          >
+            {t('关闭')}
+          </Button>
+        </div>
+      ),
+      hasCancel: false,
+      hasOk: false,
     });
   };
 
@@ -1420,135 +1675,198 @@ const ImageStudio = () => {
   };
 
   const renderHistoryRecords = () => (
-    <Spin spinning={historyLoading} wrapperClassName='h-full'>
-      <div className='flex h-full min-h-0 flex-col'>
-        <div className='mb-3 flex items-center justify-between gap-3'>
+    <div className='flex flex-col gap-3'>
+      <div className='mb-3 flex items-center justify-between gap-3'>
+        <div className='flex min-w-0 items-center gap-2'>
           <Text type='tertiary'>{t('仅保存在当前浏览器，最多保留 50 条')}</Text>
-          <Button
-            disabled={historyRecords.length === 0}
-            icon={<Trash2 size={15} />}
-            onClick={removeAllHistory}
-            theme='outline'
-            type='danger'
-          >
-            {t('清空')}
-          </Button>
+          {historyLoading && <Spin size='small' />}
         </div>
+        <Button
+          disabled={historyRecords.length === 0}
+          icon={<Trash2 size={15} />}
+          onClick={removeAllHistory}
+          theme='outline'
+          type='danger'
+        >
+          {t('清空')}
+        </Button>
+      </div>
 
-        {historyRecords.length === 0 ? (
-          <div className='flex min-h-[380px] flex-1 items-center justify-center'>
+      {historyRecords.length === 0 ? (
+        <div className='flex min-h-[380px] items-center justify-center'>
+          <Empty
+            description={t('生成成功后会自动保存到这里')}
+            image={<History size={44} color='var(--semi-color-text-2)' />}
+            title={t('暂无历史记录')}
+          />
+        </div>
+      ) : (
+        <div
+          className='grid content-start gap-4'
+          style={{
+            gridTemplateColumns: isMobile
+              ? '1fr'
+              : 'repeat(auto-fill, minmax(220px, 1fr))',
+          }}
+        >
+          {historyRecords.map((record) => {
+            const imageFailed = historyImageErrors[record.id];
+            return (
+              <Card
+                bordered
+                bodyStyle={{ padding: 12 }}
+                className='overflow-hidden'
+                key={record.id}
+              >
+                <button
+                  className='mb-3 flex w-full items-center justify-center overflow-hidden rounded border-0 p-0'
+                  onClick={() => previewHistoryRecord(record)}
+                  style={{
+                    aspectRatio: '1 / 1',
+                    background: 'var(--semi-color-fill-0)',
+                    cursor: 'pointer',
+                  }}
+                  type='button'
+                >
+                  {record.image && !imageFailed ? (
+                    <img
+                      alt={record.revised_prompt || record.prompt}
+                      className='h-full w-full object-cover'
+                      onError={() =>
+                        setHistoryImageErrors((current) => ({
+                          ...current,
+                          [record.id]: true,
+                        }))
+                      }
+                      src={record.image}
+                    />
+                  ) : (
+                    <Text type='tertiary'>{t('图片加载失败')}</Text>
+                  )}
+                </button>
+
+                <div className='mb-3 flex flex-col gap-1'>
+                  <Text ellipsis={{ showTooltip: true }} strong>
+                    {record.model || t('未知模型')}
+                  </Text>
+                  <Text size='small' type='tertiary'>
+                    {record.template_slot
+                      ? t(record.template_slot)
+                      : record.mode === 'edit'
+                        ? t('图生图')
+                        : t('文生图')}{' '}
+                    · {record.size || t('自动')}
+                  </Text>
+                  <Text
+                    className='flex items-center gap-1'
+                    size='small'
+                    type='tertiary'
+                  >
+                    <Clock3 size={13} />
+                    {formatHistoryTime(record.created_at)}
+                  </Text>
+                </div>
+
+                <div className='grid grid-cols-3 gap-2'>
+                  <Button
+                    icon={<Eye size={15} />}
+                    onClick={() => previewHistoryRecord(record)}
+                    theme='outline'
+                  >
+                    {t('查看')}
+                  </Button>
+                  <Button
+                    disabled={!record.image}
+                    icon={<Download size={15} />}
+                    onClick={() => handleHistoryDownload(record)}
+                    theme='outline'
+                  >
+                    {t('下载')}
+                  </Button>
+                  <Button
+                    icon={<Trash2 size={15} />}
+                    onClick={() => removeHistoryRecord(record)}
+                    theme='outline'
+                    type='danger'
+                  >
+                    {t('删除')}
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderPromptPresetModal = () => (
+    <Modal
+      footer={null}
+      onCancel={() => setPresetModalVisible(false)}
+      title={t('选择预设提示词')}
+      visible={presetModalVisible}
+      width={820}
+    >
+      <Spin spinning={presetLoading}>
+        {promptPresets.length === 0 ? (
+          <div className='py-10'>
             <Empty
-              description={t('生成成功后会自动保存到这里')}
-              image={<History size={44} color='var(--semi-color-text-2)' />}
-              title={t('暂无历史记录')}
+              image={<ImageIcon size={40} />}
+              title={t('暂无预设提示词')}
             />
           </div>
         ) : (
-          <div
-            className='grid flex-1 content-start gap-4 overflow-y-auto pr-1'
-            style={{
-              gridTemplateColumns: isMobile
-                ? '1fr'
-                : 'repeat(auto-fill, minmax(220px, 1fr))',
-            }}
-          >
-            {historyRecords.map((record) => {
-              const imageFailed = historyImageErrors[record.id];
-              return (
-                <Card
-                  bordered
-                  bodyStyle={{ padding: 12 }}
-                  className='overflow-hidden'
-                  key={record.id}
-                >
-                  <button
-                    className='mb-3 flex w-full items-center justify-center overflow-hidden rounded border-0 p-0'
-                    onClick={() => previewHistoryRecord(record)}
-                    style={{
-                      aspectRatio: '1 / 1',
-                      background: 'var(--semi-color-fill-0)',
-                      cursor: 'pointer',
-                    }}
-                    type='button'
+          <div className='grid max-h-[68vh] grid-cols-1 gap-4 overflow-y-auto pr-1 md:grid-cols-2'>
+            {promptPresets.map((preset, index) => (
+              <div
+                className='flex min-h-0 flex-col overflow-hidden rounded-lg border'
+                key={preset.id || index}
+                style={{ borderColor: 'var(--semi-color-border)' }}
+              >
+                <div className='flex h-44 items-center justify-center bg-semi-color-fill-0'>
+                  {preset.image ? (
+                    <img
+                      alt={preset.name}
+                      className='max-h-full max-w-full object-contain'
+                      src={preset.image}
+                    />
+                  ) : (
+                    <ImageIcon
+                      size={40}
+                      style={{ color: 'var(--semi-color-text-2)' }}
+                    />
+                  )}
+                </div>
+                <div className='flex flex-1 flex-col gap-3 p-4'>
+                  <div className='flex flex-col gap-1'>
+                    <Text strong ellipsis={{ showTooltip: true }}>
+                      {preset.name || t('未命名预设')}
+                    </Text>
+                    <Text
+                      className='min-h-[44px]'
+                      ellipsis={{ rows: 2, showTooltip: true }}
+                      size='small'
+                      type='tertiary'
+                    >
+                      {preset.prompt}
+                    </Text>
+                  </div>
+                  <Button
+                    block
+                    onClick={() => applyPromptPreset(preset)}
+                    theme='solid'
+                    type='primary'
                   >
-                    {record.image && !imageFailed ? (
-                      <img
-                        alt={record.revised_prompt || record.prompt}
-                        className='h-full w-full object-cover'
-                        onError={() =>
-                          setHistoryImageErrors((current) => ({
-                            ...current,
-                            [record.id]: true,
-                          }))
-                        }
-                        src={record.image}
-                      />
-                    ) : (
-                      <Text type='tertiary'>{t('图片加载失败')}</Text>
-                    )}
-                  </button>
-
-                  <div className='mb-3 flex flex-col gap-1'>
-                    <Text ellipsis={{ showTooltip: true }} strong>
-                      {record.model || t('未知模型')}
-                    </Text>
-                    <Text size='small' type='tertiary'>
-                      {record.template_slot
-                        ? t(record.template_slot)
-                        : record.mode === 'edit'
-                          ? t('图生图')
-                          : t('文生图')}{' '}
-                      · {record.size || t('自动')}
-                    </Text>
-                    <Text
-                      className='flex items-center gap-1'
-                      size='small'
-                      type='tertiary'
-                    >
-                      <Clock3 size={13} />
-                      {formatHistoryTime(record.created_at)}
-                    </Text>
-                    <Text
-                      ellipsis={{ showTooltip: true, rows: 2 }}
-                      size='small'
-                      type='tertiary'
-                    >
-                      {record.revised_prompt || record.prompt}
-                    </Text>
-                  </div>
-
-                  <div className='grid grid-cols-3 gap-2'>
-                    <Button
-                      icon={<Eye size={15} />}
-                      onClick={() => previewHistoryRecord(record)}
-                      theme='outline'
-                    >
-                      {t('查看')}
-                    </Button>
-                    <Button
-                      disabled={!record.image}
-                      icon={<Download size={15} />}
-                      onClick={() => handleHistoryDownload(record)}
-                      theme='outline'
-                    >
-                      {t('下载')}
-                    </Button>
-                    <Button
-                      icon={<Trash2 size={15} />}
-                      onClick={() => removeHistoryRecord(record)}
-                      theme='outline'
-                      type='danger'
-                    >
-                      {t('删除')}
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
+                    {t('使用预设')}
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
-      </div>
-    </Spin>
+      </Spin>
+    </Modal>
   );
 
   return (
@@ -1650,6 +1968,33 @@ const ImageStudio = () => {
                     </div>
 
                     <div className='flex flex-col gap-2'>
+                      <div className='flex items-center justify-between gap-2'>
+                        <Text strong>{t('预设提示词')}</Text>
+                        {presetName && (
+                          <Text
+                            ellipsis={{ showTooltip: true }}
+                            size='small'
+                            type='tertiary'
+                          >
+                            {presetName}
+                          </Text>
+                        )}
+                      </div>
+                      <TextArea
+                        autosize={{ minRows: 4, maxRows: 10 }}
+                        disabled={generating}
+                        onChange={(value) => {
+                          setPresetPrompt(value);
+                          if (!String(value || '').trim()) {
+                            setPresetName('');
+                          }
+                        }}
+                        placeholder={t('输入预设提示词')}
+                        value={presetPrompt}
+                      />
+                    </div>
+
+                    <div className='flex flex-col gap-2'>
                       <Text strong>{t('参考图')}</Text>
                       <Upload
                         accept='image/png,image/jpeg,image/webp'
@@ -1669,7 +2014,9 @@ const ImageStudio = () => {
                       </Upload>
                       {imageFiles.length > 0 && (
                         <Text type='tertiary' size='small'>
-                          {imageFiles.map((file) => file.name).join(', ')}
+                          {getOrderedReferenceFiles()
+                            .map((file) => file.name)
+                            .join(', ')}
                         </Text>
                       )}
                     </div>
@@ -1704,30 +2051,47 @@ const ImageStudio = () => {
                 )}
               </div>
 
-              <Button
-                block
-                className='shrink-0'
-                disabled={generating || filteredModels.length === 0}
-                icon={
-                  generating ? (
-                    <Loader2 className='animate-spin' size={16} />
-                  ) : (
-                    <Sparkles size={16} />
-                  )
+              <div
+                className={
+                  mode === 'template'
+                    ? 'shrink-0'
+                    : 'grid shrink-0 grid-cols-[auto_minmax(0,1fr)] gap-2'
                 }
-                onClick={handleGenerate}
-                theme='solid'
-                type='primary'
               >
-                {generating
-                  ? t('生成中') +
-                    ` ${generatedCount}/${
-                      mode === 'template'
-                        ? getTemplateSlots(templateForm.count).length
-                        : config.count
-                    }`
-                  : t('生成')}
-              </Button>
+                {mode !== 'template' && (
+                  <Button
+                    disabled={generating}
+                    icon={<WandSparkles size={16} />}
+                    onClick={openPromptPresetModal}
+                    theme='outline'
+                  >
+                    {t('预设提示词')}
+                  </Button>
+                )}
+                <Button
+                  block
+                  disabled={generating || filteredModels.length === 0}
+                  icon={
+                    generating ? (
+                      <Loader2 className='animate-spin' size={16} />
+                    ) : (
+                      <Sparkles size={16} />
+                    )
+                  }
+                  onClick={handleGenerate}
+                  theme='solid'
+                  type='primary'
+                >
+                  {generating
+                    ? t('生成中') +
+                      ` ${generatedCount}/${
+                        mode === 'template'
+                          ? getTemplateSlots(templateForm.count).length
+                          : config.count
+                      }`
+                    : t('生成')}
+                </Button>
+              </div>
             </div>
           </Spin>
         </Card>
@@ -1752,13 +2116,20 @@ const ImageStudio = () => {
             />
           </Tabs>
 
-          <div className='mt-4 min-h-0 flex-1 overflow-hidden'>
+          <div
+            className={
+              resultTab === 'history'
+                ? 'mt-4 min-h-0 flex-1 overflow-y-auto pr-1'
+                : 'mt-4 min-h-0 flex-1 overflow-hidden'
+            }
+          >
             {resultTab === 'history'
               ? renderHistoryRecords()
               : renderCurrentResults()}
           </div>
         </Card>
       </div>
+      {renderPromptPresetModal()}
     </div>
   );
 };

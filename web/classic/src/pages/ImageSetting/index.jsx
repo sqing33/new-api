@@ -24,13 +24,16 @@ import {
   Checkbox,
   Empty,
   Form,
+  Input,
   Modal,
+  Select,
   Space,
   Spin,
   Table,
   Tabs,
   TabPane,
   Tag,
+  TextArea,
   Typography,
   Upload,
 } from '@douyinfe/semi-ui';
@@ -40,7 +43,7 @@ import {
   IconImage,
   IconPlus,
 } from '@douyinfe/semi-icons';
-import { API, showError, showSuccess } from '../../helpers';
+import { API, processModelsData, showError, showSuccess } from '../../helpers';
 import { StatusContext } from '../../context/Status';
 import CardPro from '../../components/common/ui/CardPro';
 import {
@@ -56,6 +59,18 @@ const { Text } = Typography;
 
 const OPTION_KEY = 'ImageModelSettings';
 const PROMPT_PRESETS_OPTION_KEY = 'ImagePromptPresets';
+const CHAT_COMPLETIONS_ENDPOINT = '/pg/chat/completions';
+const USER_MODELS_ENDPOINT = '/api/user/models';
+const PRESET_ANALYSIS_SYSTEM_PROMPT =
+  '你是图像生成提示词架构师，负责把参考图提炼成可复用的生图预设。不要只复述当前图片内容，而要判断它的可复用风格、版式、构图、视觉语言和适用场景。输出必须是严格 JSON，不要 Markdown，不要解释。';
+const PRESET_ANALYSIS_USER_PROMPT = [
+  '请分析这张参考图，生成适合保存为“预设提示词”的 JSON：{"name":"不超过16个中文字符","prompt":"一整段中文通用生图提示词"}。',
+  'prompt 必须是一整段中文，可直接用于之后的图生图/文生图；写法要像“将我上传的图片改造成……”或“根据我上传的图片生成……”。',
+  '要保留未来用户上传图片的主体辨识度、人物/商品/动物/场景结构和主色调，不要锁死当前参考图里的具体人物、动物、品牌、地点、颜色、元素主题或文案。',
+  '重点提炼可复用的风格模板：画面类型、版式结构、主体位置、构图、光影、色彩倾向、材质质感、标注/信息框/细节展示/三视图/物品介绍等页面模块、整体氛围和负面约束。',
+  '如果参考图是手绘标注 plog，就输出真实照片加白色手绘涂鸦标注的通用模板；如果是角色概念设定稿，就输出手游/RPG 角色设定板模板；如果是人物档案卡，就输出全身写真加资料栏、物品介绍、表情展示的人设卡模板；其他图片也按其自身风格自动归纳，不强行套用固定主题。',
+  '只返回 JSON，不要输出 Markdown。',
+].join('\n');
 
 const settingsToJson = (settings) => JSON.stringify(settings, null, 2);
 const splitCsv = (value) =>
@@ -93,6 +108,28 @@ const fileToDataUrl = (file) =>
     reader.readAsDataURL(file);
   });
 
+const extractJsonObject = (content) => {
+  if (!content) return null;
+  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const raw = (fenced || content).trim();
+  const candidates = [raw];
+  const firstBrace = raw.indexOf('{');
+  const lastBrace = raw.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    candidates.push(raw.slice(firstBrace, lastBrace + 1));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  return null;
+};
+
 const ImageSetting = () => {
   const { t } = useTranslation();
   const [statusState, statusDispatch] = useContext(StatusContext);
@@ -107,6 +144,9 @@ const ImageSetting = () => {
   const [editingPresetIndex, setEditingPresetIndex] = useState(null);
   const [editingPreset, setEditingPreset] = useState(null);
   const [presetFileList, setPresetFileList] = useState([]);
+  const [analysisModels, setAnalysisModels] = useState([]);
+  const [analysisModel, setAnalysisModel] = useState('');
+  const [analyzingPreset, setAnalyzingPreset] = useState(false);
 
   const loadSettings = async () => {
     setLoading(true);
@@ -122,6 +162,27 @@ const ImageSetting = () => {
       showError(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAnalysisModels = async () => {
+    try {
+      const res = await API.get(USER_MODELS_ENDPOINT);
+      const { success, data, message } = res.data || {};
+      if (!success) {
+        showError(t(message || '加载模型失败'));
+        return;
+      }
+      const { modelOptions, selectedModel } = processModelsData(
+        Array.isArray(data) ? data : [],
+        analysisModel,
+      );
+      setAnalysisModels(modelOptions);
+      if (selectedModel && selectedModel !== analysisModel) {
+        setAnalysisModel(selectedModel);
+      }
+    } catch {
+      showError(t('加载模型失败'));
     }
   };
 
@@ -150,6 +211,10 @@ const ImageSetting = () => {
 
   useEffect(() => {
     loadSettings();
+  }, []);
+
+  useEffect(() => {
+    loadAnalysisModels();
   }, []);
 
   const saveSettings = async (nextSettings) => {
@@ -315,6 +380,70 @@ const ImageSetting = () => {
       updateEditingPreset({ image: dataUrl });
     } catch (error) {
       showError(error);
+    }
+  };
+
+  const analyzePresetImage = async () => {
+    if (!editingPreset?.image) {
+      showError(t('请先上传预设图片'));
+      return;
+    }
+    if (!analysisModel) {
+      showError(t('请选择分析模型'));
+      return;
+    }
+
+    setAnalyzingPreset(true);
+    try {
+      const res = await API.post(
+        CHAT_COMPLETIONS_ENDPOINT,
+        {
+          model: analysisModel,
+          stream: false,
+          temperature: 0.2,
+          messages: [
+            {
+              role: 'system',
+              content: PRESET_ANALYSIS_SYSTEM_PROMPT,
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: PRESET_ANALYSIS_USER_PROMPT,
+                },
+                {
+                  type: 'image_url',
+                  image_url: { url: editingPreset.image },
+                },
+              ],
+            },
+          ],
+        },
+        { skipErrorHandler: true },
+      );
+      const content = res.data?.choices?.[0]?.message?.content || '';
+      const parsed = extractJsonObject(content);
+      const name = String(parsed?.name || '').trim();
+      const prompt = String(parsed?.prompt || '').trim();
+      if (!name && !prompt) {
+        throw new Error(t('模型未返回可用的分析结果'));
+      }
+      updateEditingPreset({
+        ...(name ? { name } : {}),
+        ...(prompt ? { prompt } : {}),
+      });
+      showSuccess(t('图片分析完成'));
+    } catch (error) {
+      showError(
+        error?.response?.data?.error?.message ||
+          error?.response?.data?.message ||
+          error?.message ||
+          t('图片分析失败'),
+      );
+    } finally {
+      setAnalyzingPreset(false);
     }
   };
 
@@ -731,23 +860,48 @@ const ImageSetting = () => {
               </Upload>
             </div>
 
-            <Form>
-              <Form.Input
-                field='preset_name'
-                label={t('预设名称')}
-                onChange={(value) => updateEditingPreset({ name: value })}
-                placeholder={t('例如：商品图爆款封面')}
-                value={editingPreset.name}
-              />
-              <Form.TextArea
-                autosize={{ minRows: 8, maxRows: 14 }}
-                field='preset_prompt'
-                label={t('提示词内容')}
-                onChange={(value) => updateEditingPreset({ prompt: value })}
-                placeholder={t('输入预设提示词')}
-                value={editingPreset.prompt}
-              />
-            </Form>
+            <div className='flex flex-col'>
+              <div className='mb-4 flex flex-col gap-2'>
+                <Text strong>{t('分析模型')}</Text>
+                <div className='flex flex-col gap-2 md:flex-row'>
+                  <Select
+                    className='min-w-0 flex-1'
+                    disabled={analyzingPreset}
+                    filter
+                    onChange={setAnalysisModel}
+                    optionList={analysisModels}
+                    placeholder={t('请选择分析模型')}
+                    value={analysisModel}
+                  />
+                  <Button
+                    className='md:w-auto'
+                    disabled={!editingPreset.image || !analysisModel}
+                    loading={analyzingPreset}
+                    onClick={analyzePresetImage}
+                    type='primary'
+                  >
+                    {t('分析图片')}
+                  </Button>
+                </div>
+              </div>
+              <div className='mb-4 flex flex-col gap-2'>
+                <Text strong>{t('预设名称')}</Text>
+                <Input
+                  onChange={(value) => updateEditingPreset({ name: value })}
+                  placeholder={t('例如：商品图爆款封面')}
+                  value={editingPreset.name}
+                />
+              </div>
+              <div className='flex flex-col gap-2'>
+                <Text strong>{t('提示词内容')}</Text>
+                <TextArea
+                  autosize={{ minRows: 8, maxRows: 14 }}
+                  onChange={(value) => updateEditingPreset({ prompt: value })}
+                  placeholder={t('输入预设提示词')}
+                  value={editingPreset.prompt}
+                />
+              </div>
+            </div>
           </div>
         )}
       </Modal>

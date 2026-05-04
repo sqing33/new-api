@@ -3932,6 +3932,18 @@
     "输入预设提示词": "Enter the preset prompt",
     "请输入预设名称": "Please enter a preset name",
     "请上传预设图片": "Please upload a preset image",
-    "请输入提示词内容": "Please enter prompt content"
+    "请输入提示词内容": "Please enter prompt content",
+    "分析模型": "Analysis model",
+    "请选择分析模型": "Please select an analysis model",
+    "分析图片": "Analyze image",
+    "请先上传预设图片": "Please upload a preset image first",
+    "模型未返回可用的分析结果": "The model did not return a usable analysis result",
+    "图片分析完成": "Image analysis completed",
+    "图片分析失败": "Image analysis failed",
+    "选择预设提示词": "Select prompt preset",
+    "使用预设": "Use preset",
+    "已应用预设提示词": "Prompt preset applied",
+    "加载预设提示词失败": "Failed to load prompt presets",
+    "该预设图片无效": "This preset image is invalid"
   }
 }

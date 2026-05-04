@@ -4319,6 +4319,18 @@
     "输入预设提示词": "Nhập prompt mẫu",
     "请输入预设名称": "Vui lòng nhập tên mẫu",
     "请上传预设图片": "Vui lòng tải ảnh mẫu lên",
-    "请输入提示词内容": "Vui lòng nhập nội dung prompt"
+    "请输入提示词内容": "Vui lòng nhập nội dung prompt",
+    "分析模型": "Mô hình phân tích",
+    "请选择分析模型": "Vui lòng chọn mô hình phân tích",
+    "分析图片": "Phân tích ảnh",
+    "请先上传预设图片": "Vui lòng tải ảnh mẫu lên trước",
+    "模型未返回可用的分析结果": "Mô hình không trả về kết quả phân tích có thể dùng",
+    "图片分析完成": "Phân tích ảnh hoàn tất",
+    "图片分析失败": "Phân tích ảnh thất bại",
+    "选择预设提示词": "Chọn mẫu prompt",
+    "使用预设": "Dùng mẫu",
+    "已应用预设提示词": "Đã áp dụng mẫu prompt",
+    "加载预设提示词失败": "Không tải được mẫu prompt",
+    "该预设图片无效": "Ảnh mẫu này không hợp lệ"
   }
 }
