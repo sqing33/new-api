@@ -24,6 +24,7 @@ import PricingQuotaTypes from '../filter/PricingQuotaTypes';
 import PricingEndpointTypes from '../filter/PricingEndpointTypes';
 import PricingVendors from '../filter/PricingVendors';
 import PricingTags from '../filter/PricingTags';
+import PricingCapabilities from '../filter/PricingCapabilities';
 
 import { resetPricingFilters } from '../../../../helpers/utils';
 import { usePricingFilterCounts } from '../../../../hooks/model-pricing/usePricingFilterCounts';
@@ -50,6 +51,8 @@ const PricingSidebar = ({
   setFilterVendor,
   filterTag,
   setFilterTag,
+  filterCapability,
+  setFilterCapability,
   currentPage,
   setCurrentPage,
   tokenUnit,
@@ -63,6 +66,7 @@ const PricingSidebar = ({
     endpointTypeModels,
     vendorModels,
     tagModels,
+    capabilityModels,
     groupCountModels,
   } = usePricingFilterCounts({
     models: categoryProps.models,
@@ -71,10 +75,12 @@ const PricingSidebar = ({
     filterEndpointType,
     filterVendor,
     filterTag,
+    filterCapability,
+    imageModelSettingsMap: categoryProps.imageModelSettingsMap,
     searchValue: categoryProps.searchValue,
   });
 
-  const handleResetFilters = () =>
+  const handleResetFilters = () => {
     resetPricingFilters({
       handleChange,
       setShowWithRecharge,
@@ -86,9 +92,12 @@ const PricingSidebar = ({
       setFilterEndpointType,
       setFilterVendor,
       setFilterTag,
+      setFilterCapability,
       setCurrentPage,
       setTokenUnit,
     });
+    setFilterCapability('all');
+  };
 
   return (
     <div className='p-2'>
@@ -127,6 +136,15 @@ const PricingSidebar = ({
         filterQuotaType={filterQuotaType}
         setFilterQuotaType={setFilterQuotaType}
         models={quotaTypeModels}
+        loading={loading}
+        t={t}
+      />
+
+      <PricingCapabilities
+        filterCapability={filterCapability}
+        setFilterCapability={setFilterCapability}
+        models={capabilityModels}
+        imageModelSettingsMap={categoryProps.imageModelSettingsMap}
         loading={loading}
         t={t}
       />

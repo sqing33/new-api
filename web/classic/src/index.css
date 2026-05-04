@@ -1514,6 +1514,53 @@ html.dark .sbg-variant-green {
   overflow: hidden;
 }
 
+.edit-model-modal-body {
+  position: relative;
+  height: calc(100vh - 120px);
+  height: calc(100dvh - 120px);
+  overflow-y: auto;
+}
+
+.edit-model-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.38);
+  pointer-events: auto;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.edit-model-loading-overlay .semi-spin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.edit-model-loading-overlay .semi-spin-wrapper {
+  position: static !important;
+}
+
+.edit-model-loading-overlay .semi-spin .semi-spin-wrapper {
+  position: absolute !important;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 0;
+}
+
 .image-studio-settings-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--semi-grey-3), 0.45) transparent;
@@ -2017,7 +2064,10 @@ html.dark .with-pastel-balls::before {
   background-color: rgba(255, 255, 255, 0.2) !important;
 }
 
-.pricing-bg-shell .semi-table-tbody > .semi-table-row:hover > .semi-table-row-cell {
+.pricing-bg-shell
+  .semi-table-tbody
+  > .semi-table-row:hover
+  > .semi-table-row-cell {
   background: var(--console-glass-hover) !important;
   background-color: var(--console-glass-hover) !important;
 }

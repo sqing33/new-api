@@ -23,6 +23,18 @@ import { API, copy, showError, showInfo, showSuccess } from '../../helpers';
 import { Modal } from '@douyinfe/semi-ui';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
+import { parseImageModelSettings } from '../../helpers/imageModelSettings';
+
+const buildImageModelSettingsMap = (settings = []) =>
+  settings.reduce((map, setting) => {
+    if (setting?.model) map[setting.model] = setting;
+    return map;
+  }, {});
+
+const hasImageCapability = (model, imageModelSettingsMap) => {
+  const setting = imageModelSettingsMap?.[model?.model_name];
+  return Array.isArray(setting?.modes) && setting.modes.length > 0;
+};
 
 export const useModelPricingData = () => {
   const { t } = useTranslation();
@@ -39,6 +51,7 @@ export const useModelPricingData = () => {
   const [filterEndpointType, setFilterEndpointType] = useState('all'); // 端点类型筛选: 'all' | string
   const [filterVendor, setFilterVendor] = useState('all'); // 供应商筛选: 'all' | 'unknown' | string
   const [filterTag, setFilterTag] = useState('all'); // 模型标签筛选: 'all' | string
+  const [filterCapability, setFilterCapability] = useState('all'); // 能力筛选: 'all' | 'image' | 'chat'
   const [pageSize, setPageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
   const [currency, setCurrency] = useState('USD');
@@ -54,6 +67,14 @@ export const useModelPricingData = () => {
 
   const [statusState] = useContext(StatusContext);
   const [userState] = useContext(UserContext);
+
+  const imageModelSettingsMap = useMemo(
+    () =>
+      buildImageModelSettingsMap(
+        parseImageModelSettings(statusState?.status?.image_model_settings),
+      ),
+    [statusState?.status?.image_model_settings],
+  );
 
   // 充值汇率（price）与美元兑人民币汇率（usd_exchange_rate）
   const priceRate = useMemo(
@@ -157,6 +178,14 @@ export const useModelPricingData = () => {
       );
     }
 
+    // 能力筛选
+    if (filterCapability !== 'all') {
+      result = result.filter((model) => {
+        const isImageModel = hasImageCapability(model, imageModelSettingsMap);
+        return filterCapability === 'image' ? isImageModel : !isImageModel;
+      });
+    }
+
     return result;
   }, [
     models,
@@ -166,6 +195,8 @@ export const useModelPricingData = () => {
     filterEndpointType,
     filterVendor,
     filterTag,
+    filterCapability,
+    imageModelSettingsMap,
   ]);
 
   const rowSelection = useMemo(
@@ -328,6 +359,7 @@ export const useModelPricingData = () => {
     filterEndpointType,
     filterVendor,
     filterTag,
+    filterCapability,
     searchValue,
   ]);
 
@@ -357,6 +389,8 @@ export const useModelPricingData = () => {
     setFilterVendor,
     filterTag,
     setFilterTag,
+    filterCapability,
+    setFilterCapability,
     pageSize,
     setPageSize,
     currentPage,
@@ -374,6 +408,7 @@ export const useModelPricingData = () => {
     usableGroup,
     endpointMap,
     autoGroups,
+    imageModelSettingsMap,
 
     // 计算属性
     priceRate,

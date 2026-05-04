@@ -115,6 +115,8 @@ const splitCsv = (value) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const DEFAULT_QINGYING_IMAGE_MODES = ['generations', 'edits'];
+
 const qingyingSettingToFormValues = (setting) => {
   const normalized = setting ? normalizeImageModelSetting(setting) : null;
   const video = normalizeVideoModelConfig(normalized?.video);
@@ -122,7 +124,9 @@ const qingyingSettingToFormValues = (setting) => {
   return {
     qingying_image_enabled: (normalized?.modes || []).length > 0,
     qingying_image_modes:
-      (normalized?.modes || []).length > 0 ? normalized.modes : ['generations'],
+      (normalized?.modes || []).length > 0
+        ? normalized.modes
+        : DEFAULT_QINGYING_IMAGE_MODES,
     qingying_video_enabled: (normalized?.video_modes || []).includes(
       'text_to_video',
     ),
@@ -207,24 +211,20 @@ const EditModelModal = (props) => {
   const findQingyingSetting = (modelName, settings = imageModelSettings) =>
     settings.find((setting) => setting.model === modelName);
 
-  const applyQingyingFormValues = (
-    modelName,
-    settings = imageModelSettings,
-  ) => {
-    if (!formApiRef.current) return;
-    formApiRef.current.setValues(
-      qingyingSettingToFormValues(findQingyingSetting(modelName, settings)),
-    );
-  };
+  const getQingyingFormValues = (modelName, settings = imageModelSettings) =>
+    qingyingSettingToFormValues(findQingyingSetting(modelName, settings));
 
   const handleCancel = () => {
     props.handleClose();
   };
 
-  const loadModel = async () => {
+  const loadModel = async (
+    settings = imageModelSettings,
+    manageLoading = true,
+  ) => {
     if (!isEdit || !props.editingModel.id) return;
 
-    setLoading(true);
+    if (manageLoading) setLoading(true);
     try {
       const res = await API.get(`/api/models/${props.editingModel.id}`);
       const { success, message, data } = res.data;
@@ -243,16 +243,20 @@ const EditModelModal = (props) => {
         data.status = data.status === 1;
         data.sync_official = (data.sync_official ?? 1) === 1;
         if (formApiRef.current) {
-          formApiRef.current.setValues({ ...getInitValues(), ...data });
-          applyQingyingFormValues(data.model_name);
+          formApiRef.current.setValues({
+            ...getInitValues(),
+            ...data,
+            ...getQingyingFormValues(data.model_name, settings),
+          });
         }
       } else {
         showError(message);
       }
     } catch (error) {
       showError(t('加载模型信息失败'));
+    } finally {
+      if (manageLoading) setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -268,25 +272,31 @@ const EditModelModal = (props) => {
 
   useEffect(() => {
     if (props.visiable) {
+      if (isEdit) setLoading(true);
       (async () => {
-        const settings = await props.loadImageModelSettings?.();
-        if (Array.isArray(settings)) {
-          setImageModelSettings(settings);
-          const currentModel =
-            formApiRef.current?.getValue('model_name') ||
-            props.editingModel?.model_name ||
-            '';
-          applyQingyingFormValues(currentModel, settings);
+        try {
+          const settings = await props.loadImageModelSettings?.();
+          if (Array.isArray(settings)) {
+            setImageModelSettings(settings);
+          }
+
+          if (isEdit) {
+            await loadModel(
+              Array.isArray(settings) ? settings : imageModelSettings,
+              false,
+            );
+          } else {
+            formApiRef.current?.setValues({
+              ...getInitValues(),
+              model_name: props.editingModel?.model_name || '',
+              status: true,
+              sync_official: true,
+            });
+          }
+        } finally {
+          setLoading(false);
         }
       })();
-      if (isEdit) {
-        loadModel();
-      } else {
-        formApiRef.current?.setValues({
-          ...getInitValues(),
-          model_name: props.editingModel?.model_name || '',
-        });
-      }
     } else {
       formApiRef.current?.reset();
     }
@@ -300,7 +310,7 @@ const EditModelModal = (props) => {
     const modes = values.qingying_image_enabled
       ? values.qingying_image_modes?.length > 0
         ? values.qingying_image_modes
-        : ['generations']
+        : DEFAULT_QINGYING_IMAGE_MODES
       : [];
     const videoModes = values.qingying_video_enabled ? ['text_to_video'] : [];
     const setting = {
@@ -351,8 +361,8 @@ const EditModelModal = (props) => {
         ...values,
         tags: Array.isArray(values.tags) ? values.tags.join(',') : values.tags,
         endpoints: values.endpoints || '',
-        status: values.status ? 1 : 0,
-        sync_official: values.sync_official ? 1 : 0,
+        status: values.status === false ? 0 : 1,
+        sync_official: values.sync_official === false ? 0 : 1,
       };
       delete submitData.qingying_image_enabled;
       delete submitData.qingying_image_modes;
@@ -454,7 +464,12 @@ const EditModelModal = (props) => {
       closeIcon={null}
       onCancel={() => handleCancel()}
     >
-      <Spin spinning={loading}>
+      <div className='edit-model-modal-body'>
+        {loading && (
+          <div className='edit-model-loading-overlay'>
+            <Spin spinning />
+          </div>
+        )}
         <Form
           key={isEdit ? 'edit' : 'new'}
           initValues={getInitValues()}
@@ -581,7 +596,7 @@ const EditModelModal = (props) => {
                                   ) {
                                     formApiRef.current?.setValue(
                                       'qingying_image_modes',
-                                      ['generations'],
+                                      DEFAULT_QINGYING_IMAGE_MODES,
                                     );
                                   }
                                 }}
@@ -801,6 +816,7 @@ const EditModelModal = (props) => {
                     <Form.Switch
                       field='sync_official'
                       label={t('参与官方同步')}
+                      initValue
                       extraText={t(
                         '关闭后，此模型将不会被“同步官方”自动覆盖或创建',
                       )}
@@ -811,6 +827,7 @@ const EditModelModal = (props) => {
                     <Form.Switch
                       field='status'
                       label={t('状态')}
+                      initValue
                       size='large'
                     />
                   </Col>
@@ -819,7 +836,7 @@ const EditModelModal = (props) => {
             </div>
           )}
         </Form>
-      </Spin>
+      </div>
     </SideSheet>
   );
 };

@@ -27,6 +27,11 @@ const normalizeTags = (tags = '') =>
     .map((t) => t.trim())
     .filter(Boolean);
 
+const hasImageCapability = (model, imageModelSettingsMap) => {
+  const setting = imageModelSettingsMap?.[model?.model_name];
+  return Array.isArray(setting?.modes) && setting.modes.length > 0;
+};
+
 /**
  * 统一计算模型筛选后的各种集合与动态计数，供多个组件复用
  */
@@ -37,6 +42,8 @@ export const usePricingFilterCounts = ({
   filterEndpointType = 'all',
   filterVendor = 'all',
   filterTag = 'all',
+  filterCapability = 'all',
+  imageModelSettingsMap = {},
   searchValue = '',
 }) => {
   // 均使用同一份模型列表，避免创建新引用
@@ -84,6 +91,13 @@ export const usePricingFilterCounts = ({
       if (!tagsArr.includes(filterTag.toLowerCase())) return false;
     }
 
+    // 能力
+    if (!ignore.includes('capability') && filterCapability !== 'all') {
+      const isImageModel = hasImageCapability(model, imageModelSettingsMap);
+      if (filterCapability === 'image' && !isImageModel) return false;
+      if (filterCapability === 'chat' && isImageModel) return false;
+    }
+
     // 搜索
     if (!ignore.includes('search') && searchValue) {
       const term = searchValue.toLowerCase();
@@ -112,6 +126,8 @@ export const usePricingFilterCounts = ({
       filterEndpointType,
       filterVendor,
       filterTag,
+      filterCapability,
+      imageModelSettingsMap,
       searchValue,
     ],
   );
@@ -124,6 +140,8 @@ export const usePricingFilterCounts = ({
       filterQuotaType,
       filterVendor,
       filterTag,
+      filterCapability,
+      imageModelSettingsMap,
       searchValue,
     ],
   );
@@ -136,6 +154,8 @@ export const usePricingFilterCounts = ({
       filterQuotaType,
       filterEndpointType,
       filterTag,
+      filterCapability,
+      imageModelSettingsMap,
       searchValue,
     ],
   );
@@ -148,6 +168,8 @@ export const usePricingFilterCounts = ({
       filterQuotaType,
       filterEndpointType,
       filterVendor,
+      filterCapability,
+      imageModelSettingsMap,
       searchValue,
     ],
   );
@@ -156,6 +178,21 @@ export const usePricingFilterCounts = ({
     () => allModels.filter((m) => matchesFilters(m, ['group'])),
     [
       allModels,
+      filterQuotaType,
+      filterEndpointType,
+      filterVendor,
+      filterTag,
+      filterCapability,
+      imageModelSettingsMap,
+      searchValue,
+    ],
+  );
+
+  const capabilityModels = useMemo(
+    () => allModels.filter((m) => matchesFilters(m, ['capability'])),
+    [
+      allModels,
+      filterGroup,
       filterQuotaType,
       filterEndpointType,
       filterVendor,
@@ -170,5 +207,6 @@ export const usePricingFilterCounts = ({
     vendorModels,
     groupCountModels,
     tagModels,
+    capabilityModels,
   };
 };

@@ -24,6 +24,7 @@ import PricingQuotaTypes from '../../filter/PricingQuotaTypes';
 import PricingEndpointTypes from '../../filter/PricingEndpointTypes';
 import PricingVendors from '../../filter/PricingVendors';
 import PricingTags from '../../filter/PricingTags';
+import PricingCapabilities from '../../filter/PricingCapabilities';
 import { usePricingFilterCounts } from '../../../../../hooks/model-pricing/usePricingFilterCounts';
 
 const FilterModalContent = ({ sidebarProps, t }) => {
@@ -49,6 +50,8 @@ const FilterModalContent = ({ sidebarProps, t }) => {
     setFilterVendor,
     filterTag,
     setFilterTag,
+    filterCapability,
+    setFilterCapability,
     tokenUnit,
     setTokenUnit,
     loading,
@@ -60,6 +63,7 @@ const FilterModalContent = ({ sidebarProps, t }) => {
     endpointTypeModels,
     vendorModels,
     tagModels,
+    capabilityModels,
     groupCountModels,
   } = usePricingFilterCounts({
     models: categoryProps.models,
@@ -68,6 +72,8 @@ const FilterModalContent = ({ sidebarProps, t }) => {
     filterEndpointType,
     filterVendor,
     filterTag,
+    filterCapability,
+    imageModelSettingsMap: categoryProps.imageModelSettingsMap,
     searchValue: sidebarProps.searchValue,
   });
 
@@ -112,6 +118,15 @@ const FilterModalContent = ({ sidebarProps, t }) => {
         filterQuotaType={filterQuotaType}
         setFilterQuotaType={setFilterQuotaType}
         models={quotaTypeModels}
+        loading={loading}
+        t={t}
+      />
+
+      <PricingCapabilities
+        filterCapability={filterCapability}
+        setFilterCapability={setFilterCapability}
+        models={capabilityModels}
+        imageModelSettingsMap={categoryProps.imageModelSettingsMap}
         loading={loading}
         t={t}
       />
