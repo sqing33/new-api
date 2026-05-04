@@ -38,14 +38,10 @@ import {
   IconFile,
   IconCopy,
 } from '@douyinfe/semi-icons';
-import {
-  ArrowRight,
-  Image as ImageIcon,
-  Sparkles,
-  WandSparkles,
-} from 'lucide-react';
+import { ArrowRight, Sparkles, WandSparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import NoticeModal from '../../components/layout/NoticeModal';
+import { getLogo, getSystemName } from '../../helpers';
 import {
   Moonshot,
   OpenAI,
@@ -71,68 +67,27 @@ import {
 
 const { Text } = Typography;
 
-const DEFAULT_GALLERY_IMAGES = [
-  {
-    imageUrl:
-      'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=85',
-    title: '城市黄昏',
-    prompt: '金色夕阳下的未来城市天际线，电影感光影',
-    model: 'GPT Image',
-    tag: '电影感',
-    aspect: 'landscape',
-  },
-  {
-    imageUrl:
-      'https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=900&q=85',
-    title: '霓虹雨夜',
-    prompt: '赛博朋克街区，湿润路面反射霓虹灯牌',
-    model: 'Flux',
-    tag: '赛博朋克',
-    aspect: 'portrait',
-  },
-  {
-    imageUrl:
-      'https://images.unsplash.com/photo-1495567720989-cebdbdd97913?auto=format&fit=crop&w=900&q=85',
-    title: '沙丘日出',
-    prompt: '极简沙漠与柔和日出，低饱和高级配色',
-    model: 'Imagen',
-    tag: '极简',
-    aspect: 'square',
-  },
-  {
-    imageUrl:
-      'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=85',
-    title: '山谷晨雾',
-    prompt: '高山森林、晨雾、自然纪录片式构图',
-    model: 'GPT Image',
-    tag: '自然',
-    aspect: 'landscape',
-  },
-  {
-    imageUrl:
-      'https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?auto=format&fit=crop&w=900&q=85',
-    title: '柔和彩纸',
-    prompt: '彩色纸艺装置，干净背景，商业海报质感',
-    model: 'Flux',
-    tag: '商业',
-    aspect: 'square',
-  },
-  {
-    imageUrl:
-      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=85',
-    title: '湖畔光影',
-    prompt: '静谧湖泊与远山，柔和自然光，宽幅构图',
-    model: 'Imagen',
-    tag: '风景',
-    aspect: 'landscape',
-  },
-];
-
 const aspectClassName = {
-  square: 'aspect-square',
-  portrait: 'aspect-[3/4]',
-  landscape: 'aspect-[4/3]',
+  square: '',
+  portrait: '',
+  landscape: '',
 };
+
+const CARD_TRANSFORMS = [
+  { rotate: -7.5, x: 8, y: 0, z: 3 },
+  { rotate: 5.8, x: -10, y: -12, z: 1 },
+  { rotate: -2.2, x: 12, y: 8, z: 4 },
+  { rotate: 8.4, x: -6, y: -6, z: 2 },
+  { rotate: -5.1, x: 15, y: -16, z: 5 },
+  { rotate: 3.2, x: -14, y: 10, z: 1 },
+  { rotate: -8.8, x: 4, y: -10, z: 4 },
+  { rotate: 6.6, x: -8, y: 6, z: 2 },
+  { rotate: -3.6, x: 11, y: -14, z: 3 },
+  { rotate: 9.2, x: -12, y: 12, z: 5 },
+  { rotate: -6.4, x: 6, y: -4, z: 1 },
+  { rotate: 2.7, x: -16, y: -9, z: 4 },
+];
+const PROMPT_PRESETS_OPTION_KEY = 'ImagePromptPresets';
 
 const normalizeGalleryItem = (item = {}, index = 0) => ({
   imageUrl: String(item.imageUrl || item.url || '').trim(),
@@ -156,6 +111,28 @@ const parseGalleryImages = (value) => {
   }
 };
 
+const normalizePromptPresetGalleryItem = (item = {}, index = 0) => ({
+  imageUrl: String(item.image || item.imageUrl || '').trim(),
+  title: String(item.name || `Preset ${index + 1}`).trim(),
+  prompt: String(item.prompt || '').trim(),
+  model: '',
+  tag: '',
+  aspect: 'square',
+});
+
+const parsePromptPresetImages = (value) => {
+  try {
+    const parsed =
+      typeof value === 'string' ? JSON.parse(value || '[]') : value;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map(normalizePromptPresetGalleryItem)
+      .filter((item) => item.imageUrl);
+  } catch {
+    return [];
+  }
+};
+
 const Home = () => {
   const { t, i18n } = useTranslation();
   const [statusState] = useContext(StatusContext);
@@ -163,13 +140,15 @@ const Home = () => {
   const [homePageContentLoaded, setHomePageContentLoaded] = useState(false);
   const [homePageContent, setHomePageContent] = useState('');
   const [homePageMode, setHomePageMode] = useState('image_showcase');
-  const [galleryImages, setGalleryImages] = useState(DEFAULT_GALLERY_IMAGES);
+  const [galleryImages, setGalleryImages] = useState([]);
   const [noticeVisible, setNoticeVisible] = useState(false);
   const isMobile = useIsMobile();
   const isDemoSiteMode = statusState?.status?.demo_site_enabled || false;
   const docsLink = statusState?.status?.docs_link || '';
   const serverAddress =
     statusState?.status?.server_address || `${window.location.origin}`;
+  const logo = statusState?.status?.logo || getLogo();
+  const systemName = statusState?.status?.system_name || getSystemName();
   const endpointItems = API_ENDPOINTS.map((e) => ({ value: e }));
   const [endpointIndex, setEndpointIndex] = useState(0);
   const isChinese = i18n.language.startsWith('zh');
@@ -183,9 +162,15 @@ const Home = () => {
       const rawContent = data?.content || '';
       const parsedGallery = parseGalleryImages(data?.gallery_images);
       setHomePageMode(mode);
-      setGalleryImages(
-        parsedGallery.length > 0 ? parsedGallery : DEFAULT_GALLERY_IMAGES,
-      );
+      if (parsedGallery.length > 0 || mode !== 'image_showcase') {
+        setGalleryImages(parsedGallery);
+      } else {
+        const optionsRes = await API.get('/api/option/');
+        const presetOption = optionsRes.data?.data?.find(
+          (item) => item.key === PROMPT_PRESETS_OPTION_KEY,
+        );
+        setGalleryImages(parsePromptPresetImages(presetOption?.value));
+      }
 
       let content = rawContent;
       if (mode === 'custom_content' && !rawContent.startsWith('https://')) {
@@ -212,25 +197,48 @@ const Home = () => {
   };
 
   const renderImageShowcaseHome = () => (
-    <div className='mt-[60px] h-[calc(100vh-64px)] overflow-y-auto bg-semi-color-bg-0'>
-      <section className='px-4 py-10 md:px-8 lg:px-12'>
-        <div className='mx-auto grid max-w-7xl gap-10 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-center'>
-          <div className='flex flex-col gap-6'>
-            <div className='inline-flex w-fit items-center gap-2 rounded-full border border-semi-color-border bg-semi-color-bg-1 px-3 py-1 text-sm text-semi-color-text-1'>
-              <Sparkles size={15} />
-              <span>{t('AI 生图创作平台')}</span>
+    <div className='home-showcase-page mt-[60px] h-[calc(100vh-64px)] overflow-hidden bg-semi-color-bg-0'>
+      <section className='grid h-full grid-rows-[auto_minmax(0,1fr)] gap-5 px-4 py-5 md:grid-cols-[minmax(280px,34%)_minmax(0,1fr)] md:grid-rows-1 md:gap-8 md:px-8 md:py-8 lg:px-12'>
+        <div className='flex min-h-0 flex-col items-center justify-center text-center md:items-start md:text-left'>
+          <div className='flex w-full max-w-lg flex-col items-center gap-6 md:items-start'>
+            <div className='flex items-center gap-4'>
+              <div className='flex h-48 w-48 items-center justify-center overflow-hidden rounded-2xl border border-semi-color-border bg-semi-color-bg-1 shadow-sm md:h-60 md:w-60'>
+                {logo ? (
+                  <img
+                    alt={systemName}
+                    className='h-full w-full object-contain p-2'
+                    src={logo}
+                  />
+                ) : (
+                  <Sparkles className='text-semi-color-primary' size={30} />
+                )}
+              </div>
+              <div className='hidden flex-col md:flex'>
+                <span className='text-sm text-semi-color-text-2'>
+                  {t('AI 生图创作平台')}
+                </span>
+                <span className='max-w-[240px] truncate text-lg font-semibold text-semi-color-text-0'>
+                  {systemName}
+                </span>
+              </div>
             </div>
+
             <div className='flex flex-col gap-4'>
-              <h1 className='m-0 text-4xl font-bold leading-tight text-semi-color-text-0 md:text-5xl lg:text-6xl'>
+              <div className='inline-flex w-fit items-center gap-2 rounded-full border border-semi-color-border bg-semi-color-bg-1 px-3 py-1 text-sm text-semi-color-text-1 md:hidden'>
+                <Sparkles size={15} />
+                <span>{t('AI 生图创作平台')}</span>
+              </div>
+              <h1 className='m-0 text-3xl font-bold leading-tight text-semi-color-text-0 md:text-4xl lg:text-5xl'>
                 {t('把灵感变成可用的视觉作品')}
               </h1>
-              <p className='m-0 max-w-2xl text-base leading-7 text-semi-color-text-1 md:text-lg'>
+              <p className='m-0 max-w-md text-base leading-7 text-semi-color-text-1 md:text-lg'>
                 {t(
-                  '从提示词、参考图到商品图工作流，用统一模型与分组能力完成创意生成。',
+                  '从灵感描述、参考图到商品图工作流，让每一次创作都更快更好看。',
                 )}
               </p>
             </div>
-            <div className='flex flex-wrap items-center gap-3'>
+
+            <div className='flex flex-wrap items-center justify-center gap-3 md:justify-start'>
               <Link to='/image-studio'>
                 <Button
                   icon={<WandSparkles size={16} />}
@@ -252,67 +260,53 @@ const Home = () => {
               </Link>
             </div>
           </div>
+        </div>
 
-          <div className='grid grid-cols-2 gap-3 md:grid-cols-3'>
-            {galleryImages.slice(0, 6).map((item, index) => (
-              <div
-                className={`group relative overflow-hidden rounded-lg border border-semi-color-border bg-semi-color-bg-1 ${
-                  aspectClassName[item.aspect] || aspectClassName.square
-                } ${index === 1 || index === 4 ? 'md:translate-y-8' : ''}`}
-                key={`${item.imageUrl}-${index}`}
-              >
-                <img
-                  alt={item.title}
-                  className='h-full w-full object-cover transition duration-300 group-hover:scale-105'
-                  loading={index > 1 ? 'lazy' : 'eager'}
-                  src={item.imageUrl}
-                />
-                <div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3 text-white'>
-                  <div className='flex items-center gap-2 text-xs'>
-                    {item.tag && (
-                      <span className='rounded-full bg-white/18 px-2 py-0.5'>
-                        {item.tag}
-                      </span>
-                    )}
-                    {item.model && (
-                      <span className='opacity-80'>{item.model}</span>
-                    )}
-                  </div>
-                  <div className='mt-2 line-clamp-1 text-sm font-semibold'>
-                    {item.title}
-                  </div>
-                  {item.prompt && (
-                    <div className='mt-1 line-clamp-2 text-xs opacity-80'>
-                      {item.prompt}
-                    </div>
+        <div className='home-showcase-marquee min-h-0 overflow-hidden rounded-xl border border-semi-color-border bg-semi-color-bg-1 px-3 py-4 md:px-5 md:py-6'>
+          {galleryImages.length > 0 ? (
+            <div className='home-showcase-track'>
+              {[0, 1].map((copyIndex) => (
+                <div className='home-showcase-grid' key={copyIndex}>
+                  {galleryImages.map((item, index) =>
+                    (() => {
+                      const cardTransform =
+                        CARD_TRANSFORMS[
+                          (index + copyIndex * 5) % CARD_TRANSFORMS.length
+                        ];
+                      return (
+                        <div
+                          className={`home-showcase-card ${
+                            aspectClassName[item.aspect] ||
+                            aspectClassName.square
+                          }`}
+                          key={`${copyIndex}-${item.imageUrl}-${index}`}
+                          style={{
+                            '--home-card-rotate': `${cardTransform.rotate}deg`,
+                            '--home-card-x': `${cardTransform.x}px`,
+                            '--home-card-y': `${cardTransform.y}px`,
+                            '--home-card-z': cardTransform.z,
+                          }}
+                        >
+                          <img
+                            alt={item.title}
+                            className='block h-auto w-full rounded-sm'
+                            loading={
+                              copyIndex === 0 && index < 3 ? 'eager' : 'lazy'
+                            }
+                            src={item.imageUrl}
+                          />
+                        </div>
+                      );
+                    })(),
                   )}
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className='border-t border-semi-color-border px-4 py-8 md:px-8 lg:px-12'>
-        <div className='mx-auto grid max-w-7xl grid-cols-1 gap-3 md:grid-cols-3'>
-          {[
-            [t('多模型统一'), t('复用现有用户模型、分组和余额逻辑')],
-            [t('参考图编辑'), t('支持上传参考图并自动切换编辑模式')],
-            [t('商品图工作流'), t('一键生成主图、封面、海报和头图')],
-          ].map(([title, desc]) => (
-            <div
-              className='rounded-lg border border-semi-color-border bg-semi-color-bg-1 p-5'
-              key={title}
-            >
-              <ImageIcon className='mb-4 text-semi-color-primary' size={22} />
-              <div className='text-base font-semibold text-semi-color-text-0'>
-                {title}
-              </div>
-              <div className='mt-2 text-sm leading-6 text-semi-color-text-2'>
-                {desc}
-              </div>
+              ))}
             </div>
-          ))}
+          ) : (
+            <div className='flex h-full min-h-[320px] items-center justify-center text-center text-semi-color-text-2'>
+              {t('暂无预设提示词')}
+            </div>
+          )}
         </div>
       </section>
     </div>
