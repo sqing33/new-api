@@ -28,6 +28,7 @@ import { normalizeLanguage } from '../../i18n/language';
 import { useIsMobile } from './useIsMobile';
 import { useSidebarCollapsed } from './useSidebarCollapsed';
 import { useMinimumLoadingTime } from './useMinimumLoadingTime';
+import { isWorkbenchLikePath } from '../../constants/workbenchRoutes';
 
 export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
   const { t, i18n } = useTranslation();
@@ -83,17 +84,13 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
     return null;
   }, [headerNavModulesConfig]);
 
-  // 获取模型广场权限配置
+  // 获取模型馆权限配置
   const pricingRequireAuth = useMemo(() => {
-    if (headerNavModules?.pricing) {
-      return typeof headerNavModules.pricing === 'object'
-        ? headerNavModules.pricing.requireAuth
-        : false; // 默认不需要登录
-    }
-    return false; // 默认不需要登录
-  }, [headerNavModules]);
+    // 模型馆已经迁入工作台，路由层始终要求登录。
+    return true;
+  }, []);
 
-  const isConsoleRoute = location.pathname.startsWith('/console');
+  const isConsoleRoute = isWorkbenchLikePath(location.pathname);
 
   const theme = useTheme();
   const actualTheme = useActualTheme();

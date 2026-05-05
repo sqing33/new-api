@@ -145,6 +145,11 @@ body {
   border-top-color: var(--console-glass-border) !important;
 }
 
+.console-bg-sider .sidebar-brand-link,
+.console-bg-sider .sidebar-footer-actions {
+  border-color: var(--console-glass-border) !important;
+}
+
 .console-bg-sider .sidebar-collapse-button .semi-button {
   background: var(--console-glass-bg-soft) !important;
   border-color: var(--console-glass-border) !important;
@@ -359,8 +364,8 @@ body {
 }
 
 .app-sider {
-  height: calc(100vh - 64px);
-  height: calc(100dvh - 64px);
+  height: 100vh;
+  height: 100dvh;
 }
 
 code {
@@ -976,6 +981,49 @@ code {
   background: var(--semi-color-bg-0);
 }
 
+.sidebar-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 12px;
+  color: var(--semi-color-text-0);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(var(--semi-grey-0), 0.08);
+}
+
+.sidebar-brand-link:hover {
+  color: var(--semi-color-primary);
+  text-decoration: none;
+}
+
+.sidebar-brand-logo {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--semi-color-fill-0);
+  border: 1px solid var(--console-glass-border);
+}
+
+.sidebar-brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sidebar-brand-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .sidebar-nav {
   flex: 1;
   width: 100%;
@@ -1056,14 +1104,11 @@ code {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 12px;
+  padding: 10px 12px 8px;
   margin-top: auto;
   cursor: pointer;
   background-color: var(--semi-color-bg-0);
-  position: sticky;
-  bottom: 0;
   z-index: 10;
-  box-shadow: 0 -10px 10px -5px var(--semi-color-bg-0);
   backdrop-filter: blur(4px);
   border-top: 1px solid rgba(var(--semi-grey-0), 0.08);
 }
@@ -1087,6 +1132,69 @@ code {
 /* 侧边栏区域容器 */
 .sidebar-section {
   padding-top: 12px;
+}
+
+.sidebar-footer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid rgba(var(--semi-grey-0), 0.08);
+}
+
+.sidebar-footer-tools {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sidebar-user-menu {
+  width: 100%;
+  min-width: 0;
+}
+
+.sidebar-user-button {
+  width: 100%;
+  min-height: 38px;
+  justify-content: flex-start;
+  border-radius: 8px !important;
+  background: var(--console-glass-bg-soft) !important;
+  border: 1px solid var(--console-glass-border) !important;
+}
+
+.sidebar-user-button:hover,
+.sidebar-user-button:focus {
+  background: var(--console-glass-hover) !important;
+}
+
+.sidebar-user-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.sidebar-user-chevron {
+  flex: 0 0 auto;
+  color: var(--semi-color-text-2);
+}
+
+body.sidebar-collapsed .sidebar-brand-link,
+body.sidebar-collapsed .sidebar-footer-actions {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+body.sidebar-collapsed .sidebar-footer-tools {
+  flex-direction: column;
+}
+
+body.sidebar-collapsed .sidebar-user-button {
+  justify-content: center;
+  padding: 0 !important;
 }
 
 @media (max-width: 767px) {
@@ -1945,32 +2053,49 @@ html.dark .with-pastel-balls::before {
 /* ==================== 模型定价页面布局 ==================== */
 .pricing-page-bg {
   background: transparent;
+  height: 100%;
+  min-height: 0;
 }
 
 .pricing-layout {
-  height: calc(100vh - 60px);
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
-  margin-top: 60px;
   background: transparent !important;
+}
+
+.pricing-workbench-panel {
+  border: 1px solid var(--console-glass-border);
+  border-radius: 8px;
+  background: var(--console-glass-bg) !important;
+  background-color: var(--console-glass-bg) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .pricing-sidebar {
   width: clamp(280px, 24vw, 520px) !important;
   min-width: clamp(280px, 24vw, 520px) !important;
   max-width: clamp(280px, 24vw, 520px) !important;
-  height: calc(100vh - 60px);
-  background: var(--console-glass-bg) !important;
-  background-color: var(--console-glass-bg) !important;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  height: 100%;
+  background: transparent !important;
+  background-color: transparent !important;
   border-right: 1px solid var(--console-glass-border);
   overflow: auto;
 }
 
 .pricing-content {
-  height: calc(100vh - 60px);
+  height: 100%;
+  min-height: 0;
   background: transparent !important;
   background-color: transparent !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.pricing-content > .pricing-scroll-hide {
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -2012,6 +2137,12 @@ html.dark .with-pastel-balls::before {
 .pricing-bg-shell .pricing-page-bg {
   background: transparent !important;
   background-color: transparent !important;
+}
+
+.pricing-bg-shell .pricing-workbench-panel {
+  background: var(--console-glass-bg) !important;
+  background-color: var(--console-glass-bg) !important;
+  border-color: var(--console-glass-border) !important;
 }
 
 .pricing-bg-shell .semi-card {

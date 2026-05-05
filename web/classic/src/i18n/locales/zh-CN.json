@@ -520,7 +520,6 @@
     "例如 €, £, Rp, ₩, ₹...": "例如 €, £, Rp, ₩, ₹...",
     "例如 https://docs.newapi.pro": "例如 https://docs.newapi.pro",
     "例如 https://example.com/api/waffo/webhook": "例如 https://example.com/api/waffo/webhook",
-    "例如 https://example.com/console/topup": "例如 https://example.com/console/topup",
     "例如：": "例如：",
     "例如: /bin/bash -c \"python app.py\"": "例如: /bin/bash -c \"python app.py\"",
     "例如: nginx:latest": "例如: nginx:latest",
@@ -1794,7 +1793,6 @@
     "支付": "支付",
     "支付地址": "支付地址",
     "支付失败": "支付失败",
-    "支付完成后用户跳转的页面，留空则自动使用 服务器地址 + /console/topup": "支付完成后用户跳转的页面，留空则自动使用 服务器地址 + /console/topup",
     "支付宝": "支付宝",
     "支付方式": "支付方式",
     "支付方式名称": "支付方式名称",
@@ -3950,6 +3948,15 @@
     "默认用户消息": "你好",
     "默认视频尺寸": "默认视频尺寸",
     "默认视频时长": "默认视频时长",
-    "默认补全倍率": "默认补全倍率"
+    "默认补全倍率": "默认补全倍率",
+    "模型馆": "模型馆",
+    "模型列表与价格入口": "模型列表与价格入口",
+    "入口管理": "入口管理",
+    "控制入口模块显示状态，全局生效": "控制入口模块显示状态，全局生效",
+    "模型馆作为工作台内页，需要登录访问": "模型馆作为工作台内页，需要登录访问",
+    "例如：https://example.com/topup": "例如：https://example.com/topup",
+    "例如 https://example.com/topup": "例如 https://example.com/topup",
+    "支付完成后用户跳转的页面，留空则自动使用 服务器地址 + /topup": "支付完成后用户跳转的页面，留空则自动使用 服务器地址 + /topup",
+    "查看模型与价格": "查看模型与价格"
   }
 }

@@ -48,7 +48,7 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
       {
         text: t('工作台'),
         itemKey: 'console',
-        to: '/console',
+        to: '/dashboard',
       },
       ...(docsLink
         ? [

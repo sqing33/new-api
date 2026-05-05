@@ -39,6 +39,7 @@ import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 import { useLocation } from 'react-router-dom';
 import { normalizeLanguage } from '../../i18n/language';
+import { isWorkbenchLikePath } from '../../constants/workbenchRoutes';
 import clsx from 'clsx';
 const { Sider, Content, Header } = Layout;
 
@@ -51,36 +52,20 @@ const PageLayout = () => {
   const { i18n } = useTranslation();
   const location = useLocation();
 
-  const cardProPages = [
-    '/console/channel',
-    '/console/log',
-    '/console/redemption',
-    '/console/user',
-    '/console/token',
-    '/console/midjourney',
-    '/console/image-logs',
-    '/console/image-studio',
-    '/console/image-presets',
-    '/console/video-studio',
-    '/console/task',
-    '/console/models',
-    '/pricing',
-    '/image-studio',
-  ];
+  const isWorkbenchRoute = isWorkbenchLikePath(location.pathname);
 
   const shouldHideFooter =
-    cardProPages.includes(location.pathname) ||
+    isWorkbenchRoute ||
     (location.pathname === '/' &&
       statusState?.status?.HomePageMode !== 'custom_content');
 
   const shouldInnerPadding =
-    location.pathname.includes('/console') &&
-    !location.pathname.startsWith('/console/chat') &&
-    location.pathname !== '/console/playground';
+    isWorkbenchRoute &&
+    !location.pathname.startsWith('/chat') &&
+    location.pathname !== '/playground';
 
-  const isConsoleRoute = location.pathname.startsWith('/console');
-  const showSider = isConsoleRoute && (!isMobile || drawerOpen);
-  const hideHeader = location.pathname === '/';
+  const showSider = isWorkbenchRoute && (!isMobile || drawerOpen);
+  const hideHeader = location.pathname === '/' || isWorkbenchRoute;
 
   useEffect(() => {
     if (isMobile && drawerOpen && collapsed) {
@@ -156,7 +141,7 @@ const PageLayout = () => {
 
   return (
     <Layout
-      className={clsx('app-layout', isConsoleRoute && 'console-bg-layout')}
+      className={clsx('app-layout', isWorkbenchRoute && 'console-bg-layout')}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -183,13 +168,14 @@ const PageLayout = () => {
       )}
       <Layout
         className={clsx(
-          isConsoleRoute && 'console-bg-shell',
+          isWorkbenchRoute && 'console-bg-shell',
           location.pathname === '/pricing' && 'pricing-bg-shell',
         )}
         style={{
           overflow: isMobile ? 'visible' : 'auto',
           display: 'flex',
           flexDirection: 'column',
+          minHeight: 0,
         }}
       >
         {showSider && (
@@ -198,7 +184,7 @@ const PageLayout = () => {
             style={{
               position: 'fixed',
               left: 0,
-              top: '64px',
+              top: 0,
               zIndex: 99,
               border: 'none',
               paddingRight: '0',
@@ -213,7 +199,7 @@ const PageLayout = () => {
           </Sider>
         )}
         <Layout
-          className={clsx(isConsoleRoute && 'console-bg-main')}
+          className={clsx(isWorkbenchRoute && 'console-bg-main')}
           style={{
             marginLeft: isMobile
               ? '0'
@@ -223,12 +209,14 @@ const PageLayout = () => {
             flex: '1 1 auto',
             display: 'flex',
             flexDirection: 'column',
+            minHeight: 0,
           }}
         >
           <Content
-            className={clsx(isConsoleRoute && 'console-bg-content')}
+            className={clsx(isWorkbenchRoute && 'console-bg-content')}
             style={{
-              flex: '1 0 auto',
+              flex: '1 1 auto',
+              minHeight: 0,
               overflowY: isMobile ? 'visible' : 'hidden',
               WebkitOverflowScrolling: 'touch',
               padding: shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0',

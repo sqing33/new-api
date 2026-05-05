@@ -202,7 +202,7 @@ const Home = () => {
     about: true,
   };
   let headerNavModules = defaultHeaderNavModules;
-  let pricingRequireAuth = false;
+  let pricingRequireAuth = true;
   if (statusState?.status?.HeaderNavModules) {
     try {
       headerNavModules = JSON.parse(statusState.status.HeaderNavModules);
@@ -215,11 +215,9 @@ const Home = () => {
       if (headerNavModules.imageStudio === undefined) {
         headerNavModules.imageStudio = true;
       }
-      pricingRequireAuth =
-        typeof headerNavModules.pricing === 'object' &&
-        headerNavModules.pricing?.requireAuth === true;
+      pricingRequireAuth = true;
     } catch {
-      pricingRequireAuth = false;
+      pricingRequireAuth = true;
     }
   }
   const cabinNavItems = [
@@ -243,7 +241,7 @@ const Home = () => {
     {
       text: t('工作台'),
       description: t('管理密钥和任务'),
-      to: userState.user ? '/console' : '/login',
+      to: userState.user ? '/dashboard' : '/login',
       icon: LayoutDashboard,
       visible: headerNavModules.console === true,
     },
@@ -594,7 +592,7 @@ const Home = () => {
 
                 {/* 操作按钮 */}
                 <div className='flex flex-row gap-4 justify-center items-center'>
-                  <Link to='/console'>
+                  <Link to={userState.user ? '/dashboard' : '/login'}>
                     <Button
                       theme='solid'
                       type='primary'

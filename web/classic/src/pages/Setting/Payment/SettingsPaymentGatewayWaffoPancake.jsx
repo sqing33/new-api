@@ -102,7 +102,7 @@ export default function SettingsPaymentGatewayWaffoPancake(props) {
       ? t('Webhook 公钥（测试环境）')
       : t('Webhook 公钥（生产环境）');
 
-      if (values.WaffoPancakeEnabled && !values.WaffoPancakeMerchantID.trim()) {
+    if (values.WaffoPancakeEnabled && !values.WaffoPancakeMerchantID.trim()) {
       showError(t('请输入商户 ID'));
       return;
     }
@@ -340,7 +340,7 @@ export default function SettingsPaymentGatewayWaffoPancake(props) {
               <Form.Input
                 field='WaffoPancakeReturnURL'
                 label={t('支付返回地址')}
-                placeholder={t('例如：https://example.com/console/topup')}
+                placeholder={t('例如：https://example.com/topup')}
                 extraText={t('留空则自动使用当前站点的默认充值页地址')}
               />
             </Col>
