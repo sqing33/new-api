@@ -241,6 +241,7 @@ func GetHomePageSettings(c *gin.Context) {
 			"mode":           common.OptionMap["HomePageMode"],
 			"content":        common.OptionMap["HomePageContent"],
 			"gallery_images": common.OptionMap["HomeGalleryImages"],
+			"prompt_presets": common.OptionMap["ImagePromptPresets"],
 		},
 	})
 	return

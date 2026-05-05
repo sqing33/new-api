@@ -217,7 +217,11 @@ const PageLayout = () => {
             style={{
               flex: '1 1 auto',
               minHeight: 0,
-              overflowY: isMobile ? 'visible' : 'hidden',
+              overflowY: isMobile
+                ? 'visible'
+                : isWorkbenchRoute
+                  ? 'auto'
+                  : 'hidden',
               WebkitOverflowScrolling: 'touch',
               padding: shouldInnerPadding ? (isMobile ? '5px' : '24px') : '0',
               position: 'relative',

@@ -22,21 +22,12 @@ import React, {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLucideIcon, renderQuota } from '../../helpers/render';
-import {
-  ChevronDown,
-  ChevronLeft,
-  CreditCard,
-  Key,
-  LogIn,
-  LogOut,
-  User as UserIcon,
-} from 'lucide-react';
+import { ChevronLeft, LogIn } from 'lucide-react';
 import { useSidebarCollapsed } from '../../hooks/common/useSidebarCollapsed';
 import { useSidebar } from '../../hooks/common/useSidebar';
 import { useMinimumLoadingTime } from '../../hooks/common/useMinimumLoadingTime';
@@ -47,7 +38,6 @@ import {
   isAdmin,
   isRoot,
   showError,
-  showSuccess,
   stringToColor,
 } from '../../helpers';
 import { StatusContext } from '../../context/Status';
@@ -59,14 +49,7 @@ import LanguageSelector from './headerbar/LanguageSelector';
 import NotificationButton from './headerbar/NotificationButton';
 import SkeletonWrapper from './components/SkeletonWrapper';
 
-import {
-  Nav,
-  Divider,
-  Button,
-  Avatar,
-  Dropdown,
-  Typography,
-} from '@douyinfe/semi-ui';
+import { Nav, Divider, Button, Avatar, Typography } from '@douyinfe/semi-ui';
 
 const routerMap = {
   home: '/',
@@ -99,7 +82,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
   const [statusState] = useContext(StatusContext);
   const [userState, userDispatch] = useContext(UserContext);
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
-  const userDropdownRef = useRef(null);
   const {
     isModuleVisible,
     hasSectionVisibleModules,
@@ -123,6 +105,19 @@ const SiderBar = ({ onNavigate = () => {} }) => {
   const systemName = statusState?.status?.system_name || getSystemName();
   const logo = statusState?.status?.logo || getLogo();
   const docsLink = statusState?.status?.docs_link || '';
+  const showDocsEntry = useMemo(() => {
+    if (!docsLink) return false;
+
+    const headerNavModulesConfig = statusState?.status?.HeaderNavModules;
+    if (!headerNavModulesConfig) return true;
+
+    try {
+      const modules = JSON.parse(headerNavModulesConfig);
+      return modules.docs !== false;
+    } catch {
+      return true;
+    }
+  }, [docsLink, statusState?.status?.HeaderNavModules]);
   const currentLang = normalizeLanguage(i18n.language);
 
   useEffect(() => {
@@ -183,14 +178,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     },
     [i18n, userDispatch, userState?.user],
   );
-
-  const logout = useCallback(async () => {
-    await API.get('/api/user/logout');
-    showSuccess(t('注销成功!'));
-    userDispatch({ type: 'logout' });
-    localStorage.removeItem('user');
-    navigate('/login');
-  }, [navigate, t, userDispatch]);
 
   const workspaceItems = useMemo(() => {
     const items = [
@@ -361,7 +348,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         itemKey: 'about',
         to: '/about',
       },
-      ...(docsLink
+      ...(showDocsEntry
         ? [
             {
               text: t('文档'),
@@ -384,7 +371,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     });
 
     return filteredItems;
-  }, [chatItems, docsLink, t, isModuleVisible]);
+  }, [chatItems, showDocsEntry, t, isModuleVisible]);
 
   // 更新路由映射，添加聊天路由
   const updateRouterMapWithChats = (chats) => {
@@ -504,85 +491,35 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     const balance = renderQuota(user.quota || 0);
 
     return (
-      <div className='sidebar-user-menu' ref={userDropdownRef}>
-        <Dropdown
-          position='topLeft'
-          getPopupContainer={() => userDropdownRef.current}
-          render={
-            <Dropdown.Menu className='!bg-semi-color-bg-overlay !border-semi-color-border !shadow-lg !rounded-lg dark:!bg-gray-700 dark:!border-gray-600'>
-              <Dropdown.Item
-                onClick={() => navigate('/personal')}
-                className='!px-3 !py-1.5 !text-sm !text-semi-color-text-0 hover:!bg-semi-color-fill-1 dark:!text-gray-200 dark:hover:!bg-blue-500 dark:hover:!text-white'
-              >
-                <div className='flex items-center gap-2'>
-                  <UserIcon size={14} />
-                  <span>{t('个人设置')}</span>
-                </div>
-              </Dropdown.Item>
-              <Dropdown.Item
-                onClick={() => navigate('/token')}
-                className='!px-3 !py-1.5 !text-sm !text-semi-color-text-0 hover:!bg-semi-color-fill-1 dark:!text-gray-200 dark:hover:!bg-blue-500 dark:hover:!text-white'
-              >
-                <div className='flex items-center gap-2'>
-                  <Key size={14} />
-                  <span>{t('令牌管理')}</span>
-                </div>
-              </Dropdown.Item>
-              <Dropdown.Item
-                onClick={() => navigate('/topup')}
-                className='!px-3 !py-1.5 !text-sm !text-semi-color-text-0 hover:!bg-semi-color-fill-1 dark:!text-gray-200 dark:hover:!bg-blue-500 dark:hover:!text-white'
-              >
-                <div className='flex items-center gap-2'>
-                  <CreditCard size={14} />
-                  <span>{t('钱包管理')}</span>
-                </div>
-              </Dropdown.Item>
-              <Dropdown.Item className='!cursor-default !px-3 !py-1.5 !text-xs !text-semi-color-text-2 hover:!bg-transparent'>
-                {t('当前余额')}：{balance}
-              </Dropdown.Item>
-              <Dropdown.Item
-                onClick={logout}
-                className='!px-3 !py-1.5 !text-sm !text-semi-color-text-0 hover:!bg-semi-color-fill-1 dark:!text-gray-200 dark:hover:!bg-red-500 dark:hover:!text-white'
-              >
-                <div className='flex items-center gap-2'>
-                  <LogOut size={14} />
-                  <span>{t('退出')}</span>
-                </div>
-              </Dropdown.Item>
-            </Dropdown.Menu>
+      <div className='sidebar-user-menu'>
+        <Button
+          theme='borderless'
+          type='tertiary'
+          className='sidebar-user-button'
+          icon={
+            <Avatar size='extra-small' color={stringToColor(username)}>
+              {username?.[0]?.toUpperCase()}
+            </Avatar>
           }
+          onClick={() => navigate('/topup')}
         >
-          <Button
-            theme='borderless'
-            type='tertiary'
-            className='sidebar-user-button'
-            icon={
-              <Avatar size='extra-small' color={stringToColor(username)}>
-                {username?.[0]?.toUpperCase()}
-              </Avatar>
-            }
-          >
-            {!collapsed && (
-              <>
-                <span className='sidebar-user-copy'>
-                  <Typography.Text
-                    ellipsis
-                    className='!text-xs !font-medium !text-semi-color-text-1'
-                  >
-                    {username}
-                  </Typography.Text>
-                  <Typography.Text
-                    ellipsis
-                    className='!text-[11px] !text-semi-color-text-2'
-                  >
-                    {t('当前余额')}：{balance}
-                  </Typography.Text>
-                </span>
-                <ChevronDown size={14} className='sidebar-user-chevron' />
-              </>
-            )}
-          </Button>
-        </Dropdown>
+          {!collapsed && (
+            <span className='sidebar-user-copy'>
+              <Typography.Text
+                ellipsis
+                className='!text-xs !font-medium !text-semi-color-text-1'
+              >
+                {username}
+              </Typography.Text>
+              <Typography.Text
+                ellipsis
+                className='!text-[11px] !text-semi-color-text-2'
+              >
+                {t('当前余额')}：{balance}
+              </Typography.Text>
+            </span>
+          )}
+        </Button>
       </div>
     );
   };
@@ -724,7 +661,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
               const to =
                 routerMapState[props.itemKey] || routerMap[props.itemKey];
 
-              if (props.itemKey === 'docs' && docsLink) {
+              if (props.itemKey === 'docs' && showDocsEntry) {
                 return (
                   <a
                     style={{ textDecoration: 'none' }}
@@ -815,7 +752,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           </Nav>
         </SkeletonWrapper>
 
-        {/* 底部折叠按钮 */}
+        {renderSidebarFooter()}
         <div className='sidebar-collapse-button'>
           <SkeletonWrapper
             loading={showSkeleton}
@@ -850,7 +787,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
             </Button>
           </SkeletonWrapper>
         </div>
-        {renderSidebarFooter()}
       </div>
     </>
   );

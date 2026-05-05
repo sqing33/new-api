@@ -1925,14 +1925,16 @@ const ImageStudio = ({ publicMode = false }) => {
           ? 'mt-[60px] px-2'
           : publicMode
             ? 'mt-[60px] flex h-[calc(100vh-64px)] flex-col overflow-hidden px-2 py-2'
-            : 'mt-[60px] px-2'
+            : 'mt-[60px] flex h-[calc(100vh-48px)] min-h-0 flex-col overflow-hidden px-2'
       }
     >
       <div
         className={
           isMobile
             ? 'grid gap-4'
-            : 'grid h-[calc(100vh-88px)] min-h-0 gap-0 overflow-hidden'
+            : publicMode
+              ? 'grid h-[calc(100vh-88px)] min-h-0 gap-0 overflow-hidden'
+              : 'grid h-full min-h-0 flex-1 gap-0 overflow-hidden'
         }
         style={{
           gridTemplateColumns: isMobile ? '1fr' : '340px minmax(0, 1fr)',

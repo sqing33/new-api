@@ -105,6 +105,7 @@ body {
 .console-bg-sider {
   background: var(--console-glass-bg) !important;
   border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   overflow: hidden;
@@ -115,6 +116,7 @@ body {
   border-top: 1px solid var(--console-glass-border);
   border-right: 1px solid var(--console-glass-border);
   border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -343,19 +345,20 @@ body {
   box-shadow: none !important;
 }
 
-.console-bg-content > .mt-\[60px\] {
-  margin-top: 40px !important;
+.console-bg-content .mt-\[60px\] {
+  margin-top: 0 !important;
+  min-height: 0;
 }
 
 @media (min-width: 769px) {
-  .console-bg-content > .mt-\[60px\]:has(> .table-scroll-card) {
+  .console-bg-content .mt-\[60px\]:has(.table-scroll-card) {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 88px);
+    height: 100%;
     min-height: 0;
   }
 
-  .console-bg-content > .mt-\[60px\] > .table-scroll-card {
+  .console-bg-content .mt-\[60px\] .table-scroll-card {
     flex: 1 1 auto;
     height: auto;
     max-height: none;
@@ -1104,8 +1107,8 @@ code {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px 12px 8px;
-  margin-top: auto;
+  padding: 8px 12px 12px;
+  margin-top: 0;
   cursor: pointer;
   background-color: var(--semi-color-bg-0);
   z-index: 10;
@@ -1139,6 +1142,7 @@ code {
   flex-direction: column;
   gap: 8px;
   padding: 8px 12px 12px;
+  margin-top: auto;
   border-top: 1px solid rgba(var(--semi-grey-0), 0.08);
 }
 
@@ -1175,11 +1179,6 @@ code {
   flex-direction: column;
   align-items: flex-start;
   line-height: 1.2;
-}
-
-.sidebar-user-chevron {
-  flex: 0 0 auto;
-  color: var(--semi-color-text-2);
 }
 
 body.sidebar-collapsed .sidebar-brand-link,

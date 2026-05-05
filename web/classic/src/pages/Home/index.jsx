@@ -89,7 +89,6 @@ const ASPECT_HEIGHT_WEIGHTS = {
   square: 1,
   portrait: 1.34,
 };
-const PROMPT_PRESETS_OPTION_KEY = 'ImagePromptPresets';
 
 const getGalleryItemHeightWeight = (item) => {
   if (item.width > 0 && item.height > 0) {
@@ -220,6 +219,7 @@ const Home = () => {
       pricingRequireAuth = true;
     }
   }
+  const showDocsEntry = docsLink && headerNavModules.docs === true;
   const cabinNavItems = [
     {
       text: t('创作台'),
@@ -245,7 +245,7 @@ const Home = () => {
       icon: LayoutDashboard,
       visible: headerNavModules.console === true,
     },
-    ...(docsLink
+    ...(showDocsEntry
       ? [
           {
             text: t('指南'),
@@ -300,45 +300,51 @@ const Home = () => {
 
   const displayHomePageContent = async () => {
     setHomePageContent(localStorage.getItem('home_page_content') || '');
-    const res = await API.get('/api/home_page_settings');
-    const { success, message, data } = res.data;
-    if (success) {
-      const mode = data?.mode || 'image_showcase';
-      const rawContent = data?.content || '';
-      const parsedGallery = parseGalleryImages(data?.gallery_images);
-      setHomePageMode(mode);
-      if (parsedGallery.length > 0 || mode !== 'image_showcase') {
-        setGalleryImages(parsedGallery);
-      } else {
-        const optionsRes = await API.get('/api/option/');
-        const presetOption = optionsRes.data?.data?.find(
-          (item) => item.key === PROMPT_PRESETS_OPTION_KEY,
-        );
-        setGalleryImages(parsePromptPresetImages(presetOption?.value));
-      }
-
-      let content = rawContent;
-      if (mode === 'custom_content' && !rawContent.startsWith('https://')) {
-        content = marked.parse(rawContent);
-      }
-      setHomePageContent(content);
-      localStorage.setItem('home_page_content', content);
-
-      // 如果内容是 URL，则发送主题模式
-      if (mode === 'custom_content' && rawContent.startsWith('https://')) {
-        const iframe = document.querySelector('iframe');
-        if (iframe) {
-          iframe.onload = () => {
-            iframe.contentWindow.postMessage({ themeMode: actualTheme }, '*');
-            iframe.contentWindow.postMessage({ lang: i18n.language }, '*');
-          };
+    try {
+      const res = await API.get('/api/home_page_settings', {
+        skipErrorHandler: true,
+      });
+      const { success, message, data } = res.data;
+      if (success) {
+        const mode = data?.mode || 'image_showcase';
+        const rawContent = data?.content || '';
+        const parsedGallery = parseGalleryImages(data?.gallery_images);
+        setHomePageMode(mode);
+        if (parsedGallery.length > 0 || mode !== 'image_showcase') {
+          setGalleryImages(parsedGallery);
+        } else {
+          setGalleryImages(
+            parsePromptPresetImages(data?.prompt_presets || ''),
+          );
         }
+
+        let content = rawContent;
+        if (mode === 'custom_content' && !rawContent.startsWith('https://')) {
+          content = marked.parse(rawContent);
+        }
+        setHomePageContent(content);
+        localStorage.setItem('home_page_content', content);
+
+        // 如果内容是 URL，则发送主题模式
+        if (mode === 'custom_content' && rawContent.startsWith('https://')) {
+          const iframe = document.querySelector('iframe');
+          if (iframe) {
+            iframe.onload = () => {
+              iframe.contentWindow.postMessage({ themeMode: actualTheme }, '*');
+              iframe.contentWindow.postMessage({ lang: i18n.language }, '*');
+            };
+          }
+        }
+      } else {
+        showError(message);
+        setHomePageContent('加载首页内容失败...');
       }
-    } else {
-      showError(message);
-      setHomePageContent('加载首页内容失败...');
+    } catch {
+      setHomePageContent(localStorage.getItem('home_page_content') || '');
+      setGalleryImages([]);
+    } finally {
+      setHomePageContentLoaded(true);
     }
-    setHomePageContentLoaded(true);
   };
 
   const renderImageShowcaseHome = () => (
@@ -500,7 +506,9 @@ const Home = () => {
       const today = new Date().toDateString();
       if (lastCloseDate !== today) {
         try {
-          const res = await API.get('/api/notice');
+          const res = await API.get('/api/notice', {
+            skipErrorHandler: true,
+          });
           const { success, data } = res.data;
           if (success && data && data.trim() !== '') {
             setNoticeVisible(true);
@@ -618,7 +626,7 @@ const Home = () => {
                       {statusState.status.version}
                     </Button>
                   ) : (
-                    docsLink && (
+                    showDocsEntry && (
                       <Button
                         size={isMobile ? 'default' : 'large'}
                         className='flex items-center !rounded-3xl px-6 py-2'
