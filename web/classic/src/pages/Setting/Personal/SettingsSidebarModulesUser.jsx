@@ -76,6 +76,7 @@ export default function SettingsSidebarModulesUser() {
         'image-studio': isSidebarModuleAllowed('chat', 'image-studio'),
         'image-presets': isSidebarModuleAllowed('chat', 'image-presets'),
         'video-studio': isSidebarModuleAllowed('chat', 'video-studio'),
+        tools: isSidebarModuleAllowed('chat', 'tools'),
         chat: isSidebarModuleAllowed('chat', 'chat'),
       };
     }
@@ -318,6 +319,11 @@ export default function SettingsSidebarModulesUser() {
           key: 'video-studio',
           title: t('视频'),
           description: t('视频生成工具'),
+        },
+        {
+          key: 'tools',
+          title: t('工具配置'),
+          description: t('CLI 工具安装教程'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
       ],

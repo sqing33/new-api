@@ -40,6 +40,7 @@ const buildDefaultSidebarModules = () => ({
     'image-studio': true,
     'image-presets': true,
     'video-studio': true,
+    tools: true,
     chat: true,
   },
   console: {
@@ -198,6 +199,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           key: 'video-studio',
           title: t('视频'),
           description: t('视频生成工具'),
+        },
+        {
+          key: 'tools',
+          title: t('工具配置'),
+          description: t('CLI 工具安装教程'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
       ],
