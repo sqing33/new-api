@@ -266,6 +266,11 @@ export default function SettingsSidebarModulesAdmin(props) {
         },
         { key: 'user', title: t('用户管理'), description: t('用户账户管理') },
         {
+          key: 'tool-install-setting',
+          title: t('工具安装设置'),
+          description: t('工具安装脚本管理'),
+        },
+        {
           key: 'setting',
           title: t('系统设置'),
           description: t('系统参数配置'),

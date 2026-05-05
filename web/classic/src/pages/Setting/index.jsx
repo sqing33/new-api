@@ -34,7 +34,6 @@ import {
   CreditCard,
   Server,
   Activity,
-  Wrench,
 } from 'lucide-react';
 
 import SystemSetting from '../../components/settings/SystemSetting';
@@ -50,7 +49,6 @@ import DrawingSetting from '../../components/settings/DrawingSetting';
 import PaymentSetting from '../../components/settings/PaymentSetting';
 import ModelDeploymentSetting from '../../components/settings/ModelDeploymentSetting';
 import PerformanceSetting from '../../components/settings/PerformanceSetting';
-import ToolInstallSetting from '../../components/settings/ToolInstallSetting';
 
 const Setting = () => {
   const { t } = useTranslation();
@@ -60,16 +58,6 @@ const Setting = () => {
   let panes = [];
 
   if (isRoot()) {
-    panes.push({
-      tab: (
-        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <Wrench size={18} />
-          {t('工具安装设置')}
-        </span>
-      ),
-      content: <ToolInstallSetting />,
-      itemKey: 'tools',
-    });
     panes.push({
       tab: (
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>

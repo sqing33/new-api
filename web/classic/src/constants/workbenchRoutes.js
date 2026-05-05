@@ -2,6 +2,7 @@ export const WORKBENCH_PATHS = new Set([
   '/dashboard',
   '/channel',
   '/token',
+  '/tools',
   '/playground',
   '/image-studio',
   '/video-studio',
@@ -20,6 +21,7 @@ export const WORKBENCH_PATHS = new Set([
   '/models',
   '/deployment',
   '/subscription',
+  '/tool-install-setting',
   '/chat',
 ]);
 

@@ -350,6 +350,313 @@ body {
   min-height: 0;
 }
 
+.tools-info-item,
+.tools-script-section,
+.tools-tab-panel,
+.tools-empty-panel,
+.tools-info-panel,
+.tools-warning-panel,
+.tools-success-panel {
+  border: 1px solid var(--console-glass-border);
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 16px;
+}
+
+.tools-tab-panel {
+  border-top-left-radius: 0;
+}
+
+.tools-info-panel {
+  border-color: rgba(59, 130, 246, 0.18);
+  background: rgba(239, 246, 255, 0.66);
+}
+
+.tools-warning-panel {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(255, 251, 235, 0.72);
+  padding: 16px;
+}
+
+.tools-success-panel {
+  border-color: rgba(34, 197, 94, 0.24);
+  background: rgba(240, 253, 244, 0.72);
+  padding: 16px;
+}
+
+.tools-command-block {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.tools-command-block pre {
+  color: #f8fafc !important;
+}
+
+.tools-command-copy.semi-button {
+  position: absolute !important;
+  top: 12px;
+  right: 12px;
+  border-radius: 8px !important;
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.tools-command-copy.semi-button:hover,
+.tools-command-copy.semi-button:focus {
+  background: rgba(255, 255, 255, 0.18) !important;
+}
+
+.tools-refresh-button.semi-button {
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+
+.tool-install-setting-card.table-scroll-card {
+  height: 100%;
+  max-height: 100%;
+}
+
+.tool-install-setting-card.table-scroll-card .semi-card-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tool-install-setting-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.tool-install-setting-content > .semi-banner {
+  flex: 0 0 auto;
+}
+
+.tool-install-setting-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.tool-install-setting-table .semi-table-wrapper,
+.tool-install-setting-table .semi-table-container,
+.tool-install-setting-table .semi-table-body {
+  min-height: 0;
+}
+
+.tool-install-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 4px 16px;
+  height: 100%;
+  min-height: 0;
+  padding-top: 4px;
+  overflow: hidden;
+}
+
+.tool-install-form-full {
+  grid-column: 1 / -1;
+}
+
+.tool-install-form-grid .semi-form-field {
+  margin-bottom: 0 !important;
+}
+
+.tool-install-script-field {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.tool-install-script-field .semi-form-field-main,
+.tool-install-script-field .semi-input-textarea-wrapper {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tool-install-script-field .semi-input-textarea-wrapper textarea {
+  flex: 1 1 auto;
+  height: 100% !important;
+  min-height: 0 !important;
+  resize: none;
+}
+
+.tool-install-form-grid .semi-form-field:has(textarea#shell_script),
+.tool-install-form-grid .semi-form-field:has(textarea#powershell_script) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.tool-install-form-grid
+  .semi-form-field:has(textarea#shell_script)
+  .semi-form-field-main,
+.tool-install-form-grid
+  .semi-form-field:has(textarea#powershell_script)
+  .semi-form-field-main,
+.tool-install-form-grid
+  .semi-form-field:has(textarea#shell_script)
+  .semi-input-textarea-wrapper,
+.tool-install-form-grid
+  .semi-form-field:has(textarea#powershell_script)
+  .semi-input-textarea-wrapper {
+  display: flex;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.tool-install-form-grid textarea#shell_script,
+.tool-install-form-grid textarea#powershell_script {
+  flex: 1 1 auto;
+  height: 100% !important;
+  min-height: 0 !important;
+  resize: none;
+}
+
+.tool-install-switch-field {
+  display: flex;
+  align-items: flex-end;
+  min-height: 54px;
+  padding-bottom: 0;
+}
+
+.tool-install-switch-field .semi-form-field {
+  width: 100%;
+}
+
+.tool-install-params-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) auto minmax(360px, 1.1fr);
+  gap: 18px;
+  height: 100%;
+  min-height: 0;
+  padding-top: 8px;
+  overflow: hidden;
+}
+
+.tool-install-params-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.tool-install-params-divider {
+  height: auto !important;
+}
+
+.tool-install-ai-prompt-preview {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  font-family: JetBrains Mono, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.tool-install-modal .semi-modal-body-wrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tool-install-modal .semi-modal-body,
+.tool-install-modal .semi-tabs,
+.tool-install-modal .semi-form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tool-install-modal .semi-tabs-pane:not(.semi-tabs-pane-inactive) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.tool-install-modal .semi-tabs-pane-motion-overlay {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.tool-install-modal .semi-tabs-content {
+  display: flex;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 0 !important;
+  padding-top: 4px !important;
+}
+
+.tool-install-modal .semi-tabs-bar {
+  align-items: center;
+  margin-top: 0;
+}
+
+.tool-install-modal .semi-tabs-bar-extra {
+  display: flex;
+  align-items: center;
+}
+
+.tool-install-modal-close.semi-button {
+  border-radius: 999px !important;
+}
+
+.tool-install-modal .tool-install-params-panel .semi-table-wrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.tool-install-modal .semi-form-field-label {
+  margin-bottom: 4px !important;
+}
+
+.tool-install-modal .semi-modal-footer {
+  padding-top: 10px !important;
+}
+
+.tool-install-modal .semi-textarea-wrapper textarea {
+  line-height: 1.35;
+}
+
+@media (max-width: 960px) {
+  .tool-install-form-grid,
+  .tool-install-params-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-install-params-divider {
+    display: none;
+  }
+}
+
 @media (min-width: 769px) {
   .console-bg-content .mt-\[60px\]:has(.table-scroll-card) {
     display: flex;

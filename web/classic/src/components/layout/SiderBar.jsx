@@ -69,6 +69,7 @@ const routerMap = {
   task: '/task',
   models: '/models',
   deployment: '/deployment',
+  'tool-install-setting': '/tool-install-setting',
   playground: '/playground',
   'image-studio': '/image-studio',
   'image-presets': '/image-presets',
@@ -299,6 +300,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         itemKey: 'user',
         to: '/user',
         className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('工具安装设置'),
+        itemKey: 'tool-install-setting',
+        to: '/tool-install-setting',
+        className: isRoot() ? '' : 'tableHiddle',
       },
       {
         text: t('系统设置'),

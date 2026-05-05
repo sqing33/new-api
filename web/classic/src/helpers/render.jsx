@@ -135,6 +135,7 @@ export function getLucideIcon(key, selected = false) {
     case 'video-studio':
       return <Video {...commonProps} color={iconColor} />;
     case 'tools':
+    case 'tool-install-setting':
       return <Wrench {...commonProps} color={iconColor} />;
     case 'chat':
       return <MessageSquare {...commonProps} color={iconColor} />;
