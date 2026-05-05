@@ -73,6 +73,7 @@ const routerMap = {
   'image-studio': '/image-studio',
   'image-presets': '/image-presets',
   'video-studio': '/video-studio',
+  tools: '/tools',
   personal: '/personal',
 };
 
@@ -337,6 +338,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('视频'),
         itemKey: 'video-studio',
         to: '/video-studio',
+      },
+      {
+        text: t('工具配置'),
+        itemKey: 'tools',
+        to: '/tools',
       },
       {
         text: t('模型馆'),

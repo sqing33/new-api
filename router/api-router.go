@@ -265,6 +265,22 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.POST("/batch/keys", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKeysBatch)
 		}
 
+		toolInstallRoute := apiRouter.Group("/tool-install")
+		{
+			toolInstallRoute.GET("/tools", middleware.UserAuth(), controller.GetToolInstallTools)
+			toolInstallRoute.POST("/token", middleware.UserAuth(), controller.CreateToolInstallToken)
+			toolInstallRoute.GET("/config", middleware.DisableCache(), controller.GetToolInstallConfig)
+			toolInstallRoute.GET("/scripts/:tool/:platform", middleware.DisableCache(), controller.GetToolInstallScript)
+			toolInstallAdminRoute := toolInstallRoute.Group("/admin")
+			toolInstallAdminRoute.Use(middleware.AdminAuth())
+			{
+				toolInstallAdminRoute.GET("/tools", controller.GetAdminToolInstallTools)
+				toolInstallAdminRoute.POST("/tools", controller.CreateAdminToolInstallTool)
+				toolInstallAdminRoute.PUT("/tools/:id", controller.UpdateAdminToolInstallTool)
+				toolInstallAdminRoute.DELETE("/tools/:id", controller.DeleteAdminToolInstallTool)
+			}
+		}
+
 		usageRoute := apiRouter.Group("/usage")
 		usageRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{

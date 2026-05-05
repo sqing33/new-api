@@ -70,13 +70,10 @@ import {
   Key,
   BarChart3,
   BookMarked,
-  BookOpen,
   Image as ImageIcon,
   Video,
   CheckSquare,
   CreditCard,
-  Compass,
-  Info,
   Layers,
   Gift,
   User,
@@ -85,6 +82,7 @@ import {
   Package,
   Server,
   CalendarClock,
+  Wrench,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -136,12 +134,8 @@ export function getLucideIcon(key, selected = false) {
       return <BookMarked {...commonProps} color={iconColor} />;
     case 'video-studio':
       return <Video {...commonProps} color={iconColor} />;
-    case 'pricing':
-      return <Compass {...commonProps} color={iconColor} />;
-    case 'about':
-      return <Info {...commonProps} color={iconColor} />;
-    case 'docs':
-      return <BookOpen {...commonProps} color={iconColor} />;
+    case 'tools':
+      return <Wrench {...commonProps} color={iconColor} />;
     case 'chat':
       return <MessageSquare {...commonProps} color={iconColor} />;
     case 'token':
