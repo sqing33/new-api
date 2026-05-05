@@ -32,6 +32,9 @@ export const DEFAULT_ADMIN_CONFIG = {
     'image-studio': true,
     'image-presets': true,
     'video-studio': true,
+    pricing: true,
+    about: true,
+    docs: true,
     chat: true,
   },
   console: {

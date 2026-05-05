@@ -514,7 +514,6 @@
     "例如 €, £, Rp, ₩, ₹...": "Ví dụ, €, £, Rp, ₩, ₹...",
     "例如 https://docs.newapi.pro": "Ví dụ, https://docs.newapi.pro",
     "例如 https://example.com/api/waffo/webhook": "",
-    "例如 https://example.com/console/topup": "",
     "例如：": "Ví dụ:",
     "例如: /bin/bash -c \"python app.py\"": "e.g.: /bin/bash -c \"python app.py\"",
     "例如: nginx:latest": "e.g.: nginx:latest",
@@ -1758,7 +1757,6 @@
     "支付": "Thanh toán",
     "支付地址": "Địa chỉ thanh toán",
     "支付失败": "Thanh toán thất bại",
-    "支付完成后用户跳转的页面，留空则自动使用 服务器地址 + /console/topup": "",
     "支付宝": "Alipay",
     "支付方式": "Phương thức thanh toán",
     "支付方式名称": "Tên phương thức thanh toán",
@@ -4353,6 +4351,15 @@
     "默认用户消息": "Xin chào",
     "默认视频尺寸": "Kích thước video mặc định",
     "默认视频时长": "Thời lượng video mặc định",
-    "默认补全倍率": "Tỷ lệ hoàn thành mặc định"
+    "默认补全倍率": "Tỷ lệ hoàn thành mặc định",
+    "模型馆": "Kho mô hình",
+    "模型列表与价格入口": "Lối vào danh sách mô hình và giá",
+    "入口管理": "Quản lý lối vào",
+    "控制入口模块显示状态，全局生效": "Kiểm soát trạng thái hiển thị mô-đun lối vào trên toàn hệ thống",
+    "模型馆作为工作台内页，需要登录访问": "Kho mô hình là trang trong bàn làm việc và yêu cầu đăng nhập",
+    "例如：https://example.com/topup": "Ví dụ: https://example.com/topup",
+    "例如 https://example.com/topup": "Ví dụ: https://example.com/topup",
+    "支付完成后用户跳转的页面，留空则自动使用 服务器地址 + /topup": "Trang người dùng được chuyển đến sau khi thanh toán. Để trống để dùng địa chỉ máy chủ + /topup",
+    "查看模型与价格": "Xem mô hình và giá"
   }
 }

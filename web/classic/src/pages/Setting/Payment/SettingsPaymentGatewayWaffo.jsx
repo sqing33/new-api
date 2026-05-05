@@ -547,7 +547,7 @@ export default function SettingsPaymentGatewayWaffo(props) {
               <Form.Input
                 field='WaffoReturnUrl'
                 label={t('支付返回地址')}
-                placeholder={t('例如：https://example.com/console/topup')}
+                placeholder={t('例如：https://example.com/topup')}
                 extraText={t('留空则自动使用当前站点的默认充值页地址')}
               />
             </Col>

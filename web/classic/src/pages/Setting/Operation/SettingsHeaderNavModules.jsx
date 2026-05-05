@@ -45,7 +45,7 @@ export default function SettingsHeaderNavModules(props) {
     imageStudio: true,
     pricing: {
       enabled: true,
-      requireAuth: false, // 默认不需要登录鉴权
+      requireAuth: true,
     },
     docs: true,
     about: true,
@@ -68,7 +68,7 @@ export default function SettingsHeaderNavModules(props) {
     };
   }
 
-  // 处理模型广场权限控制变更
+  // 处理模型馆权限控制变更
   function handlePricingAuthChange(checked) {
     const newModules = { ...headerNavModules };
     newModules.pricing = {
@@ -86,7 +86,7 @@ export default function SettingsHeaderNavModules(props) {
       imageStudio: true,
       pricing: {
         enabled: true,
-        requireAuth: false,
+        requireAuth: true,
       },
       docs: true,
       about: true,
@@ -140,8 +140,10 @@ export default function SettingsHeaderNavModules(props) {
         if (typeof modules.pricing === 'boolean') {
           modules.pricing = {
             enabled: modules.pricing,
-            requireAuth: false, // 默认不需要登录鉴权
+            requireAuth: true,
           };
+        } else if (modules.pricing && typeof modules.pricing === 'object') {
+          modules.pricing.requireAuth = true;
         }
         if (modules.imageStudio === undefined) {
           modules.imageStudio = true;
@@ -156,7 +158,7 @@ export default function SettingsHeaderNavModules(props) {
           imageStudio: true,
           pricing: {
             enabled: true,
-            requireAuth: false,
+            requireAuth: true,
           },
           docs: true,
           about: true,
@@ -185,8 +187,8 @@ export default function SettingsHeaderNavModules(props) {
     },
     {
       key: 'pricing',
-      title: t('模型广场'),
-      description: t('模型定价，需要登录访问'),
+      title: t('模型馆'),
+      description: t('模型列表与价格入口'),
       hasSubConfig: true, // 标识该模块有子配置
     },
     {
@@ -204,8 +206,8 @@ export default function SettingsHeaderNavModules(props) {
   return (
     <Card>
       <Form.Section
-        text={t('顶栏管理')}
-        extraText={t('控制顶栏模块显示状态，全局生效')}
+        text={t('入口管理')}
+        extraText={t('控制入口模块显示状态，全局生效')}
       >
         <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
           {moduleConfigs.map((module) => (
@@ -266,7 +268,7 @@ export default function SettingsHeaderNavModules(props) {
                   </div>
                 </div>
 
-                {/* 为模型广场添加权限控制子开关 */}
+                {/* 为模型馆添加权限控制子开关 */}
                 {module.key === 'pricing' &&
                   (module.key === 'pricing'
                     ? headerNavModules[module.key]?.enabled
@@ -306,15 +308,16 @@ export default function SettingsHeaderNavModules(props) {
                               display: 'block',
                             }}
                           >
-                            {t('开启后未登录用户无法访问模型广场')}
+                            {t('模型馆作为工作台内页，需要登录访问')}
                           </Text>
                         </div>
                         <div style={{ marginLeft: '16px' }}>
                           <Switch
                             checked={
-                              headerNavModules.pricing?.requireAuth || false
+                              headerNavModules.pricing?.requireAuth !== false
                             }
                             onChange={handlePricingAuthChange}
+                            disabled
                             size='default'
                           />
                         </div>

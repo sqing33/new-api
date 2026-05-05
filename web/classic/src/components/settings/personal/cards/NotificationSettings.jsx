@@ -70,6 +70,9 @@ const NotificationSettings = ({
       'image-studio': true,
       'image-presets': true,
       'video-studio': true,
+      pricing: true,
+      about: true,
+      docs: true,
       chat: true,
     },
     console: {
@@ -166,6 +169,9 @@ const NotificationSettings = ({
         'image-studio': true,
         'image-presets': true,
         'video-studio': true,
+        pricing: true,
+        about: true,
+        docs: true,
         chat: true,
       },
       console: {
@@ -280,6 +286,21 @@ const NotificationSettings = ({
           key: 'video-studio',
           title: t('视频'),
           description: t('视频生成工具'),
+        },
+        {
+          key: 'pricing',
+          title: t('模型馆'),
+          description: t('查看模型与价格'),
+        },
+        {
+          key: 'about',
+          title: t('关于'),
+          description: t('关于系统的详细信息'),
+        },
+        {
+          key: 'docs',
+          title: t('文档'),
+          description: t('系统文档和帮助信息'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
       ],

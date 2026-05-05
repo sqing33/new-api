@@ -87,7 +87,7 @@ const StatsCards = ({
                       size='large'
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate('/console/topup');
+                        navigate('/topup');
                       }}
                     >
                       {t('充值')}

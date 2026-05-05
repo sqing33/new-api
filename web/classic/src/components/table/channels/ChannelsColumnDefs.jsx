@@ -104,7 +104,7 @@ const renderType = (type, record = {}, t) => {
     if (!ionetMeta?.deployment_id) {
       return;
     }
-    const targetUrl = `/console/deployment?deployment_id=${ionetMeta.deployment_id}`;
+    const targetUrl = `/deployment?deployment_id=${ionetMeta.deployment_id}`;
     window.open(targetUrl, '_blank', 'noopener');
   };
 

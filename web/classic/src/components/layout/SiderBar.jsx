@@ -17,52 +17,101 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getLucideIcon } from '../../helpers/render';
-import { ChevronLeft } from 'lucide-react';
+import { getLucideIcon, renderQuota } from '../../helpers/render';
+import {
+  ChevronDown,
+  ChevronLeft,
+  CreditCard,
+  Key,
+  LogIn,
+  LogOut,
+  User as UserIcon,
+} from 'lucide-react';
 import { useSidebarCollapsed } from '../../hooks/common/useSidebarCollapsed';
 import { useSidebar } from '../../hooks/common/useSidebar';
 import { useMinimumLoadingTime } from '../../hooks/common/useMinimumLoadingTime';
-import { isAdmin, isRoot, showError } from '../../helpers';
+import {
+  API,
+  getLogo,
+  getSystemName,
+  isAdmin,
+  isRoot,
+  showError,
+  showSuccess,
+  stringToColor,
+} from '../../helpers';
+import { StatusContext } from '../../context/Status';
+import { UserContext } from '../../context/User';
+import { normalizeLanguage } from '../../i18n/language';
+import { useNotifications } from '../../hooks/common/useNotifications';
+import NoticeModal from './NoticeModal';
+import LanguageSelector from './headerbar/LanguageSelector';
+import NotificationButton from './headerbar/NotificationButton';
 import SkeletonWrapper from './components/SkeletonWrapper';
 
-import { Nav, Divider, Button } from '@douyinfe/semi-ui';
+import {
+  Nav,
+  Divider,
+  Button,
+  Avatar,
+  Dropdown,
+  Typography,
+} from '@douyinfe/semi-ui';
 
 const routerMap = {
   home: '/',
-  channel: '/console/channel',
-  token: '/console/token',
-  redemption: '/console/redemption',
-  topup: '/console/topup',
-  user: '/console/user',
-  subscription: '/console/subscription',
-  log: '/console/log',
-  midjourney: '/console/midjourney',
-  'image-log': '/console/image-logs',
-  setting: '/console/setting',
+  channel: '/channel',
+  token: '/token',
+  redemption: '/redemption',
+  topup: '/topup',
+  user: '/user',
+  subscription: '/subscription',
+  log: '/log',
+  midjourney: '/midjourney',
+  'image-log': '/image-logs',
+  setting: '/setting',
   about: '/about',
-  detail: '/console',
+  detail: '/dashboard',
   pricing: '/pricing',
-  task: '/console/task',
-  models: '/console/models',
-  deployment: '/console/deployment',
-  playground: '/console/playground',
-  'image-studio': '/console/image-studio',
-  'image-presets': '/console/image-presets',
-  'video-studio': '/console/video-studio',
-  personal: '/console/personal',
+  task: '/task',
+  models: '/models',
+  deployment: '/deployment',
+  playground: '/playground',
+  'image-studio': '/image-studio',
+  'image-presets': '/image-presets',
+  'video-studio': '/video-studio',
+  personal: '/personal',
 };
 
 const SiderBar = ({ onNavigate = () => {} }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const [statusState] = useContext(StatusContext);
+  const [userState, userDispatch] = useContext(UserContext);
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
+  const userDropdownRef = useRef(null);
   const {
     isModuleVisible,
     hasSectionVisibleModules,
     loading: sidebarLoading,
   } = useSidebar();
+  const {
+    noticeVisible,
+    unreadCount,
+    handleNoticeOpen,
+    handleNoticeClose,
+    getUnreadKeys,
+  } = useNotifications(statusState);
 
   const showSkeleton = useMinimumLoadingTime(sidebarLoading, 200);
 
@@ -71,13 +120,84 @@ const SiderBar = ({ onNavigate = () => {} }) => {
   const [openedKeys, setOpenedKeys] = useState([]);
   const location = useLocation();
   const [routerMapState, setRouterMapState] = useState(routerMap);
+  const systemName = statusState?.status?.system_name || getSystemName();
+  const logo = statusState?.status?.logo || getLogo();
+  const docsLink = statusState?.status?.docs_link || '';
+  const currentLang = normalizeLanguage(i18n.language);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!userState?.user?.id) return undefined;
+
+    API.get('/api/user/self')
+      .then((res) => {
+        const nextUser = res?.data?.success ? res.data.data : null;
+        if (!nextUser || cancelled) return;
+        userDispatch({ type: 'login', payload: nextUser });
+        localStorage.setItem('user', JSON.stringify(nextUser));
+      })
+      .catch(() => {
+        // Best effort refresh only; stale local balance is still usable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userDispatch, userState?.user?.id]);
+
+  const handleLanguageChange = useCallback(
+    async (lang) => {
+      const previousLang = normalizeLanguage(i18n.language);
+      i18n.changeLanguage(lang);
+      localStorage.setItem('i18nextLng', lang);
+
+      if (userState?.user?.id) {
+        try {
+          const res = await API.put('/api/user/self', { language: lang });
+          if (res.data.success) {
+            let settings = {};
+            if (userState?.user?.setting) {
+              try {
+                settings = JSON.parse(userState.user.setting) || {};
+              } catch (e) {
+                settings = {};
+              }
+            }
+
+            settings.language = lang;
+            const nextUser = {
+              ...userState.user,
+              setting: JSON.stringify(settings),
+            };
+
+            userDispatch({ type: 'login', payload: nextUser });
+            localStorage.setItem('user', JSON.stringify(nextUser));
+          }
+        } catch (error) {
+          if (previousLang) {
+            i18n.changeLanguage(previousLang);
+            localStorage.setItem('i18nextLng', previousLang);
+          }
+        }
+      }
+    },
+    [i18n, userDispatch, userState?.user],
+  );
+
+  const logout = useCallback(async () => {
+    await API.get('/api/user/logout');
+    showSuccess(t('注销成功!'));
+    userDispatch({ type: 'logout' });
+    localStorage.removeItem('user');
+    navigate('/login');
+  }, [navigate, t, userDispatch]);
 
   const workspaceItems = useMemo(() => {
     const items = [
       {
         text: t('数据看板'),
         itemKey: 'detail',
-        to: '/detail',
+        to: '/dashboard',
         className:
           localStorage.getItem('enable_data_export') === 'true'
             ? ''
@@ -171,7 +291,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
       {
         text: t('模型管理'),
         itemKey: 'models',
-        to: '/console/models',
+        to: '/models',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {
@@ -232,6 +352,25 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/video-studio',
       },
       {
+        text: t('模型馆'),
+        itemKey: 'pricing',
+        to: '/pricing',
+      },
+      {
+        text: t('关于'),
+        itemKey: 'about',
+        to: '/about',
+      },
+      ...(docsLink
+        ? [
+            {
+              text: t('文档'),
+              itemKey: 'docs',
+              externalLink: docsLink,
+            },
+          ]
+        : []),
+      {
         text: t('聊天'),
         itemKey: 'chat',
         items: chatItems,
@@ -245,7 +384,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     });
 
     return filteredItems;
-  }, [chatItems, t, isModuleVisible]);
+  }, [chatItems, docsLink, t, isModuleVisible]);
 
   // 更新路由映射，添加聊天路由
   const updateRouterMapWithChats = (chats) => {
@@ -253,7 +392,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
 
     if (Array.isArray(chats) && chats.length > 0) {
       for (let i = 0; i < chats.length; i++) {
-        newRouterMap['chat' + i] = '/console/chat/' + i;
+        newRouterMap['chat' + i] = '/chat/' + i;
       }
     }
 
@@ -281,7 +420,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
               }
               chat.text = key;
               chat.itemKey = 'chat' + i;
-              chat.to = '/console/chat/' + i;
+              chat.to = '/chat/' + i;
             }
             if (shouldSkip || !chat.text) continue; // 避免推入空项
             chatItems.push(chat);
@@ -303,7 +442,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     );
 
     // 处理聊天路由
-    if (!matchingKey && currentPath.startsWith('/console/chat/')) {
+    if (!matchingKey && currentPath.startsWith('/chat/')) {
       const chatIndex = currentPath.split('/').pop();
       if (!isNaN(chatIndex)) {
         matchingKey = 'chat' + chatIndex;
@@ -326,6 +465,145 @@ const SiderBar = ({ onNavigate = () => {} }) => {
       document.body.classList.remove('sidebar-collapsed');
     }
   }, [collapsed]);
+
+  const renderBrand = () => (
+    <Link
+      to='/'
+      className='sidebar-brand-link'
+      onClick={onNavigate}
+      title={systemName}
+    >
+      <div className='sidebar-brand-logo'>
+        {logo ? <img src={logo} alt='logo' /> : null}
+      </div>
+      {!collapsed && (
+        <span className='sidebar-brand-title truncate'>{systemName}</span>
+      )}
+    </Link>
+  );
+
+  const renderUserMenu = () => {
+    const user = userState?.user;
+    if (!user) {
+      return (
+        <Button
+          theme='solid'
+          type='primary'
+          size='small'
+          className='sidebar-user-button'
+          icon={collapsed ? <LogIn size={16} /> : null}
+          icononly={collapsed}
+          onClick={() => navigate('/login')}
+        >
+          {!collapsed ? t('登录') : null}
+        </Button>
+      );
+    }
+
+    const username = user.username || '';
+    const balance = renderQuota(user.quota || 0);
+
+    return (
+      <div className='sidebar-user-menu' ref={userDropdownRef}>
+        <Dropdown
+          position='topLeft'
+          getPopupContainer={() => userDropdownRef.current}
+          render={
+            <Dropdown.Menu className='!bg-semi-color-bg-overlay !border-semi-color-border !shadow-lg !rounded-lg dark:!bg-gray-700 dark:!border-gray-600'>
+              <Dropdown.Item
+                onClick={() => navigate('/personal')}
+                className='!px-3 !py-1.5 !text-sm !text-semi-color-text-0 hover:!bg-semi-color-fill-1 dark:!text-gray-200 dark:hover:!bg-blue-500 dark:hover:!text-white'
+              >
+                <div className='flex items-center gap-2'>
+                  <UserIcon size={14} />
+                  <span>{t('个人设置')}</span>
+                </div>
+              </Dropdown.Item>
+              <Dropdown.Item
+                onClick={() => navigate('/token')}
+                className='!px-3 !py-1.5 !text-sm !text-semi-color-text-0 hover:!bg-semi-color-fill-1 dark:!text-gray-200 dark:hover:!bg-blue-500 dark:hover:!text-white'
+              >
+                <div className='flex items-center gap-2'>
+                  <Key size={14} />
+                  <span>{t('令牌管理')}</span>
+                </div>
+              </Dropdown.Item>
+              <Dropdown.Item
+                onClick={() => navigate('/topup')}
+                className='!px-3 !py-1.5 !text-sm !text-semi-color-text-0 hover:!bg-semi-color-fill-1 dark:!text-gray-200 dark:hover:!bg-blue-500 dark:hover:!text-white'
+              >
+                <div className='flex items-center gap-2'>
+                  <CreditCard size={14} />
+                  <span>{t('钱包管理')}</span>
+                </div>
+              </Dropdown.Item>
+              <Dropdown.Item className='!cursor-default !px-3 !py-1.5 !text-xs !text-semi-color-text-2 hover:!bg-transparent'>
+                {t('当前余额')}：{balance}
+              </Dropdown.Item>
+              <Dropdown.Item
+                onClick={logout}
+                className='!px-3 !py-1.5 !text-sm !text-semi-color-text-0 hover:!bg-semi-color-fill-1 dark:!text-gray-200 dark:hover:!bg-red-500 dark:hover:!text-white'
+              >
+                <div className='flex items-center gap-2'>
+                  <LogOut size={14} />
+                  <span>{t('退出')}</span>
+                </div>
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          }
+        >
+          <Button
+            theme='borderless'
+            type='tertiary'
+            className='sidebar-user-button'
+            icon={
+              <Avatar size='extra-small' color={stringToColor(username)}>
+                {username?.[0]?.toUpperCase()}
+              </Avatar>
+            }
+          >
+            {!collapsed && (
+              <>
+                <span className='sidebar-user-copy'>
+                  <Typography.Text
+                    ellipsis
+                    className='!text-xs !font-medium !text-semi-color-text-1'
+                  >
+                    {username}
+                  </Typography.Text>
+                  <Typography.Text
+                    ellipsis
+                    className='!text-[11px] !text-semi-color-text-2'
+                  >
+                    {t('当前余额')}：{balance}
+                  </Typography.Text>
+                </span>
+                <ChevronDown size={14} className='sidebar-user-chevron' />
+              </>
+            )}
+          </Button>
+        </Dropdown>
+      </div>
+    );
+  };
+
+  const renderSidebarFooter = () => (
+    <div className='sidebar-footer-actions'>
+      <div className='sidebar-footer-tools'>
+        <NotificationButton
+          unreadCount={unreadCount}
+          onNoticeOpen={handleNoticeOpen}
+          t={t}
+        />
+        <LanguageSelector
+          currentLang={currentLang}
+          onLanguageChange={handleLanguageChange}
+          t={t}
+        />
+      </div>
+      {renderUserMenu()}
+    </div>
+  );
 
   // 选中高亮颜色（统一）
   const SELECTED_COLOR = 'var(--semi-color-primary)';
@@ -411,145 +689,170 @@ const SiderBar = ({ onNavigate = () => {} }) => {
   };
 
   return (
-    <div
-      className='sidebar-container'
-      style={{
-        width: 'var(--sidebar-current-width)',
-      }}
-    >
-      <SkeletonWrapper
-        loading={showSkeleton}
-        type='sidebar'
-        className=''
-        collapsed={collapsed}
-        showAdmin={isAdmin()}
+    <>
+      <NoticeModal
+        visible={noticeVisible}
+        onClose={handleNoticeClose}
+        isMobile={false}
+        defaultTab={unreadCount > 0 ? 'system' : 'inApp'}
+        unreadKeys={getUnreadKeys()}
+      />
+      <div
+        className='sidebar-container'
+        style={{
+          width: 'var(--sidebar-current-width)',
+        }}
       >
-        <Nav
-          className='sidebar-nav'
-          defaultIsCollapsed={collapsed}
-          isCollapsed={collapsed}
-          onCollapseChange={toggleCollapsed}
-          selectedKeys={selectedKeys}
-          itemStyle='sidebar-nav-item'
-          hoverStyle='sidebar-nav-item:hover'
-          selectedStyle='sidebar-nav-item-selected'
-          renderWrapper={({ itemElement, props }) => {
-            const to =
-              routerMapState[props.itemKey] || routerMap[props.itemKey];
-
-            // 如果没有路由，直接返回元素
-            if (!to) return itemElement;
-
-            return (
-              <Link
-                style={{ textDecoration: 'none' }}
-                to={to}
-                onClick={onNavigate}
-              >
-                {itemElement}
-              </Link>
-            );
-          }}
-          onSelect={(key) => {
-            // 如果点击的是已经展开的子菜单的父项，则收起子菜单
-            if (openedKeys.includes(key.itemKey)) {
-              setOpenedKeys(openedKeys.filter((k) => k !== key.itemKey));
-            }
-
-            setSelectedKeys([key.itemKey]);
-          }}
-          openKeys={openedKeys}
-          onOpenChange={(data) => {
-            setOpenedKeys(data.openKeys);
-          }}
-        >
-          {/* 工作台区域 */}
-          {hasSectionVisibleModules('chat') && (
-            <div className='sidebar-section'>
-              {!collapsed && (
-                <div className='sidebar-group-label'>{t('工作台')}</div>
-              )}
-              {chatMenuItems.map((item) => renderSubItem(item))}
-            </div>
-          )}
-
-          {/* 控制台区域 */}
-          {hasSectionVisibleModules('console') && (
-            <>
-              <Divider className='sidebar-divider' />
-              <div>
-                {!collapsed && (
-                  <div className='sidebar-group-label'>{t('控制台')}</div>
-                )}
-                {workspaceItems.map((item) => renderNavItem(item))}
-              </div>
-            </>
-          )}
-
-          {/* 个人中心区域 */}
-          {hasSectionVisibleModules('personal') && (
-            <>
-              <Divider className='sidebar-divider' />
-              <div>
-                {!collapsed && (
-                  <div className='sidebar-group-label'>{t('个人中心')}</div>
-                )}
-                {financeItems.map((item) => renderNavItem(item))}
-              </div>
-            </>
-          )}
-
-          {/* 管理员区域 - 只在管理员时显示且配置允许时显示 */}
-          {isAdmin() && hasSectionVisibleModules('admin') && (
-            <>
-              <Divider className='sidebar-divider' />
-              <div>
-                {!collapsed && (
-                  <div className='sidebar-group-label'>{t('管理员')}</div>
-                )}
-                {adminItems.map((item) => renderNavItem(item))}
-              </div>
-            </>
-          )}
-        </Nav>
-      </SkeletonWrapper>
-
-      {/* 底部折叠按钮 */}
-      <div className='sidebar-collapse-button'>
+        {renderBrand()}
         <SkeletonWrapper
           loading={showSkeleton}
-          type='button'
-          width={collapsed ? 36 : 156}
-          height={24}
-          className='w-full'
+          type='sidebar'
+          className=''
+          collapsed={collapsed}
+          showAdmin={isAdmin()}
         >
-          <Button
-            theme='outline'
-            type='tertiary'
-            size='small'
-            icon={
-              <ChevronLeft
-                size={16}
-                strokeWidth={2.5}
-                color='var(--semi-color-text-2)'
-                style={{
-                  transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)',
-                }}
-              />
-            }
-            onClick={toggleCollapsed}
-            icononly={collapsed}
-            style={
-              collapsed
-                ? { width: 36, height: 24, padding: 0 }
-                : { padding: '4px 12px', width: '100%' }
-            }
+          <Nav
+            className='sidebar-nav'
+            defaultIsCollapsed={collapsed}
+            isCollapsed={collapsed}
+            onCollapseChange={toggleCollapsed}
+            selectedKeys={selectedKeys}
+            itemStyle='sidebar-nav-item'
+            hoverStyle='sidebar-nav-item:hover'
+            selectedStyle='sidebar-nav-item-selected'
+            renderWrapper={({ itemElement, props }) => {
+              const to =
+                routerMapState[props.itemKey] || routerMap[props.itemKey];
+
+              if (props.itemKey === 'docs' && docsLink) {
+                return (
+                  <a
+                    style={{ textDecoration: 'none' }}
+                    href={docsLink}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    onClick={onNavigate}
+                  >
+                    {itemElement}
+                  </a>
+                );
+              }
+
+              // 如果没有路由，直接返回元素
+              if (!to) return itemElement;
+
+              return (
+                <Link
+                  style={{ textDecoration: 'none' }}
+                  to={to}
+                  onClick={onNavigate}
+                >
+                  {itemElement}
+                </Link>
+              );
+            }}
+            onSelect={(key) => {
+              // 如果点击的是已经展开的子菜单的父项，则收起子菜单
+              if (openedKeys.includes(key.itemKey)) {
+                setOpenedKeys(openedKeys.filter((k) => k !== key.itemKey));
+              }
+
+              setSelectedKeys([key.itemKey]);
+            }}
+            openKeys={openedKeys}
+            onOpenChange={(data) => {
+              setOpenedKeys(data.openKeys);
+            }}
           >
-            {!collapsed ? t('收起侧边栏') : null}
-          </Button>
+            {/* 工作台区域 */}
+            {hasSectionVisibleModules('chat') && (
+              <div className='sidebar-section'>
+                {!collapsed && (
+                  <div className='sidebar-group-label'>{t('工作台')}</div>
+                )}
+                {chatMenuItems.map((item) => renderSubItem(item))}
+              </div>
+            )}
+
+            {/* 控制台区域 */}
+            {hasSectionVisibleModules('console') && (
+              <>
+                <Divider className='sidebar-divider' />
+                <div>
+                  {!collapsed && (
+                    <div className='sidebar-group-label'>{t('控制台')}</div>
+                  )}
+                  {workspaceItems.map((item) => renderNavItem(item))}
+                </div>
+              </>
+            )}
+
+            {/* 个人中心区域 */}
+            {hasSectionVisibleModules('personal') && (
+              <>
+                <Divider className='sidebar-divider' />
+                <div>
+                  {!collapsed && (
+                    <div className='sidebar-group-label'>{t('个人中心')}</div>
+                  )}
+                  {financeItems.map((item) => renderNavItem(item))}
+                </div>
+              </>
+            )}
+
+            {/* 管理员区域 - 只在管理员时显示且配置允许时显示 */}
+            {isAdmin() && hasSectionVisibleModules('admin') && (
+              <>
+                <Divider className='sidebar-divider' />
+                <div>
+                  {!collapsed && (
+                    <div className='sidebar-group-label'>{t('管理员')}</div>
+                  )}
+                  {adminItems.map((item) => renderNavItem(item))}
+                </div>
+              </>
+            )}
+          </Nav>
         </SkeletonWrapper>
+
+        {/* 底部折叠按钮 */}
+        <div className='sidebar-collapse-button'>
+          <SkeletonWrapper
+            loading={showSkeleton}
+            type='button'
+            width={collapsed ? 36 : 156}
+            height={24}
+            className='w-full'
+          >
+            <Button
+              theme='outline'
+              type='tertiary'
+              size='small'
+              icon={
+                <ChevronLeft
+                  size={16}
+                  strokeWidth={2.5}
+                  color='var(--semi-color-text-2)'
+                  style={{
+                    transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)',
+                  }}
+                />
+              }
+              onClick={toggleCollapsed}
+              icononly={collapsed}
+              style={
+                collapsed
+                  ? { width: 36, height: 24, padding: 0 }
+                  : { padding: '4px 12px', width: '100%' }
+              }
+            >
+              {!collapsed ? t('收起侧边栏') : null}
+            </Button>
+          </SkeletonWrapper>
+        </div>
+        {renderSidebarFooter()}
       </div>
-    </div>
+    </>
   );
 };
 

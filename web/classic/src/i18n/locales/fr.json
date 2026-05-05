@@ -521,7 +521,6 @@
     "例如 €, £, Rp, ₩, ₹...": "Par exemple, €, £, Rp, ₩, ₹...",
     "例如 https://docs.newapi.pro": "Par exemple, https://docs.newapi.pro",
     "例如 https://example.com/api/waffo/webhook": "",
-    "例如 https://example.com/console/topup": "",
     "例如：": "Par exemple :",
     "例如: /bin/bash -c \"python app.py\"": "e.g.: /bin/bash -c \"python app.py\"",
     "例如: nginx:latest": "e.g.: nginx:latest",
@@ -1786,7 +1785,6 @@
     "支付": "Payer",
     "支付地址": "Adresse de paiement",
     "支付失败": "Paiement échoué",
-    "支付完成后用户跳转的页面，留空则自动使用 服务器地址 + /console/topup": "",
     "支付宝": "Alipay",
     "支付方式": "Mode de paiement",
     "支付方式名称": "Nom de méthode de paiement",
@@ -3821,6 +3819,15 @@
     "默认用户消息": "Bonjour",
     "默认视频尺寸": "Taille vidéo par défaut",
     "默认视频时长": "Durée vidéo par défaut",
-    "默认补全倍率": "Taux de complétion par défaut"
+    "默认补全倍率": "Taux de complétion par défaut",
+    "模型馆": "Hub de modèles",
+    "模型列表与价格入口": "Entrée de la liste des modèles et des tarifs",
+    "入口管理": "Gestion des entrées",
+    "控制入口模块显示状态，全局生效": "Contrôler globalement l'affichage des modules d'entrée",
+    "模型馆作为工作台内页，需要登录访问": "Le Hub de modèles est une page de l'espace de travail et nécessite une connexion",
+    "例如：https://example.com/topup": "Exemple : https://example.com/topup",
+    "例如 https://example.com/topup": "Exemple : https://example.com/topup",
+    "支付完成后用户跳转的页面，留空则自动使用 服务器地址 + /topup": "Page vers laquelle les utilisateurs sont redirigés après le paiement. Laissez vide pour utiliser l'adresse du serveur + /topup",
+    "查看模型与价格": "Voir les modèles et les tarifs"
   }
 }
