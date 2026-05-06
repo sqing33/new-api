@@ -43,7 +43,6 @@ import {
   BookOpen,
   Compass,
   ImageIcon,
-  Info,
   LayoutDashboard,
   Sparkles,
 } from 'lucide-react';
@@ -222,14 +221,14 @@ const Home = () => {
   const showDocsEntry = docsLink && headerNavModules.docs === true;
   const cabinNavItems = [
     {
-      text: t('创作台'),
+      text: t('清荫工作台'),
       description: t('进入生图工作流'),
       to: '/image-studio',
       icon: ImageIcon,
       visible: headerNavModules.imageStudio === true,
     },
     {
-      text: t('模型馆'),
+      text: t('清荫模型馆'),
       description: t('查看模型与价格'),
       to: pricingRequireAuth && !userState.user ? '/login' : '/pricing',
       icon: Compass,
@@ -239,7 +238,7 @@ const Home = () => {
           : headerNavModules.pricing === true,
     },
     {
-      text: t('工作台'),
+      text: t('清荫控制台'),
       description: t('管理密钥和任务'),
       to: userState.user ? '/dashboard' : '/login',
       icon: LayoutDashboard,
@@ -257,10 +256,10 @@ const Home = () => {
         ]
       : []),
     {
-      text: t('关于'),
+      text: t('清荫手册'),
       description: t('了解平台信息'),
-      to: '/about',
-      icon: Info,
+      to: '/tools',
+      icon: BookOpen,
       visible: headerNavModules.about === true,
     },
   ].filter((item) => item.visible);

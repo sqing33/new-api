@@ -132,37 +132,6 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
             <FormDirtyIndicator isDirty={isDirty} />
             <FormField
               control={form.control}
-              name='theme.frontend'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Frontend Theme')}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger className='w-full'>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value='default'>
-                        {t('Default (New Frontend)')}
-                      </SelectItem>
-                      <SelectItem value='classic'>
-                        {t('Classic (Legacy Frontend)')}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    {t(
-                      'Switch between the new frontend and the classic frontend. Changes take effect after page reload.'
-                    )}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
               name='Notice'
               render={({ field }) => (
                 <FormItem>

@@ -29,7 +29,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { selectFilter } from '../../../../helpers';
 
-const APP_CONFIGS = {
+export const APP_CONFIGS = {
   claude: {
     label: 'Claude',
     defaultName: 'My Claude',
@@ -63,7 +63,7 @@ function getServerAddress() {
   return window.location.origin;
 }
 
-function buildCCSwitchURL(app, name, models, apiKey) {
+export function buildCCSwitchURL(app, name, models, apiKey) {
   const serverAddress = getServerAddress();
   const endpoint = app === 'codex' ? serverAddress + '/v1' : serverAddress;
   const params = new URLSearchParams();

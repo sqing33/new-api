@@ -187,7 +187,7 @@ export default function SettingsHeaderNavModules(props) {
     },
     {
       key: 'pricing',
-      title: t('模型馆'),
+      title: t('清荫模型馆'),
       description: t('模型列表与价格入口'),
       hasSubConfig: true, // 标识该模块有子配置
     },

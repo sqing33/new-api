@@ -41,6 +41,7 @@ const buildDefaultSidebarModules = () => ({
     'image-presets': true,
     'video-studio': true,
     tools: true,
+    pricing: true,
     chat: true,
   },
   console: {
@@ -178,7 +179,7 @@ export default function SettingsSidebarModulesAdmin(props) {
     {
       key: 'chat',
       title: t('工作台区域'),
-      description: t('操练场和清影工作台'),
+      description: t('操练场和清荫工作台'),
       modules: [
         {
           key: 'playground',
@@ -187,13 +188,13 @@ export default function SettingsSidebarModulesAdmin(props) {
         },
         {
           key: 'image-studio',
-          title: t('清影工作台'),
+          title: t('清荫工作台'),
           description: t('生图工具'),
         },
         {
           key: 'image-presets',
-          title: t('预设提示词'),
-          description: t('清影预设模板'),
+          title: t('清荫展览馆'),
+          description: t('清荫预设模板'),
         },
         {
           key: 'video-studio',
@@ -202,8 +203,13 @@ export default function SettingsSidebarModulesAdmin(props) {
         },
         {
           key: 'tools',
-          title: t('工具配置'),
+          title: t('清荫手册'),
           description: t('CLI 工具安装教程'),
+        },
+        {
+          key: 'pricing',
+          title: t('清荫模型馆'),
+          description: t('模型列表与价格入口'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
       ],
@@ -223,7 +229,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         },
         {
           key: 'image-log',
-          title: t('清影日志'),
+          title: t('清荫日志'),
           description: t('生图调用记录'),
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
@@ -267,7 +273,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         { key: 'user', title: t('用户管理'), description: t('用户账户管理') },
         {
           key: 'tool-install-setting',
-          title: t('工具安装设置'),
+          title: t('工具管理'),
           description: t('工具安装脚本管理'),
         },
         {

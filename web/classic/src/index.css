@@ -355,11 +355,11 @@ body {
 .tools-tab-panel,
 .tools-empty-panel,
 .tools-info-panel,
-.tools-warning-panel,
-.tools-success-panel {
+.tools-warning-panel {
   border: 1px solid var(--console-glass-border);
   background: rgba(255, 255, 255, 0.28);
   border-radius: 16px;
+  padding: 16px;
 }
 
 .tools-tab-panel {
@@ -377,15 +377,30 @@ body {
   padding: 16px;
 }
 
-.tools-success-panel {
-  border-color: rgba(34, 197, 94, 0.24);
-  background: rgba(240, 253, 244, 0.72);
-  padding: 16px;
+.tools-status-tag {
+  white-space: nowrap;
+}
+
+.tools-ccswitch-import {
+  border: 1px solid var(--console-glass-border);
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.tools-script-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.tool-install-setting-card.table-scroll-card {
+  height: 100%;
 }
 
 .tools-command-block {
   position: relative;
   overflow: hidden;
+  flex: 1;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.94);
@@ -393,6 +408,7 @@ body {
 }
 
 .tools-command-block pre {
+  height: 100%;
   color: #f8fafc !important;
 }
 
@@ -408,11 +424,6 @@ body {
 .tools-command-copy.semi-button:hover,
 .tools-command-copy.semi-button:focus {
   background: rgba(255, 255, 255, 0.18) !important;
-}
-
-.tools-refresh-button.semi-button {
-  border-radius: 999px !important;
-  background: rgba(255, 255, 255, 0.4) !important;
 }
 
 .tool-install-setting-card.table-scroll-card {
@@ -455,12 +466,80 @@ body {
 .tool-install-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 4px 16px;
   height: 100%;
   min-height: 0;
   padding-top: 4px;
   overflow: hidden;
+}
+
+.tool-install-basic-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+  margin-bottom: -6px;
+}
+
+.tool-install-ai-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tool-install-ai-field .semi-form-field {
+  min-width: 0;
+}
+
+.tool-install-ai-field-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 18px;
+  line-height: 18px;
+  margin-bottom: 2px;
+}
+
+.tool-install-ai-toggle.semi-button {
+  min-width: 34px;
+  height: 20px;
+  padding: 0 8px !important;
+  border-radius: 999px !important;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.tool-install-ai-field-path,
+.tool-install-ai-field-content {
+  position: relative;
+}
+
+.tool-install-ai-field-path .semi-input-wrapper,
+.tool-install-ai-field-content .semi-input-textarea-wrapper {
+  padding-right: 48px;
+}
+
+.tool-install-ai-field-path .tool-install-ai-toggle.semi-button {
+  position: absolute;
+  right: 6px;
+  top: 5px;
+  z-index: 2;
+}
+
+.tool-install-ai-field-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tool-install-ai-field-content .tool-install-ai-toggle.semi-button {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 2;
 }
 
 .tool-install-form-full {
@@ -469,6 +548,10 @@ body {
 
 .tool-install-form-grid .semi-form-field {
   margin-bottom: 0 !important;
+}
+
+.tool-install-basic-row .semi-form-field {
+  padding-top: 5px !important;
 }
 
 .tool-install-script-field {
@@ -526,15 +609,88 @@ body {
   resize: none;
 }
 
-.tool-install-switch-field {
+.tool-install-config-files {
   display: flex;
-  align-items: flex-end;
-  min-height: 54px;
-  padding-bottom: 0;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.tool-install-switch-field .semi-form-field {
-  width: 100%;
+.tool-install-config-files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tool-install-config-files-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tool-install-config-files-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.tool-install-config-file-card {
+  display: flex;
+  flex: 0 0 250px;
+  flex-direction: column;
+  gap: 8px;
+  height: 250px;
+  min-height: 250px;
+  padding: 10px;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.36);
+}
+
+.tool-install-config-file-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.tool-install-config-paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tool-install-config-file-card .semi-input-textarea-wrapper,
+.tool-install-config-content,
+.tool-install-ai-field-content {
+  display: flex;
+  flex: 1 1 auto;
+  height: auto !important;
+  min-height: 0;
+}
+
+.tool-install-config-file-card .semi-input-textarea-wrapper textarea,
+.tool-install-config-file-card .semi-input-textarea {
+  flex: 1 1 auto;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: auto;
+  scrollbar-width: none;
+  resize: none;
+  font-family: JetBrains Mono, Consolas, monospace;
+}
+
+.tool-install-config-file-card .semi-input-textarea-wrapper textarea::-webkit-scrollbar,
+.tool-install-config-file-card .semi-input-textarea::-webkit-scrollbar {
+  display: none;
 }
 
 .tool-install-params-layout {
@@ -642,6 +798,50 @@ body {
   padding-top: 10px !important;
 }
 
+.tool-install-modal-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+}
+
+.tool-install-footer-ai {
+  display: flex;
+  justify-self: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.tool-install-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tool-install-footer-actions .semi-form-field {
+  margin-bottom: 0 !important;
+}
+
+.tool-install-footer-actions .semi-form-field-main {
+  display: flex;
+  align-items: center;
+}
+
+.tool-install-footer-model-select {
+  width: 180px;
+  max-width: 100%;
+}
+
+.tool-install-footer-model-select .semi-select-arrow {
+  transform: rotate(180deg);
+}
+
 .tool-install-modal .semi-textarea-wrapper textarea {
   line-height: 1.35;
 }
@@ -652,8 +852,20 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .tool-install-basic-row {
+    grid-template-columns: 1fr;
+  }
+
   .tool-install-params-divider {
     display: none;
+  }
+
+  .tool-install-config-file-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-install-config-paths {
+    grid-template-columns: 1fr;
   }
 }
 

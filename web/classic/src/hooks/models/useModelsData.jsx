@@ -179,7 +179,7 @@ export const useModelsData = () => {
       setImageModelSettings(settings);
       return settings;
     } catch (error) {
-      showError(error.message || t('加载清影模型配置失败'));
+      showError(error.message || t('加载清荫模型配置失败'));
       return [];
     }
   };
@@ -411,7 +411,7 @@ export const useModelsData = () => {
               ),
             );
           } catch (error) {
-            showError(error.message || t('清影模型配置同步失败'));
+            showError(error.message || t('清荫模型配置同步失败'));
           }
         }
         await refresh();
@@ -516,7 +516,7 @@ export const useModelsData = () => {
             );
           }
         } catch (error) {
-          showError(error.message || t('清影模型配置同步失败'));
+          showError(error.message || t('清荫模型配置同步失败'));
         }
         showSuccess(t(`成功删除 ${successCount} 个模型`));
         setSelectedKeys([]);

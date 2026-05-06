@@ -385,7 +385,7 @@ const EditModelModal = (props) => {
               nextModelName,
             );
           } catch (error) {
-            showError(error.message || t('清影模型配置同步失败'));
+            showError(error.message || t('清荫模型配置同步失败'));
           }
           props.refresh();
           props.handleClose();
@@ -400,7 +400,7 @@ const EditModelModal = (props) => {
           try {
             await syncQingyingSettings(values, '', nextModelName);
           } catch (error) {
-            showError(error.message || t('清影模型配置同步失败'));
+            showError(error.message || t('清荫模型配置同步失败'));
           }
           props.refresh();
           props.handleClose();
@@ -573,10 +573,10 @@ const EditModelModal = (props) => {
                     >
                       <div className='mb-3'>
                         <Text className='text-base font-medium'>
-                          {t('清影能力')}
+                          {t('清荫能力')}
                         </Text>
                         <div className='text-xs text-gray-600'>
-                          {t('控制该模型是否用于清影工作台的图片或视频生成')}
+                          {t('控制该模型是否用于清荫工作台的图片或视频生成')}
                         </div>
                       </div>
                       <Row gutter={12}>

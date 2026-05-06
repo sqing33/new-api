@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -26,14 +27,15 @@ type createToolInstallTokenRequest struct {
 }
 
 type saveToolInstallToolRequest struct {
-	Slug             string `json:"slug"`
-	Name             string `json:"name"`
-	Description      string `json:"description"`
-	PackageName      string `json:"package_name"`
-	VerifyCommand    string `json:"verify_command"`
-	ShellScript      string `json:"shell_script"`
-	PowerShellScript string `json:"powershell_script"`
-	Enabled          bool   `json:"enabled"`
+	Slug             string                        `json:"slug"`
+	Name             string                        `json:"name"`
+	Description      string                        `json:"description"`
+	PackageName      string                        `json:"package_name"`
+	VerifyCommand    string                        `json:"verify_command"`
+	ShellScript      string                        `json:"shell_script"`
+	PowerShellScript string                        `json:"powershell_script"`
+	ConfigFiles      []model.ToolInstallConfigFile `json:"config_files"`
+	Enabled          bool                          `json:"enabled"`
 }
 
 func getRequestBaseURL(c *gin.Context) string {
@@ -90,6 +92,289 @@ func renderToolInstallScript(template string, baseURL string, tool *model.ToolIn
 		"{{OPENAI_BASE_URL}}", baseURL+"/v1",
 	)
 	return replacer.Replace(template)
+}
+
+func isConfigFileForPlatform(file model.ToolInstallConfigFile, platform string) bool {
+	if !file.Enabled || strings.TrimSpace(file.Path) == "" {
+		return false
+	}
+	filePlatform := strings.ToLower(strings.TrimSpace(file.Platform))
+	if filePlatform == "" || filePlatform == "all" {
+		return true
+	}
+	if platform == "ps1" {
+		return filePlatform == "windows"
+	}
+	return filePlatform == "unix" || filePlatform == "linux" || filePlatform == "macos" || filePlatform == "darwin"
+}
+
+func getToolInstallConfigFilesForPlatform(tool *model.ToolInstallTool, platform string) []model.ToolInstallConfigFile {
+	items := make([]model.ToolInstallConfigFile, 0, len(tool.ConfigFiles))
+	for _, file := range tool.ConfigFiles {
+		if isConfigFileForPlatform(file, platform) {
+			items = append(items, file)
+		}
+	}
+	return items
+}
+
+func encodeToolInstallConfigFiles(files []model.ToolInstallConfigFile) (string, error) {
+	data, err := common.Marshal(files)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(data), nil
+}
+
+func shellSingleQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+func powerShellSingleQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func renderGeneratedToolInstallShellScript(baseURL string, tool *model.ToolInstallTool, token string, files []model.ToolInstallConfigFile) (string, error) {
+	filesBase64, err := encodeToolInstallConfigFiles(files)
+	if err != nil {
+		return "", err
+	}
+	configURL := buildToolInstallConfigURL(baseURL, tool.Slug, token)
+	template := `#!/usr/bin/env sh
+set -eu
+
+log() { printf '[%s] %s\n' __TOOL_NAME__ "$1"; }
+fail() { printf '[%s] ERROR: %s\n' __TOOL_NAME__ "$1" >&2; exit 1; }
+
+PACKAGE_NAME=__PACKAGE_NAME__
+VERIFY_COMMAND=__VERIFY_COMMAND__
+CONFIG_URL=__CONFIG_URL__
+INSTALL_KEY=__INSTALL_KEY__
+BASE_URL=__BASE_URL__
+OPENAI_BASE_URL=__OPENAI_BASE_URL__
+CONFIG_FILES_B64=__CONFIG_FILES_B64__
+
+command -v node >/dev/null 2>&1 || fail "Node.js is required. Install Node.js 18+ and run this installer again."
+
+if command -v bun >/dev/null 2>&1; then
+  PM="bun"
+elif command -v pnpm >/dev/null 2>&1; then
+  PM="pnpm"
+elif command -v npm >/dev/null 2>&1; then
+  PM="npm"
+else
+  fail "A package manager (bun, pnpm, or npm) is required."
+fi
+
+if [ -n "$PACKAGE_NAME" ]; then
+  log "Installing package via $PM: $PACKAGE_NAME"
+  "$PM" install -g "$PACKAGE_NAME" || fail "$PM global installation failed"
+fi
+
+TMP_CONFIG="$(mktemp)"
+cleanup() { rm -f "$TMP_CONFIG"; }
+trap cleanup EXIT
+
+log "Fetching New API configuration"
+if command -v curl >/dev/null 2>&1; then
+  curl -fsSL "$CONFIG_URL" -o "$TMP_CONFIG" || fail "Failed to fetch configuration with curl"
+elif command -v wget >/dev/null 2>&1; then
+  wget -qO "$TMP_CONFIG" "$CONFIG_URL" || fail "Failed to fetch configuration with wget"
+else
+  fail "curl or wget is required to fetch configuration"
+fi
+
+node - "$TMP_CONFIG" "$CONFIG_FILES_B64" "$INSTALL_KEY" "$CONFIG_URL" "$BASE_URL" "$OPENAI_BASE_URL" __TOOL_NAME__ "$PACKAGE_NAME" "$VERIFY_COMMAND" <<'NODE'
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const [configFile, filesBase64, installKey, configUrl, baseUrl, openaiBaseUrl, toolName, packageName, verifyCommand] = process.argv.slice(2);
+const response = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+if (!response.success) {
+  throw new Error(response.message || 'Failed to fetch config');
+}
+const data = response.data || {};
+if (!data.api_key) {
+  throw new Error('New API config response is missing data.api_key');
+}
+
+const replacements = {
+  '{{API_KEY}}': String(data.api_key || ''),
+  '{{OPENAI_BASE_URL}}': String(data.openai_base_url || openaiBaseUrl || ''),
+  '{{BASE_URL}}': String(data.base_url || baseUrl || ''),
+  '{{CONFIG_URL}}': configUrl,
+  '{{INSTALL_KEY}}': installKey,
+  '{{TOOL_NAME}}': toolName,
+  '{{PACKAGE_NAME}}': packageName,
+  '{{VERIFY_COMMAND}}': verifyCommand,
+};
+
+function render(value) {
+  let output = String(value || '');
+  for (const [key, replacement] of Object.entries(replacements)) {
+    output = output.split(key).join(replacement);
+  }
+  return output;
+}
+
+function expandUnixPath(value) {
+  let output = render(value).trim();
+  output = output.replace(/^~(?=$|\/)/, os.homedir());
+  output = output.replace(/\$\{HOME\}/g, os.homedir()).replace(/\$HOME/g, os.homedir());
+  return output;
+}
+
+const files = JSON.parse(Buffer.from(filesBase64, 'base64').toString('utf8'));
+for (const file of files) {
+  if (!file || file.enabled === false) continue;
+  const target = expandUnixPath(file.path);
+  if (!target) continue;
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  if (file.backup && fs.existsSync(target)) {
+    fs.copyFileSync(target, target + '.bak.' + Date.now());
+  }
+  fs.writeFileSync(target, render(file.content), { encoding: 'utf8', mode: 0o600 });
+  console.log('[' + toolName + '] Wrote ' + target);
+}
+NODE
+
+if [ -n "$VERIFY_COMMAND" ]; then
+  log "Verifying installation: $VERIFY_COMMAND"
+  sh -c "$VERIFY_COMMAND" || fail "Verification command failed"
+fi
+
+log "Installation completed successfully"
+`
+	replacer := strings.NewReplacer(
+		"__TOOL_NAME__", shellSingleQuote(tool.Name),
+		"__PACKAGE_NAME__", shellSingleQuote(tool.PackageName),
+		"__VERIFY_COMMAND__", shellSingleQuote(tool.VerifyCommand),
+		"__CONFIG_URL__", shellSingleQuote(configURL),
+		"__INSTALL_KEY__", shellSingleQuote(token),
+		"__BASE_URL__", shellSingleQuote(baseURL),
+		"__OPENAI_BASE_URL__", shellSingleQuote(baseURL+"/v1"),
+		"__CONFIG_FILES_B64__", shellSingleQuote(filesBase64),
+	)
+	return replacer.Replace(template), nil
+}
+
+func renderGeneratedToolInstallPowerShellScript(baseURL string, tool *model.ToolInstallTool, token string, files []model.ToolInstallConfigFile) (string, error) {
+	filesBase64, err := encodeToolInstallConfigFiles(files)
+	if err != nil {
+		return "", err
+	}
+	configURL := buildToolInstallConfigURL(baseURL, tool.Slug, token)
+	template := `$ErrorActionPreference = "Stop"
+
+function Write-ToolLog {
+  param([string]$Message)
+  Write-Host "[$(__TOOL_NAME__)] $Message"
+}
+
+$PackageName = __PACKAGE_NAME__
+$VerifyCommand = __VERIFY_COMMAND__
+$ConfigUrl = __CONFIG_URL__
+$InstallKey = __INSTALL_KEY__
+$BaseUrl = __BASE_URL__
+$OpenAIBaseUrl = __OPENAI_BASE_URL__
+$ConfigFilesBase64 = __CONFIG_FILES_B64__
+
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  throw "Node.js is required. Install Node.js 18+ and run this installer again."
+}
+
+$PM = $null
+if (Get-Command bun -ErrorAction SilentlyContinue) {
+  $PM = "bun"
+} elseif (Get-Command pnpm -ErrorAction SilentlyContinue) {
+  $PM = "pnpm"
+} elseif (Get-Command npm -ErrorAction SilentlyContinue) {
+  $PM = "npm"
+} else {
+  throw "A package manager (bun, pnpm, or npm) is required."
+}
+
+if ($PackageName) {
+  Write-ToolLog "Installing package via ${PM}: $PackageName"
+  & $PM install -g $PackageName
+}
+
+Write-ToolLog "Fetching New API configuration"
+$Response = Invoke-RestMethod -Uri $ConfigUrl -Method Get
+if (-not $Response.success) {
+  if ($Response.message) {
+    throw $Response.message
+  }
+  throw "Failed to fetch config"
+}
+if (-not $Response.data.api_key) {
+  throw "New API config response is missing data.api_key"
+}
+
+$ConfigFilesJson = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($ConfigFilesBase64))
+$ConfigFiles = $ConfigFilesJson | ConvertFrom-Json
+
+function Render-Template {
+  param([string]$Value)
+  if ($null -eq $Value) { return "" }
+  $Output = [string]$Value
+  $Output = $Output.Replace("{{API_KEY}}", [string]$Response.data.api_key)
+  $ResolvedOpenAIBaseUrl = if ($Response.data.openai_base_url) { $Response.data.openai_base_url } else { $OpenAIBaseUrl }
+  $ResolvedBaseUrl = if ($Response.data.base_url) { $Response.data.base_url } else { $BaseUrl }
+  $Output = $Output.Replace("{{OPENAI_BASE_URL}}", [string]$ResolvedOpenAIBaseUrl)
+  $Output = $Output.Replace("{{BASE_URL}}", [string]$ResolvedBaseUrl)
+  $Output = $Output.Replace("{{CONFIG_URL}}", $ConfigUrl)
+  $Output = $Output.Replace("{{INSTALL_KEY}}", $InstallKey)
+  $Output = $Output.Replace("{{TOOL_NAME}}", __TOOL_NAME__)
+  $Output = $Output.Replace("{{PACKAGE_NAME}}", $PackageName)
+  $Output = $Output.Replace("{{VERIFY_COMMAND}}", $VerifyCommand)
+  return $Output
+}
+
+function Expand-ConfigPath {
+  param([string]$Value)
+  $Output = (Render-Template $Value).Trim()
+  $Output = $Output.Replace("~", $env:USERPROFILE)
+  $Output = $Output.Replace('$env:USERPROFILE', $env:USERPROFILE)
+  $Output = $Output.Replace('${env:USERPROFILE}', $env:USERPROFILE)
+  $Output = $Output.Replace('%USERPROFILE%', $env:USERPROFILE)
+  return $Output
+}
+
+foreach ($File in @($ConfigFiles)) {
+  if ($File.enabled -eq $false) { continue }
+  $Target = Expand-ConfigPath $File.path
+  if (-not $Target) { continue }
+  $Directory = Split-Path -Parent $Target
+  if ($Directory) {
+    New-Item -ItemType Directory -Force -Path $Directory | Out-Null
+  }
+  if ($File.backup -and (Test-Path $Target)) {
+    Copy-Item $Target "$Target.bak.$([DateTimeOffset]::Now.ToUnixTimeSeconds())" -Force
+  }
+  Set-Content -Path $Target -Value (Render-Template $File.content) -Encoding UTF8
+  Write-ToolLog "Wrote $Target"
+}
+
+if ($VerifyCommand) {
+  Write-ToolLog "Verifying installation: $VerifyCommand"
+  Invoke-Expression $VerifyCommand
+}
+
+Write-ToolLog "Installation completed successfully"
+`
+	replacer := strings.NewReplacer(
+		"__TOOL_NAME__", powerShellSingleQuote(tool.Name),
+		"__PACKAGE_NAME__", powerShellSingleQuote(tool.PackageName),
+		"__VERIFY_COMMAND__", powerShellSingleQuote(tool.VerifyCommand),
+		"__CONFIG_URL__", powerShellSingleQuote(configURL),
+		"__INSTALL_KEY__", powerShellSingleQuote(token),
+		"__BASE_URL__", powerShellSingleQuote(baseURL),
+		"__OPENAI_BASE_URL__", powerShellSingleQuote(baseURL+"/v1"),
+		"__CONFIG_FILES_B64__", powerShellSingleQuote(filesBase64),
+	)
+	return replacer.Replace(template), nil
 }
 
 func validateApiTokenForInstall(c *gin.Context, apiTokenId int) (*model.Token, bool) {
@@ -232,6 +517,30 @@ func GetToolInstallScript(c *gin.Context) {
 		return
 	}
 
+	baseURL := getRequestBaseURL(c)
+	configFiles := getToolInstallConfigFilesForPlatform(tool, platform)
+	if len(configFiles) > 0 {
+		var script string
+		var err error
+		if platform == "ps1" {
+			script, err = renderGeneratedToolInstallPowerShellScript(baseURL, tool, c.Query("token"), configFiles)
+		} else {
+			script, err = renderGeneratedToolInstallShellScript(baseURL, tool, c.Query("token"), configFiles)
+		}
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		contentType := "text/x-shellscript; charset=utf-8"
+		if platform == "ps1" {
+			contentType = "text/plain; charset=utf-8"
+		}
+		c.Header("Cache-Control", "no-store")
+		c.Header("Content-Type", contentType)
+		c.String(http.StatusOK, script)
+		return
+	}
+
 	template := tool.ShellScript
 	contentType := "text/x-shellscript; charset=utf-8"
 	if platform == "ps1" {
@@ -245,7 +554,7 @@ func GetToolInstallScript(c *gin.Context) {
 
 	c.Header("Cache-Control", "no-store")
 	c.Header("Content-Type", contentType)
-	c.String(http.StatusOK, renderToolInstallScript(template, getRequestBaseURL(c), tool, c.Query("token")))
+	c.String(http.StatusOK, renderToolInstallScript(template, baseURL, tool, c.Query("token")))
 }
 
 func GetAdminToolInstallTools(c *gin.Context) {
@@ -313,6 +622,7 @@ func saveAdminToolInstallTool(c *gin.Context, tool *model.ToolInstallTool) {
 	tool.VerifyCommand = req.VerifyCommand
 	tool.ShellScript = req.ShellScript
 	tool.PowerShellScript = req.PowerShellScript
+	tool.ConfigFiles = req.ConfigFiles
 	tool.Enabled = req.Enabled
 
 	if err := model.SaveToolInstallTool(tool); err != nil {

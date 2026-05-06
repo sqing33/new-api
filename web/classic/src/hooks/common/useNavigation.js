@@ -36,12 +36,12 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
 
     const allLinks = [
       {
-        text: t('清影'),
+        text: t('清荫'),
         itemKey: 'home',
         to: '/',
       },
       {
-        text: t('模型馆'),
+        text: t('清荫模型馆'),
         itemKey: 'pricing',
         to: '/pricing',
       },

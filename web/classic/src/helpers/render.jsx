@@ -83,6 +83,8 @@ import {
   Server,
   CalendarClock,
   Wrench,
+  Compass,
+  BookOpen,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -135,8 +137,11 @@ export function getLucideIcon(key, selected = false) {
     case 'video-studio':
       return <Video {...commonProps} color={iconColor} />;
     case 'tools':
+      return <BookOpen {...commonProps} color={iconColor} />;
     case 'tool-install-setting':
       return <Wrench {...commonProps} color={iconColor} />;
+    case 'pricing':
+      return <Compass {...commonProps} color={iconColor} />;
     case 'chat':
       return <MessageSquare {...commonProps} color={iconColor} />;
     case 'token':

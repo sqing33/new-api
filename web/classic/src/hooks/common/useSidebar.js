@@ -33,6 +33,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     'image-presets': true,
     'video-studio': true,
     tools: true,
+    pricing: true,
     chat: true,
   },
   console: {

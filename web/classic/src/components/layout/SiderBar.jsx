@@ -193,7 +193,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
             : 'tableHiddle',
       },
       {
-        text: t('清影日志'),
+        text: t('清荫日志'),
         itemKey: 'image-log',
         to: '/image-logs',
       },
@@ -302,7 +302,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {
-        text: t('工具安装设置'),
+        text: t('工具管理'),
         itemKey: 'tool-install-setting',
         to: '/tool-install-setting',
         className: isRoot() ? '' : 'tableHiddle',
@@ -332,12 +332,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/playground',
       },
       {
-        text: t('清影工作台'),
+        text: t('清荫工作台'),
         itemKey: 'image-studio',
         to: '/image-studio',
       },
       {
-        text: t('预设提示词'),
+        text: t('清荫展览馆'),
         itemKey: 'image-presets',
         to: '/image-presets',
       },
@@ -347,14 +347,14 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/video-studio',
       },
       {
-        text: t('工具配置'),
-        itemKey: 'tools',
-        to: '/tools',
-      },
-      {
-        text: t('模型馆'),
+        text: t('清荫模型馆'),
         itemKey: 'pricing',
         to: '/pricing',
+      },
+      {
+        text: t('清荫手册'),
+        itemKey: 'tools',
+        to: '/tools',
       },
       {
         text: t('关于'),
