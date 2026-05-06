@@ -66,6 +66,7 @@ import LinuxDoIcon from '../common/logo/LinuxDoIcon';
 import TwoFAVerification from './TwoFAVerification';
 import { useTranslation } from 'react-i18next';
 import { SiDiscord } from 'react-icons/si';
+import FooterBar from '../layout/Footer';
 
 const LoginForm = () => {
   let navigate = useNavigate();
@@ -516,7 +517,7 @@ const LoginForm = () => {
             </Title>
           </div>
 
-          <Card className='border-0 !rounded-2xl overflow-hidden'>
+          <Card className='border-0 !rounded-2xl overflow-hidden' style={{ background: 'rgba(255, 255, 255, 0.65)', backdropFilter: 'blur(12px)' }}>
             <div className='flex justify-center pt-6 pb-2'>
               <Title heading={3} className='text-gray-800 dark:text-gray-200'>
                 {t('登 录')}
@@ -730,7 +731,7 @@ const LoginForm = () => {
             <Title heading={3}>{systemName}</Title>
           </div>
 
-          <Card className='border-0 !rounded-2xl overflow-hidden'>
+          <Card className='border-0 !rounded-2xl overflow-hidden' style={{ background: 'rgba(255, 255, 255, 0.65)', backdropFilter: 'blur(12px)' }}>
             <div className='flex justify-center pt-6 pb-2'>
               <Title heading={3} className='text-gray-800 dark:text-gray-200'>
                 {t('登 录')}
@@ -952,7 +953,7 @@ const LoginForm = () => {
   };
 
   return (
-    <div className='relative overflow-hidden bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8'>
+    <div className='relative overflow-hidden flex flex-col items-center justify-center min-h-screen px-4 sm:px-6 lg:px-8' style={{ backgroundImage: 'url(/classic-bg-login.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
       {/* 背景模糊晕染球 */}
       <div
         className='blur-ball blur-ball-indigo'
@@ -962,7 +963,8 @@ const LoginForm = () => {
         className='blur-ball blur-ball-teal'
         style={{ top: '50%', left: '-120px' }}
       />
-      <div className='w-full max-w-sm mt-[60px]'>
+      <div className='w-full max-w-sm flex-1 flex items-center justify-center'>
+        <div className='w-full'>
         {showEmailLogin || !hasOAuthLoginOptions
           ? renderEmailLoginForm()
           : renderOAuthOptions()}
@@ -979,6 +981,10 @@ const LoginForm = () => {
             />
           </div>
         )}
+        </div>
+      </div>
+      <div className='w-full flex-shrink-0'>
+        <FooterBar />
       </div>
     </div>
   );

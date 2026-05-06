@@ -32,7 +32,7 @@ import {
   setUserData,
 } from '../../helpers';
 import { UserContext } from '../../context/User';
-import { Modal } from '@douyinfe/semi-ui';
+import { Modal, Button } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
 
 // 导入子组件
@@ -541,12 +541,20 @@ const PersonalSetting = () => {
     }
   };
 
+  const handleLogout = async () => {
+    await API.get('/api/user/logout');
+    showSuccess(t('注销成功!'));
+    userDispatch({ type: 'logout' });
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
   return (
     <div className='mt-[60px]'>
       <div className='flex justify-center'>
         <div className='w-full max-w-7xl mx-auto px-2'>
           {/* 顶部用户信息区域 */}
-          <UserInfoHeader t={t} userState={userState} />
+          <UserInfoHeader t={t} userState={userState} onLogout={handleLogout} />
 
           {/* 签到日历 - 仅在启用时显示 */}
           {status?.checkin_enabled && (

@@ -25,6 +25,7 @@ import {
   Divider,
   Typography,
   Badge,
+  Button,
 } from '@douyinfe/semi-ui';
 import {
   isRoot,
@@ -32,9 +33,9 @@ import {
   renderQuota,
   stringToColor,
 } from '../../../../helpers';
-import { Coins, BarChart2, Users } from 'lucide-react';
+import { Coins, BarChart2, Users, LogOut } from 'lucide-react';
 
-const UserInfoHeader = ({ t, userState }) => {
+const UserInfoHeader = ({ t, userState, onLogout }) => {
   const getUsername = () => {
     if (userState.user) {
       return userState.user.username;
@@ -117,13 +118,27 @@ const UserInfoHeader = ({ t, userState }) => {
       }
     >
       {/* 当前余额和桌面版统计信息 */}
-      <div className='flex items-start justify-between gap-6'>
+      <div className='flex items-center justify-between gap-6'>
         {/* 当前余额显示 */}
         <Badge count={t('当前余额')} position='rightTop' type='danger'>
           <div className='text-2xl sm:text-3xl md:text-4xl font-bold tracking-wide'>
             {renderQuota(userState?.user?.quota)}
           </div>
         </Badge>
+
+        <div className='flex items-center gap-3'>
+          {onLogout && (
+            <Button
+              type='danger'
+              theme='light'
+              size='small'
+              icon={<LogOut size={14} />}
+              onClick={onLogout}
+              className='!rounded-lg'
+            >
+              {t('退出登录')}
+            </Button>
+          )}
 
         {/* 桌面版统计信息（Semi UI 卡片） */}
         <div className='hidden lg:block flex-shrink-0'>
@@ -164,6 +179,7 @@ const UserInfoHeader = ({ t, userState }) => {
               </div>
             </div>
           </Card>
+        </div>
         </div>
       </div>
 

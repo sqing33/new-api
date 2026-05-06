@@ -56,6 +56,8 @@ const PageLayout = () => {
 
   const shouldHideFooter =
     isWorkbenchRoute ||
+    location.pathname === '/login' ||
+    location.pathname === '/register' ||
     (location.pathname === '/' &&
       statusState?.status?.HomePageMode !== 'custom_content');
 
@@ -65,7 +67,7 @@ const PageLayout = () => {
     location.pathname !== '/playground';
 
   const showSider = isWorkbenchRoute && (!isMobile || drawerOpen);
-  const hideHeader = location.pathname === '/' || isWorkbenchRoute;
+  const hideHeader = location.pathname === '/' || isWorkbenchRoute || location.pathname === '/login' || location.pathname === '/register';
 
   useEffect(() => {
     if (isMobile && drawerOpen && collapsed) {
