@@ -75,7 +75,7 @@ body {
       rgba(255, 255, 255, 0.16) 22%,
       rgba(255, 255, 255, 0.08)
     ),
-    url('/classic-bg-console.png') center / cover no-repeat,
+    url('/classic-bg-console.webp') center / cover no-repeat,
     #f8f4ea;
 }
 
@@ -98,7 +98,7 @@ body {
       rgba(255, 255, 255, 0.12) 24%,
       rgba(255, 255, 255, 0.06)
     ),
-    url('/classic-bg-pricing.png') center / cover no-repeat,
+    url('/classic-bg-pricing.webp') center / cover no-repeat,
     #f8f4ea;
 }
 
@@ -919,7 +919,7 @@ code {
   isolation: isolate;
   background:
     linear-gradient(90deg, rgba(255, 252, 238, 0.34), transparent 44%),
-    url('/home-showcase-cabin-bg.png') right bottom / cover no-repeat,
+    url('/home-showcase-cabin-bg.webp') right bottom / cover no-repeat,
     #f3ead4;
   color: #172017;
 }

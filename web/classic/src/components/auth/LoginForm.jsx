@@ -953,7 +953,7 @@ const LoginForm = () => {
   };
 
   return (
-    <div className='relative overflow-hidden flex flex-col items-center justify-center min-h-screen px-4 sm:px-6 lg:px-8' style={{ backgroundImage: 'url(/classic-bg-login.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
+    <div className='relative overflow-hidden flex flex-col items-center justify-center min-h-screen px-4 sm:px-6 lg:px-8' style={{ backgroundImage: 'url(/classic-bg-login.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
       {/* 背景模糊晕染球 */}
       <div
         className='blur-ball blur-ball-indigo'
