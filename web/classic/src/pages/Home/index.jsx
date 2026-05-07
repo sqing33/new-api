@@ -244,17 +244,6 @@ const Home = () => {
       icon: LayoutDashboard,
       visible: headerNavModules.console === true,
     },
-    ...(showDocsEntry
-      ? [
-          {
-            text: t('指南'),
-            description: t('查看使用说明'),
-            externalLink: docsLink,
-            icon: BookOpen,
-            visible: headerNavModules.docs === true,
-          },
-        ]
-      : []),
     {
       text: t('清荫手册'),
       description: t('了解平台信息'),

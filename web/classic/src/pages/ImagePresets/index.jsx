@@ -59,7 +59,7 @@ const PRESET_ANALYSIS_SYSTEM_PROMPT =
   '你是图像生成提示词架构师，负责把参考图提炼成可复用的生图预设。不要只复述当前图片内容，而要判断它的可复用风格、版式、构图、视觉语言和适用场景。输出必须是严格 JSON，不要 Markdown，不要解释。';
 const PRESET_ANALYSIS_USER_PROMPT = [
   '请分析这张参考图，生成适合保存为“预设提示词”的 JSON：{"name":"不超过16个中文字符","prompt":"一整段中文通用生图提示词"}。',
-  'prompt 必须是一整段中文，可直接用于之后的图生图/文生图；写法要像“将我上传的图片改造成……”或“根据我上传的图片生成……”。',
+  'prompt 必须是一整段中文，可直接用于之后的图生图/文生图；写法要兼容有图和无图两种场景，像”生成一张……风格的图片”这样描述风格和画面，不要以”根据我上传的图片”或”将我上传的图片”开头。',
   '要保留未来用户上传图片的主体辨识度、人物/商品/动物/场景结构和主色调，不要锁死当前参考图里的具体人物、动物、品牌、地点、颜色、元素主题或原有文案。',
   '重点提炼可复用的风格模板：画面类型、版式结构、主体位置、构图、光影、色彩倾向、材质质感、标注/信息框、细节展示、三视图、物品介绍、文字层级和设计语言。',
   '只返回 JSON，不要输出 Markdown。',
@@ -94,6 +94,26 @@ const fileToDataUrl = (file) =>
     reader.onload = () => resolve(reader.result);
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+
+const compressImageToWebP = (dataUrl, maxDim = 800, quality = 0.8) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/webp', quality));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
   });
 
 const extractJsonObject = (content) => {
@@ -316,6 +336,12 @@ const ImagePresets = () => {
     if (!nextPreset.name) return showError(t('请输入预设名称'));
     if (!nextPreset.image) return showError(t('请上传预设图片'));
     if (!nextPreset.prompt) return showError(t('请输入提示词内容'));
+
+    try {
+      nextPreset.image = await compressImageToWebP(nextPreset.image);
+    } catch {
+      // 压缩失败则保留原图
+    }
 
     const nextPresets =
       editingPresetIndex === null
