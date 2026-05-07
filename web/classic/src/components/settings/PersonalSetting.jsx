@@ -47,6 +47,7 @@ import AccountDeleteModal from './personal/modals/AccountDeleteModal';
 import ChangePasswordModal from './personal/modals/ChangePasswordModal';
 import SecureVerificationModal from '../common/modals/SecureVerificationModal';
 import { useSecureVerification } from '../../hooks/common/useSecureVerification';
+import TopUp from '../topup';
 
 const PersonalSetting = () => {
   const [userState, userDispatch] = useContext(UserContext);
@@ -567,6 +568,10 @@ const PersonalSetting = () => {
               />
             </div>
           )}
+
+          <div className='mt-4 md:mt-6'>
+            <TopUp embedded />
+          </div>
 
           {/* 账户管理和其他设置 */}
           <div className='grid grid-cols-1 xl:grid-cols-2 items-start gap-4 md:gap-6 mt-4 md:mt-6'>

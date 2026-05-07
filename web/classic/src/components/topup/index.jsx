@@ -40,7 +40,7 @@ import TransferModal from './modals/TransferModal';
 import PaymentConfirmModal from './modals/PaymentConfirmModal';
 import TopupHistoryModal from './modals/TopupHistoryModal';
 
-const TopUp = () => {
+const TopUp = ({ embedded = false }) => {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [userState, userDispatch] = useContext(UserContext);
@@ -873,9 +873,8 @@ const TopUp = () => {
     }));
   };
 
-  return (
-    <div className='w-full max-w-7xl mx-auto relative min-h-screen lg:min-h-0 mt-[60px] px-2'>
-      {/* 划转模态框 */}
+  const content = (
+    <>
       <TransferModal
         t={t}
         openTransfer={openTransfer}
@@ -888,7 +887,6 @@ const TopUp = () => {
         setTransferAmount={setTransferAmount}
       />
 
-      {/* 充值确认模态框 */}
       <PaymentConfirmModal
         t={t}
         open={open}
@@ -905,14 +903,12 @@ const TopUp = () => {
         discountRate={topupInfo?.discount?.[topUpCount] || 1.0}
       />
 
-      {/* 充值账单模态框 */}
       <TopupHistoryModal
         visible={openHistory}
         onCancel={handleHistoryCancel}
         t={t}
       />
 
-      {/* Creem 充值确认模态框 */}
       <Modal
         title={t('确定要充值 $')}
         visible={creemOpen}
@@ -940,7 +936,6 @@ const TopUp = () => {
         )}
       </Modal>
 
-      {/* 主布局区域 */}
       <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
         <RechargeCard
           t={t}
@@ -996,6 +991,14 @@ const TopUp = () => {
           handleAffLinkClick={handleAffLinkClick}
         />
       </div>
+    </>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <div className='w-full max-w-7xl mx-auto relative min-h-screen lg:min-h-0 mt-[60px] px-2'>
+      {content}
     </div>
   );
 };

@@ -514,7 +514,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
               {username?.[0]?.toUpperCase()}
             </Avatar>
           }
-          onClick={() => navigate('/topup')}
+          onClick={() => navigate('/personal')}
         >
           {!collapsed && (
             <span className='sidebar-user-copy'>
