@@ -265,10 +265,10 @@ body {
   .semi-table-tbody
   > .semi-table-row
   > .semi-table-row-cell.semi-table-cell-fixed-right {
-  background: var(--console-glass-bg-strong) !important;
-  background-color: var(--console-glass-bg-strong) !important;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(248, 246, 240, 0.96) !important;
+  background-color: rgba(248, 246, 240, 0.96) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 .console-bg-content
@@ -279,10 +279,10 @@ body {
   .semi-table-thead
   > .semi-table-row
   > .semi-table-row-head.semi-table-cell-fixed-right {
-  background: var(--console-glass-bg-strong) !important;
-  background-color: var(--console-glass-bg-strong) !important;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(248, 246, 240, 0.96) !important;
+  background-color: rgba(248, 246, 240, 0.96) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 .console-bg-content
@@ -293,8 +293,8 @@ body {
   .semi-table-tbody
   > .semi-table-row:hover
   > .semi-table-row-cell.semi-table-cell-fixed-right {
-  background: var(--console-glass-hover) !important;
-  background-color: var(--console-glass-hover) !important;
+  background: rgba(252, 251, 247, 0.98) !important;
+  background-color: rgba(252, 251, 247, 0.98) !important;
 }
 
 .console-bg-content
