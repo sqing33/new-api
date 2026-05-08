@@ -258,6 +258,46 @@ body {
 }
 
 .console-bg-content
+  .semi-table-tbody
+  > .semi-table-row
+  > .semi-table-row-cell.semi-table-cell-fixed-left,
+.console-bg-content
+  .semi-table-tbody
+  > .semi-table-row
+  > .semi-table-row-cell.semi-table-cell-fixed-right {
+  background: var(--console-glass-bg-strong) !important;
+  background-color: var(--console-glass-bg-strong) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.console-bg-content
+  .semi-table-thead
+  > .semi-table-row
+  > .semi-table-row-head.semi-table-cell-fixed-left,
+.console-bg-content
+  .semi-table-thead
+  > .semi-table-row
+  > .semi-table-row-head.semi-table-cell-fixed-right {
+  background: var(--console-glass-bg-strong) !important;
+  background-color: var(--console-glass-bg-strong) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.console-bg-content
+  .semi-table-tbody
+  > .semi-table-row:hover
+  > .semi-table-row-cell.semi-table-cell-fixed-left,
+.console-bg-content
+  .semi-table-tbody
+  > .semi-table-row:hover
+  > .semi-table-row-cell.semi-table-cell-fixed-right {
+  background: var(--console-glass-hover) !important;
+  background-color: var(--console-glass-hover) !important;
+}
+
+.console-bg-content
   .semi-table-thead
   > .semi-table-row
   > .semi-table-row-head.semi-table-cell-fixed-left::before,
