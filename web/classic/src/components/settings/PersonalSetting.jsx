@@ -94,6 +94,7 @@ const PersonalSetting = () => {
     gotifyToken: '',
     gotifyPriority: 5,
     upstreamModelUpdateNotifyEnabled: false,
+    upstreamPricingChangeNotifyEnabled: false,
     acceptUnsetModelRatioModel: false,
     recordIpLog: false,
   });
@@ -196,6 +197,8 @@ const PersonalSetting = () => {
           settings.gotify_priority !== undefined ? settings.gotify_priority : 5,
         upstreamModelUpdateNotifyEnabled:
           settings.upstream_model_update_notify_enabled === true,
+        upstreamPricingChangeNotifyEnabled:
+          settings.upstream_pricing_change_notify_enabled === true,
         acceptUnsetModelRatioModel:
           settings.accept_unset_model_ratio_model || false,
         recordIpLog: settings.record_ip_log || false,
@@ -526,6 +529,8 @@ const PersonalSetting = () => {
         })(),
         upstream_model_update_notify_enabled:
           notificationSettings.upstreamModelUpdateNotifyEnabled === true,
+        upstream_pricing_change_notify_enabled:
+          notificationSettings.upstreamPricingChangeNotifyEnabled === true,
         accept_unset_model_ratio_model:
           notificationSettings.acceptUnsetModelRatioModel,
         record_ip_log: notificationSettings.recordIpLog,

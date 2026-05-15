@@ -327,6 +327,7 @@ export const getChannelsColumns = ({
   setCurrentMultiKeyChannel,
   openUpstreamUpdateModal,
   detectChannelUpstreamUpdates,
+  detectChannelUpstreamPricing,
 }) => {
   return [
     {
@@ -760,6 +761,17 @@ export const getChannelsColumns = ({
                     ? 'add'
                     : 'remove',
                 );
+              },
+            });
+          }
+
+          if (upstreamUpdateMeta.supported) {
+            moreMenuItems.push({
+              node: 'item',
+              name: t('检测上游定价变动'),
+              type: 'tertiary',
+              onClick: () => {
+                detectChannelUpstreamPricing(record);
               },
             });
           }

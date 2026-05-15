@@ -542,6 +542,24 @@ const NotificationSettings = ({
                   />
                 )}
 
+                {isAdminOrRoot && (
+                  <Form.Switch
+                    field='upstreamPricingChangeNotifyEnabled'
+                    label={t('接收上游定价变动通知')}
+                    checkedText={t('开')}
+                    uncheckedText={t('关')}
+                    onChange={(value) =>
+                      handleFormChange(
+                        'upstreamPricingChangeNotifyEnabled',
+                        value,
+                      )
+                    }
+                    extraText={t(
+                      '仅管理员可用。开启后，当系统定时检测发现监控渠道的上游定价发生变动（特别是涨价）时，会通过已配置的通知渠道推送提醒。',
+                    )}
+                  />
+                )}
+
                 {/* 邮件通知设置 */}
                 {notificationSettings.warningType === 'email' && (
                   <Form.Input

@@ -215,6 +215,9 @@ const EditChannelModal = (props) => {
     upstream_model_update_last_check_time: 0,
     upstream_model_update_last_detected_models: [],
     upstream_model_update_ignored_models: '',
+    upstream_pricing_check_enabled: false,
+    upstream_pricing_endpoint: '',
+    upstream_pricing_last_check_time: 0,
   };
   const [batch, setBatch] = useState(false);
   const [multiToSingle, setMultiToSingle] = useState(false);
@@ -927,6 +930,14 @@ const EditChannelModal = (props) => {
           )
             ? parsedSettings.upstream_model_update_ignored_models.join(',')
             : '';
+          data.upstream_pricing_check_enabled =
+            parsedSettings.upstream_pricing_check_enabled === true;
+          data.upstream_pricing_endpoint =
+            typeof parsedSettings.upstream_pricing_endpoint === 'string'
+              ? parsedSettings.upstream_pricing_endpoint
+              : '';
+          data.upstream_pricing_last_check_time =
+            Number(parsedSettings.upstream_pricing_last_check_time) || 0;
         } catch (error) {
           console.error('解析其他设置失败:', error);
           data.azure_responses_version = '';
@@ -1826,6 +1837,18 @@ const EditChannelModal = (props) => {
       settings.upstream_model_update_last_check_time = 0;
     }
 
+    settings.upstream_pricing_check_enabled =
+      localInputs.upstream_pricing_check_enabled === true;
+    const pricingEndpoint = String(
+      localInputs.upstream_pricing_endpoint || '',
+    ).trim();
+    if (pricingEndpoint) {
+      settings.upstream_pricing_endpoint = pricingEndpoint;
+    }
+    if (typeof settings.upstream_pricing_last_check_time !== 'number') {
+      settings.upstream_pricing_last_check_time = 0;
+    }
+
     localInputs.settings = JSON.stringify(settings);
 
     // 清理不需要发送到后端的字段
@@ -1853,6 +1876,9 @@ const EditChannelModal = (props) => {
     delete localInputs.upstream_model_update_last_check_time;
     delete localInputs.upstream_model_update_last_detected_models;
     delete localInputs.upstream_model_update_ignored_models;
+    delete localInputs.upstream_pricing_check_enabled;
+    delete localInputs.upstream_pricing_endpoint;
+    delete localInputs.upstream_pricing_last_check_time;
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
@@ -2297,6 +2323,46 @@ const EditChannelModal = (props) => {
                         </span>
                       </>
                     )}
+                  </div>
+                </div>
+                )}
+
+                {MODEL_FETCHABLE_CHANNEL_TYPES.has(inputs.type) && (
+                <div className='pb-3 border-b border-gray-100'>
+                  <Text className='text-sm font-medium text-gray-500 mb-3 block'>
+                    {t('上游定价监控')}
+                  </Text>
+
+                  <Form.Switch
+                    field='upstream_pricing_check_enabled'
+                    label={t('是否监控上游定价变动')}
+                    checkedText={t('开')}
+                    uncheckedText={t('关')}
+                    onChange={(value) =>
+                      handleChannelOtherSettingsChange(
+                        'upstream_pricing_check_enabled',
+                        value,
+                      )
+                    }
+                    extraText={t(
+                      '开启后由后端定时任务检测该渠道上游定价变化',
+                    )}
+                  />
+                  <Form.Input
+                    field='upstream_pricing_endpoint'
+                    label={t('定价接口路径')}
+                    placeholder='/api/pricing'
+                    extraText={t('默认: /api/pricing')}
+                    onChange={(value) =>
+                      handleInputChange('upstream_pricing_endpoint', value)
+                    }
+                    showClear
+                  />
+                  <div className='text-xs text-gray-500 mb-3'>
+                    {t('上次检测时间')}:&nbsp;
+                    {inputs.upstream_pricing_last_check_time
+                      ? formatUnixTime(inputs.upstream_pricing_last_check_time)
+                      : t('从未检测')}
                   </div>
                 </div>
                 )}

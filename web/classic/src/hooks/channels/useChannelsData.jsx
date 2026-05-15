@@ -36,6 +36,7 @@ import {
 import { useIsMobile } from '../common/useIsMobile';
 import { useTableCompactMode } from '../common/useTableCompactMode';
 import { useChannelUpstreamUpdates } from './useChannelUpstreamUpdates';
+import { useChannelUpstreamPricing } from './useChannelUpstreamPricing';
 import { parseUpstreamUpdateMeta } from './upstreamUpdateUtils';
 import { Modal, Button } from '@douyinfe/semi-ui';
 import { openCodexUsageModal } from '../../components/table/channels/modals/CodexUsageModal';
@@ -438,6 +439,7 @@ export const useChannelsData = () => {
   };
 
   const upstreamUpdates = useChannelUpstreamUpdates({ t, refresh });
+  const upstreamPricing = useChannelUpstreamPricing({ t, refresh });
 
   // Channel management
   const manageChannel = async (id, action, record, value) => {
@@ -1204,6 +1206,7 @@ export const useChannelsData = () => {
     currentMultiKeyChannel,
     setCurrentMultiKeyChannel,
     ...upstreamUpdates,
+    ...upstreamPricing,
 
     // Form
     formApi,

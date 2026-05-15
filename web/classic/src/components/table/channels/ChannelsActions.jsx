@@ -40,6 +40,8 @@ const ChannelsActions = ({
   detectAllUpstreamUpdates,
   detectAllUpstreamUpdatesLoading,
   applyAllUpstreamUpdatesLoading,
+  detectAllUpstreamPricing,
+  detectAllUpstreamPricingLoading,
   compactMode,
   setCompactMode,
   idSort,
@@ -190,6 +192,28 @@ const ChannelsActions = ({
                     }}
                   >
                     {t('处理全部渠道上游更新')}
+                  </Button>
+                </Dropdown.Item>
+                <Dropdown.Item>
+                  <Button
+                    size='small'
+                    type='tertiary'
+                    className='w-full'
+                    loading={detectAllUpstreamPricingLoading}
+                    disabled={detectAllUpstreamPricingLoading}
+                    onClick={() => {
+                      Modal.confirm({
+                        title: t('批量检测上游定价'),
+                        content: t(
+                          '将对所有启用了上游定价监控的渠道进行检测，可能会耗时较长。是否继续？',
+                        ),
+                        onOk: () => detectAllUpstreamPricing(),
+                        size: 'sm',
+                        centered: true,
+                      });
+                    }}
+                  >
+                    {t('检测上游定价变动')}
                   </Button>
                 </Dropdown.Item>
                 <Dropdown.Item>
