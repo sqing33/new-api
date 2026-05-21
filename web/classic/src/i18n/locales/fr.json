@@ -3879,6 +3879,8 @@
     "whsec_xxx 的 Webhook 签名密钥，敏感信息不显示": "Clé de signature Webhook whsec_xxx, les informations sensibles ne sont pas affichées",
     "Windows PowerShell": "Windows PowerShell",
     "Worker地址": "Adresse du Worker",
-    "Worker密钥": "Clé du Worker"
+    "Worker密钥": "Clé du Worker",
+    "上游定价检测间隔时间": "Intervalle de vérification des prix amont",
+    "每隔多少分钟检测一次已启用上游定价监控的渠道": "Fréquence de vérification des canaux avec surveillance des prix amont activée"
   }
 }

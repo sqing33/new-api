@@ -4024,6 +4024,8 @@
     "whsec_xxx 的 Webhook 签名密钥，敏感信息不显示": "Webhook signature key for whsec_xxx, sensitive information not displayed",
     "Windows PowerShell": "Windows PowerShell",
     "Worker地址": "Worker Address",
-    "Worker密钥": "Worker Key"
+    "Worker密钥": "Worker Key",
+    "上游定价检测间隔时间": "Upstream pricing check interval",
+    "每隔多少分钟检测一次已启用上游定价监控的渠道": "How often to check channels with upstream pricing monitoring enabled"
   }
 }

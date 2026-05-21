@@ -61,6 +61,10 @@ const monitoringSchema = z
         .number()
         .int()
         .min(1, 'Interval must be at least 1 minute'),
+      upstream_pricing_monitor_interval_minutes: z.coerce
+        .number()
+        .int()
+        .min(1, 'Interval must be at least 1 minute'),
     }),
   })
   .superRefine((values, ctx) => {
@@ -105,6 +109,7 @@ type MonitoringSettingsSectionProps = {
     AutomaticRetryStatusCodes: string
     'monitor_setting.auto_test_channel_enabled': boolean
     'monitor_setting.auto_test_channel_minutes': number
+    'monitor_setting.upstream_pricing_monitor_interval_minutes': number
   }
 }
 
@@ -122,6 +127,7 @@ type NormalizedMonitoringValues = {
   AutomaticRetryStatusCodes: string
   'monitor_setting.auto_test_channel_enabled': boolean
   'monitor_setting.auto_test_channel_minutes': number
+  'monitor_setting.upstream_pricing_monitor_interval_minutes': number
 }
 
 const buildFormDefaults = (
@@ -141,6 +147,8 @@ const buildFormDefaults = (
       defaults['monitor_setting.auto_test_channel_enabled'],
     auto_test_channel_minutes:
       defaults['monitor_setting.auto_test_channel_minutes'],
+    upstream_pricing_monitor_interval_minutes:
+      defaults['monitor_setting.upstream_pricing_monitor_interval_minutes'],
   },
 })
 
@@ -164,6 +172,8 @@ const normalizeDefaults = (
     defaults['monitor_setting.auto_test_channel_enabled'],
   'monitor_setting.auto_test_channel_minutes':
     defaults['monitor_setting.auto_test_channel_minutes'],
+  'monitor_setting.upstream_pricing_monitor_interval_minutes':
+    defaults['monitor_setting.upstream_pricing_monitor_interval_minutes'],
 })
 
 const normalizeFormValues = (
@@ -186,6 +196,8 @@ const normalizeFormValues = (
     values.monitor_setting.auto_test_channel_enabled,
   'monitor_setting.auto_test_channel_minutes':
     values.monitor_setting.auto_test_channel_minutes,
+  'monitor_setting.upstream_pricing_monitor_interval_minutes':
+    values.monitor_setting.upstream_pricing_monitor_interval_minutes,
 })
 
 export function MonitoringSettingsSection({
@@ -302,6 +314,43 @@ export function MonitoringSettingsSection({
                   </FormControl>
                   <FormDescription>
                     {t('How frequently the system tests all channels')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='monitor_setting.upstream_pricing_monitor_interval_minutes'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Upstream pricing check interval (minutes)')}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={1}
+                      step={1}
+                      value={
+                        typeof field.value === 'number' &&
+                        Number.isFinite(field.value)
+                          ? field.value
+                          : ''
+                      }
+                      onChange={(event) =>
+                        field.onChange(event.target.valueAsNumber)
+                      }
+                      name={field.name}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'How frequently the system checks monitored channels for upstream pricing changes'
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

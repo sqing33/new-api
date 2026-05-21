@@ -44,6 +44,7 @@ export default function SettingsMonitoring(props) {
       '100-199,300-399,401-407,409-499,500-503,505-523,525-599',
     'monitor_setting.auto_test_channel_enabled': false,
     'monitor_setting.auto_test_channel_minutes': 10,
+    'monitor_setting.upstream_pricing_monitor_interval_minutes': 60,
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -159,6 +160,26 @@ export default function SettingsMonitoring(props) {
                     setInputs({
                       ...inputs,
                       'monitor_setting.auto_test_channel_minutes':
+                        parseInt(value),
+                    })
+                  }
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  label={t('上游定价检测间隔时间')}
+                  step={1}
+                  min={1}
+                  suffix={t('分钟')}
+                  extraText={t('每隔多少分钟检测一次已启用上游定价监控的渠道')}
+                  placeholder={''}
+                  field={
+                    'monitor_setting.upstream_pricing_monitor_interval_minutes'
+                  }
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      'monitor_setting.upstream_pricing_monitor_interval_minutes':
                         parseInt(value),
                     })
                   }

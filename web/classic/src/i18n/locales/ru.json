@@ -3899,6 +3899,8 @@
     "whsec_xxx 的 Webhook 签名密钥，敏感信息不显示": "Ключ подписи Webhook whsec_xxx, конфиденциальная информация не отображается",
     "Windows PowerShell": "Windows PowerShell",
     "Worker地址": "Адрес Worker",
-    "Worker密钥": "Ключ Worker"
+    "Worker密钥": "Ключ Worker",
+    "上游定价检测间隔时间": "Интервал проверки цен upstream",
+    "每隔多少分钟检测一次已启用上游定价监控的渠道": "Как часто проверять каналы с включенным мониторингом цен upstream"
   }
 }

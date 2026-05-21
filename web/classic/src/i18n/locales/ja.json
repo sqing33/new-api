@@ -3848,6 +3848,8 @@
     "whsec_xxx 的 Webhook 签名密钥，敏感信息不显示": "whsec_xxx のWebhook署名シークレット。機密情報は表示されません",
     "Windows PowerShell": "Windows PowerShell",
     "Worker地址": "Workerアドレス",
-    "Worker密钥": "WorkerAPIキー"
+    "Worker密钥": "WorkerAPIキー",
+    "上游定价检测间隔时间": "アップストリーム価格チェック間隔",
+    "每隔多少分钟检测一次已启用上游定价监控的渠道": "アップストリーム価格監視が有効なチャネルを確認する頻度"
   }
 }

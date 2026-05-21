@@ -13,12 +13,13 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 )
 
 const (
-	upstreamPricingMonitorDefaultIntervalMinutes     = 60
-	upstreamPricingMonitorBatchSize                  = 100
+	upstreamPricingMonitorDefaultIntervalMinutes      = 60
+	upstreamPricingMonitorBatchSize                   = 100
 	upstreamPricingMonitorMinCheckIntervalSeconds     = 600
 	upstreamPricingMonitorNotifySuppressWindowSeconds = 86400
 	upstreamPricingMonitorNotifyMaxChangeDetails      = 20
@@ -237,6 +238,34 @@ func buildUpstreamPricingMonitorNotificationContent(
 	return b.String()
 }
 
+func upstreamPricingMonitorInterval() time.Duration {
+	intervalMinutes := operation_setting.GetMonitorSetting().UpstreamPricingMonitorIntervalMinutes
+	if intervalMinutes < 1 {
+		intervalMinutes = common.GetEnvOrDefault(
+			"UPSTREAM_PRICING_MONITOR_TASK_INTERVAL_MINUTES",
+			upstreamPricingMonitorDefaultIntervalMinutes,
+		)
+	}
+	if intervalMinutes < 1 {
+		intervalMinutes = upstreamPricingMonitorDefaultIntervalMinutes
+	}
+	return time.Duration(intervalMinutes) * time.Minute
+}
+
+func waitUpstreamPricingMonitorInterval(startedAt time.Time) {
+	for {
+		remaining := upstreamPricingMonitorInterval() - time.Since(startedAt)
+		if remaining <= 0 {
+			return
+		}
+		sleepFor := remaining
+		if sleepFor > 30*time.Second {
+			sleepFor = 30 * time.Second
+		}
+		time.Sleep(sleepFor)
+	}
+}
+
 func runUpstreamPricingMonitorTaskOnce() {
 	if !upstreamPricingMonitorTaskRunning.CompareAndSwap(false, true) {
 		return
@@ -342,21 +371,13 @@ func StartUpstreamPricingMonitorTask() {
 			common.SysLog("upstream pricing monitor task disabled by UPSTREAM_PRICING_MONITOR_TASK_ENABLED")
 			return
 		}
-		intervalMinutes := common.GetEnvOrDefault(
-			"UPSTREAM_PRICING_MONITOR_TASK_INTERVAL_MINUTES",
-			upstreamPricingMonitorDefaultIntervalMinutes,
-		)
-		if intervalMinutes < 1 {
-			intervalMinutes = upstreamPricingMonitorDefaultIntervalMinutes
-		}
-		interval := time.Duration(intervalMinutes) * time.Minute
 		go func() {
-			common.SysLog(fmt.Sprintf("upstream pricing monitor task started: interval=%s", interval))
-			runUpstreamPricingMonitorTaskOnce()
-			ticker := time.NewTicker(interval)
-			defer ticker.Stop()
-			for range ticker.C {
+			common.SysLog("upstream pricing monitor task started")
+			for {
+				startedAt := time.Now()
 				runUpstreamPricingMonitorTaskOnce()
+				common.SysLog(fmt.Sprintf("upstream pricing monitor next run in %s", upstreamPricingMonitorInterval()))
+				waitUpstreamPricingMonitorInterval(startedAt)
 			}
 		}()
 	})

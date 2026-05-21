@@ -3872,6 +3872,8 @@
     "whsec_xxx 的 Webhook 签名密钥，敏感信息不显示": "whsec_xxx 的 Webhook 簽名密鑰，敏感資訊不顯示",
     "Windows PowerShell": "Windows PowerShell",
     "Worker地址": "Worker位址",
-    "Worker密钥": "Worker密鑰"
+    "Worker密钥": "Worker密鑰",
+    "上游定价检测间隔时间": "上游定價檢測間隔時間",
+    "每隔多少分钟检测一次已启用上游定价监控的渠道": "每隔多少分鐘檢測一次已啟用上游定價監控的渠道"
   }
 }

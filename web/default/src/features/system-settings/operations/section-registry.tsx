@@ -61,6 +61,10 @@ const OPERATIONS_SECTIONS = [
             settings['monitor_setting.auto_test_channel_enabled'],
           'monitor_setting.auto_test_channel_minutes':
             settings['monitor_setting.auto_test_channel_minutes'],
+          'monitor_setting.upstream_pricing_monitor_interval_minutes':
+            settings[
+              'monitor_setting.upstream_pricing_monitor_interval_minutes'
+            ],
         }}
       />
     ),

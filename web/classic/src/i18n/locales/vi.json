@@ -4411,6 +4411,8 @@
     "whsec_xxx 的 Webhook 签名密钥，敏感信息不显示": "Khóa chữ ký Webhook cho whsec_xxx, thông tin nhạy cảm không được hiển thị",
     "Windows PowerShell": "Windows PowerShell",
     "Worker地址": "Địa chỉ Worker",
-    "Worker密钥": "Khóa Worker"
+    "Worker密钥": "Khóa Worker",
+    "上游定价检测间隔时间": "Khoảng thời gian kiểm tra giá upstream",
+    "每隔多少分钟检测一次已启用上游定价监控的渠道": "Tần suất kiểm tra các kênh đã bật giám sát giá upstream"
   }
 }

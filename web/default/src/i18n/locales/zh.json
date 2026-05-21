@@ -4454,6 +4454,8 @@
     "operation and charging behavior": "运营和收费行为产生的法律责任",
     "，": "，",
     "，and ": "，",
-    "、": "、"
+    "、": "、",
+    "Upstream pricing check interval (minutes)": "上游定价检测间隔时间（分钟）",
+    "How frequently the system checks monitored channels for upstream pricing changes": "系统检测已启用上游定价监控渠道的频率"
   }
 }
