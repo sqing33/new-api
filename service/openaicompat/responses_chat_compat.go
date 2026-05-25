@@ -13,11 +13,16 @@ import (
 )
 
 func ResponsesRequestToChatCompletionsRequest(req *dto.OpenAIResponsesRequest) (*dto.GeneralOpenAIRequest, error) {
+	chatReq, _, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, dto.ResponsesCompatToolModeWrapNonFunction)
+	return chatReq, err
+}
+
+func ResponsesRequestToChatCompletionsRequestWithToolMode(req *dto.OpenAIResponsesRequest, toolMode string) (*dto.GeneralOpenAIRequest, map[string]dto.ResponsesCompatToolMapping, error) {
 	if req == nil {
-		return nil, errors.New("request is nil")
+		return nil, nil, errors.New("request is nil")
 	}
 	if req.Model == "" {
-		return nil, errors.New("model is required")
+		return nil, nil, errors.New("model is required")
 	}
 
 	messages := make([]dto.Message, 0)
@@ -30,10 +35,15 @@ func ResponsesRequestToChatCompletionsRequest(req *dto.OpenAIResponsesRequest) (
 
 	inputMessages, err := responsesInputToChatMessages(req.Input)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	messages = append(messages, inputMessages...)
 	messages = collapseSystemMessages(messages)
+
+	tools, toolMappings, err := responsesToolsToChatTools(req.Tools, toolMode)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	chatReq := &dto.GeneralOpenAIRequest{
 		Model:            req.Model,
@@ -43,8 +53,8 @@ func ResponsesRequestToChatCompletionsRequest(req *dto.OpenAIResponsesRequest) (
 		MaxTokens:        req.MaxOutputTokens,
 		Temperature:      req.Temperature,
 		TopP:             req.TopP,
-		Tools:            responsesToolsToChatTools(req.Tools),
-		ToolChoice:       responsesToolChoiceToChatToolChoice(req.ToolChoice),
+		Tools:            tools,
+		ToolChoice:       responsesToolChoiceToChatToolChoice(req.ToolChoice, toolMappings),
 		ResponseFormat:   responsesTextToChatResponseFormat(req.Text),
 		User:             req.User,
 		Store:            req.Store,
@@ -69,7 +79,7 @@ func ResponsesRequestToChatCompletionsRequest(req *dto.OpenAIResponsesRequest) (
 		chatReq.PromptCacheRetention = req.PromptCacheRetention
 	}
 
-	return chatReq, nil
+	return chatReq, toolMappings, nil
 }
 
 func collapseSystemMessages(messages []dto.Message) []dto.Message {
@@ -108,6 +118,10 @@ func collapseSystemMessages(messages []dto.Message) []dto.Message {
 }
 
 func ChatCompletionsResponseToResponsesResponse(resp *dto.OpenAITextResponse, id string) (*dto.OpenAIResponsesResponse, *dto.Usage, error) {
+	return ChatCompletionsResponseToResponsesResponseWithToolMappings(resp, id, nil)
+}
+
+func ChatCompletionsResponseToResponsesResponseWithToolMappings(resp *dto.OpenAITextResponse, id string, mappings map[string]dto.ResponsesCompatToolMapping) (*dto.OpenAIResponsesResponse, *dto.Usage, error) {
 	if resp == nil {
 		return nil, nil, errors.New("response is nil")
 	}
@@ -123,15 +137,28 @@ func ChatCompletionsResponseToResponsesResponse(resp *dto.OpenAITextResponse, id
 				if callID == "" {
 					callID = fmt.Sprintf("call_%d_%d", choiceIndex, toolIndex)
 				}
-				argumentsRaw, _ := common.Marshal(toolCall.Function.Arguments)
-				output = append(output, dto.ResponsesOutput{
-					Type:      "function_call",
-					ID:        "fc_" + callID,
-					Status:    "completed",
-					CallId:    callID,
-					Name:      toolCall.Function.Name,
-					Arguments: argumentsRaw,
-				})
+				mapping := responsesCompatToolMappingForName(mappings, toolCall.Function.Name)
+				toolOutput := dto.ResponsesOutput{
+					Type:   "function_call",
+					ID:     "fc_" + callID,
+					Status: "completed",
+					CallId: callID,
+					Name:   toolCall.Function.Name,
+				}
+				if mapping != nil {
+					toolOutput.Name = mapping.OriginalName
+					if mapping.Wrapped {
+						toolOutput.Type = "custom_tool_call"
+						toolOutput.ID = "ctc_" + callID
+					}
+				}
+				argumentsRaw := responsesToolArgumentsRaw(toolCall.Function.Arguments)
+				if toolOutput.Type == "custom_tool_call" {
+					toolOutput.Input = responsesCustomToolInputRaw(toolCall.Function.Arguments, argumentsRaw)
+				} else {
+					toolOutput.Arguments = argumentsRaw
+				}
+				output = append(output, toolOutput)
 			}
 			continue
 		}
@@ -196,31 +223,32 @@ func responsesInputToChatMessages(input json.RawMessage) ([]dto.Message, error) 
 		itemType := common.Interface2String(item["type"])
 		switch itemType {
 		case "function_call_output":
-			callID := common.Interface2String(item["call_id"])
-			output := item["output"]
-			if _, ok := knownToolCallIDs[callID]; !ok || callID == "" {
-				messages = append(messages, dto.Message{
-					Role:    "user",
-					Content: functionCallOutputText(callID, output),
-				})
-				continue
-			}
-			messages = append(messages, dto.Message{
-				Role:       "tool",
-				ToolCallId: callID,
-				Content:    interfaceText(output),
-			})
-		case "function_call":
+			messages = append(messages, responsesToolOutputToChatMessage(
+				common.Interface2String(item["call_id"]),
+				item["output"],
+				knownToolCallIDs,
+			))
+		case "custom_tool_call_output":
+			messages = append(messages, responsesToolOutputToChatMessage(
+				common.Interface2String(item["call_id"]),
+				item["output"],
+				knownToolCallIDs,
+			))
+		case "function_call", "custom_tool_call":
 			callID := common.Interface2String(item["call_id"])
 			if callID == "" {
 				callID = common.Interface2String(item["id"])
+			}
+			arguments := item["arguments"]
+			if itemType == "custom_tool_call" {
+				arguments = item["input"]
 			}
 			toolCall := dto.ToolCallRequest{
 				ID:   callID,
 				Type: "function",
 				Function: dto.FunctionRequest{
 					Name:      common.Interface2String(item["name"]),
-					Arguments: rawArgumentString(item["arguments"]),
+					Arguments: rawArgumentString(arguments),
 				},
 			}
 			msg := dto.Message{Role: "assistant", Content: ""}
@@ -255,6 +283,20 @@ func functionCallOutputText(callID string, output any) string {
 		return "Tool output:\n" + text
 	}
 	return "Tool output (" + callID + "):\n" + text
+}
+
+func responsesToolOutputToChatMessage(callID string, output any, knownToolCallIDs map[string]struct{}) dto.Message {
+	if _, ok := knownToolCallIDs[callID]; !ok || callID == "" {
+		return dto.Message{
+			Role:    "user",
+			Content: functionCallOutputText(callID, output),
+		}
+	}
+	return dto.Message{
+		Role:       "tool",
+		ToolCallId: callID,
+		Content:    interfaceText(output),
+	}
 }
 
 func normalizeResponsesChatRole(role string) string {
@@ -346,50 +388,162 @@ func responsesContentPartToChatPart(part map[string]any, role string) (dto.Media
 	}
 }
 
-func responsesToolsToChatTools(raw json.RawMessage) []dto.ToolCallRequest {
+func responsesToolsToChatTools(raw json.RawMessage, toolMode string) ([]dto.ToolCallRequest, map[string]dto.ResponsesCompatToolMapping, error) {
 	if len(raw) == 0 {
-		return nil
+		return nil, nil, nil
 	}
 	var tools []map[string]any
 	if err := common.Unmarshal(raw, &tools); err != nil {
-		return nil
+		return nil, nil, err
 	}
 
 	chatTools := make([]dto.ToolCallRequest, 0, len(tools))
+	mappings := make(map[string]dto.ResponsesCompatToolMapping)
+	usedNames := make(map[string]int)
 	for _, tool := range tools {
-		if common.Interface2String(tool["type"]) != "function" {
-			continue
-		}
-		name := common.Interface2String(tool["name"])
-		description := common.Interface2String(tool["description"])
-		parameters := tool["parameters"]
-		if fn, ok := tool["function"].(map[string]any); ok {
-			if name == "" {
-				name = common.Interface2String(fn["name"])
-			}
-			if description == "" {
-				description = common.Interface2String(fn["description"])
-			}
-			if parameters == nil {
-				parameters = fn["parameters"]
-			}
-		}
+		toolType := common.Interface2String(tool["type"])
+		name, description, parameters := responsesToolDetails(tool)
 		if name == "" {
+			if toolMode == dto.ResponsesCompatToolModeStrictError {
+				return nil, nil, fmt.Errorf("responses tool %q cannot be converted to chat completions tool: missing name", toolType)
+			}
 			continue
 		}
+		if toolType != "function" {
+			switch toolMode {
+			case "", dto.ResponsesCompatToolModeWrapNonFunction:
+			case dto.ResponsesCompatToolModeStrictError:
+				return nil, nil, fmt.Errorf("responses tool %q cannot be represented natively by chat completions", name)
+			default:
+				continue
+			}
+		}
+		if parameters == nil {
+			parameters = responsesLooseToolParameters()
+		}
+		safeName := responsesSafeToolName(name, usedNames)
 		chatTools = append(chatTools, dto.ToolCallRequest{
 			Type: "function",
 			Function: dto.FunctionRequest{
-				Name:        name,
+				Name:        safeName,
 				Description: description,
 				Parameters:  parameters,
 			},
 		})
+		mappings[safeName] = dto.ResponsesCompatToolMapping{
+			SafeName:     safeName,
+			OriginalName: name,
+			OriginalType: toolType,
+			Wrapped:      toolType != "function",
+		}
 	}
-	return chatTools
+	if len(mappings) == 0 {
+		mappings = nil
+	}
+	return chatTools, mappings, nil
 }
 
-func responsesToolChoiceToChatToolChoice(raw json.RawMessage) any {
+func responsesToolDetails(tool map[string]any) (string, string, any) {
+	name := common.Interface2String(tool["name"])
+	description := common.Interface2String(tool["description"])
+	parameters := firstNonNil(tool["parameters"], tool["input_schema"], tool["schema"], tool["json_schema"])
+	if fn, ok := tool["function"].(map[string]any); ok {
+		if name == "" {
+			name = common.Interface2String(fn["name"])
+		}
+		if description == "" {
+			description = common.Interface2String(fn["description"])
+		}
+		if parameters == nil {
+			parameters = firstNonNil(fn["parameters"], fn["input_schema"], fn["schema"])
+		}
+	}
+	if custom, ok := tool["custom"].(map[string]any); ok {
+		if name == "" {
+			name = common.Interface2String(custom["name"])
+		}
+		if description == "" {
+			description = common.Interface2String(custom["description"])
+		}
+		if parameters == nil {
+			parameters = firstNonNil(custom["parameters"], custom["input_schema"], custom["schema"])
+		}
+	}
+	if name == "" {
+		name = common.Interface2String(tool["type"])
+	}
+	return name, description, parameters
+}
+
+func firstNonNil(values ...any) any {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func responsesLooseToolParameters() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": true,
+		"properties": map[string]any{
+			"input": map[string]any{
+				"type":        "string",
+				"description": "Tool input. Use this when the original tool accepts free-form text or an unknown schema.",
+			},
+		},
+	}
+}
+
+func responsesSafeToolName(name string, used map[string]int) string {
+	var builder strings.Builder
+	for _, r := range strings.TrimSpace(name) {
+		switch {
+		case r >= 'a' && r <= 'z':
+			builder.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			builder.WriteRune(r)
+		case r >= '0' && r <= '9':
+			builder.WriteRune(r)
+		case r == '_' || r == '-':
+			builder.WriteRune(r)
+		default:
+			builder.WriteByte('_')
+		}
+	}
+	base := strings.Trim(builder.String(), "_-")
+	if base == "" {
+		base = "tool"
+	}
+	if len(base) > 64 {
+		base = strings.TrimRight(base[:64], "_-")
+		if base == "" {
+			base = "tool"
+		}
+	}
+
+	count := used[base]
+	used[base] = count + 1
+	if count == 0 {
+		return base
+	}
+	suffix := fmt.Sprintf("_%d", count+1)
+	maxBaseLen := 64 - len(suffix)
+	if maxBaseLen < 1 {
+		return "tool" + suffix
+	}
+	if len(base) > maxBaseLen {
+		base = strings.TrimRight(base[:maxBaseLen], "_-")
+		if base == "" {
+			base = "tool"
+		}
+	}
+	return base + suffix
+}
+
+func responsesToolChoiceToChatToolChoice(raw json.RawMessage, mappings map[string]dto.ResponsesCompatToolMapping) any {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -404,9 +558,6 @@ func responsesToolChoiceToChatToolChoice(raw json.RawMessage) any {
 	if err := common.Unmarshal(raw, &choice); err != nil {
 		return nil
 	}
-	if common.Interface2String(choice["type"]) != "function" {
-		return choice
-	}
 	name := common.Interface2String(choice["name"])
 	if name == "" {
 		if fn, ok := choice["function"].(map[string]any); ok {
@@ -414,7 +565,16 @@ func responsesToolChoiceToChatToolChoice(raw json.RawMessage) any {
 		}
 	}
 	if name == "" {
+		if common.Interface2String(choice["type"]) != "function" {
+			return choice
+		}
 		return choice
+	}
+	for safeName, mapping := range mappings {
+		if mapping.OriginalName == name {
+			name = safeName
+			break
+		}
 	}
 	return map[string]any{
 		"type": "function",
@@ -422,6 +582,38 @@ func responsesToolChoiceToChatToolChoice(raw json.RawMessage) any {
 			"name": name,
 		},
 	}
+}
+
+func responsesCompatToolMappingForName(mappings map[string]dto.ResponsesCompatToolMapping, name string) *dto.ResponsesCompatToolMapping {
+	if len(mappings) == 0 {
+		return nil
+	}
+	mapping, ok := mappings[name]
+	if !ok {
+		return nil
+	}
+	return &mapping
+}
+
+func responsesToolArgumentsRaw(arguments string) json.RawMessage {
+	trimmed := strings.TrimSpace(arguments)
+	var value any
+	if trimmed != "" && common.Unmarshal([]byte(trimmed), &value) == nil {
+		return json.RawMessage(trimmed)
+	}
+	raw, _ := common.Marshal(arguments)
+	return raw
+}
+
+func responsesCustomToolInputRaw(arguments string, fallback json.RawMessage) json.RawMessage {
+	var object map[string]any
+	if err := common.Unmarshal([]byte(arguments), &object); err == nil {
+		if input, ok := object["input"].(string); ok {
+			raw, _ := common.Marshal(input)
+			return raw
+		}
+	}
+	return fallback
 }
 
 func responsesTextToChatResponseFormat(raw json.RawMessage) *dto.ResponseFormat {

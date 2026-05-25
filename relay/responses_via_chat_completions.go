@@ -18,9 +18,16 @@ import (
 )
 
 func responsesViaChatCompletions(c *gin.Context, info *relaycommon.RelayInfo, adaptor channel.Adaptor, request *dto.OpenAIResponsesRequest) (*dto.Usage, *types.NewAPIError) {
-	chatReq, err := service.ResponsesRequestToChatCompletionsRequest(request)
+	toolMode := info.ChannelOtherSettings.ResponsesCompatToolMode
+	if toolMode == "" {
+		toolMode = dto.ResponsesCompatToolModeWrapNonFunction
+	}
+	chatReq, toolMappings, err := service.ResponsesRequestToChatCompletionsRequestWithToolMode(request, toolMode)
 	if err != nil {
 		return nil, types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+	}
+	if len(toolMappings) > 0 {
+		c.Set(dto.ContextKeyResponsesCompatToolMappings, toolMappings)
 	}
 	info.AppendRequestConversion(types.RelayFormatOpenAI)
 

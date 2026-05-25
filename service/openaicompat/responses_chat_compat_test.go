@@ -77,6 +77,136 @@ func TestResponsesRequestToChatCompletionsRequestBasic(t *testing.T) {
 	require.Equal(t, "lookup", fn["name"])
 }
 
+func TestResponsesRequestToChatCompletionsRequestWrapsNonFunctionTools(t *testing.T) {
+	req := &dto.OpenAIResponsesRequest{
+		Model: "MiniMax-M2.7",
+		Input: rawJSON(t, "hello"),
+		Tools: rawJSON(t, []map[string]any{
+			{
+				"type":        "custom",
+				"name":        "functions.apply_patch",
+				"description": "apply a patch",
+			},
+			{
+				"type":        "mcp",
+				"name":        "functions/apply_patch",
+				"description": "duplicate after sanitizing",
+				"input_schema": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"patch": map[string]any{"type": "string"},
+					},
+				},
+			},
+		}),
+		ToolChoice: rawJSON(t, map[string]any{
+			"type": "custom",
+			"name": "functions.apply_patch",
+		}),
+	}
+
+	chatReq, mappings, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, dto.ResponsesCompatToolModeWrapNonFunction)
+	require.NoError(t, err)
+	require.Len(t, chatReq.Tools, 2)
+	require.Equal(t, "functions_apply_patch", chatReq.Tools[0].Function.Name)
+	require.Equal(t, "functions_apply_patch_2", chatReq.Tools[1].Function.Name)
+	require.Equal(t, map[string]any{
+		"type":                 "object",
+		"additionalProperties": true,
+		"properties": map[string]any{
+			"input": map[string]any{
+				"type":        "string",
+				"description": "Tool input. Use this when the original tool accepts free-form text or an unknown schema.",
+			},
+		},
+	}, chatReq.Tools[0].Function.Parameters)
+	require.Equal(t, "functions.apply_patch", mappings["functions_apply_patch"].OriginalName)
+	require.Equal(t, "custom", mappings["functions_apply_patch"].OriginalType)
+	require.True(t, mappings["functions_apply_patch"].Wrapped)
+
+	toolChoice, ok := chatReq.ToolChoice.(map[string]any)
+	require.True(t, ok)
+	fn, ok := toolChoice["function"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "functions_apply_patch", fn["name"])
+}
+
+func TestResponsesRequestToChatCompletionsRequestFunctionOnlySkipsNonFunctionTools(t *testing.T) {
+	req := &dto.OpenAIResponsesRequest{
+		Model: "MiniMax-M2.7",
+		Tools: rawJSON(t, []map[string]any{
+			{"type": "custom", "name": "web.run"},
+			{"type": "function", "name": "lookup"},
+		}),
+	}
+
+	chatReq, mappings, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, dto.ResponsesCompatToolModeFunctionOnly)
+	require.NoError(t, err)
+	require.Len(t, chatReq.Tools, 1)
+	require.Equal(t, "lookup", chatReq.Tools[0].Function.Name)
+	require.False(t, mappings["lookup"].Wrapped)
+}
+
+func TestResponsesRequestToChatCompletionsRequestSanitizesFunctionNamesWithoutWrappingType(t *testing.T) {
+	req := &dto.OpenAIResponsesRequest{
+		Model: "MiniMax-M2.7",
+		Tools: rawJSON(t, []map[string]any{
+			{"type": "function", "name": "functions.apply_patch"},
+		}),
+	}
+
+	chatReq, mappings, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, dto.ResponsesCompatToolModeWrapNonFunction)
+	require.NoError(t, err)
+	require.Len(t, chatReq.Tools, 1)
+	require.Equal(t, "functions_apply_patch", chatReq.Tools[0].Function.Name)
+	require.Equal(t, "functions.apply_patch", mappings["functions_apply_patch"].OriginalName)
+	require.False(t, mappings["functions_apply_patch"].Wrapped)
+}
+
+func TestResponsesRequestToChatCompletionsRequestStrictErrorsOnNonFunctionTools(t *testing.T) {
+	req := &dto.OpenAIResponsesRequest{
+		Model: "MiniMax-M2.7",
+		Tools: rawJSON(t, []map[string]any{
+			{"type": "custom", "name": "web.run"},
+		}),
+	}
+
+	_, _, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, dto.ResponsesCompatToolModeStrictError)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot be represented")
+}
+
+func TestResponsesRequestToChatCompletionsRequestCustomToolHistory(t *testing.T) {
+	req := &dto.OpenAIResponsesRequest{
+		Model: "MiniMax-M2.7",
+		Input: rawJSON(t, []map[string]any{
+			{
+				"type":    "custom_tool_call",
+				"call_id": "call_custom",
+				"name":    "web.run",
+				"input":   `{"search_query":[{"q":"new-api"}]}`,
+			},
+			{
+				"type":    "custom_tool_call_output",
+				"call_id": "call_custom",
+				"output":  "result",
+			},
+		}),
+	}
+
+	chatReq, err := ResponsesRequestToChatCompletionsRequest(req)
+	require.NoError(t, err)
+	require.Len(t, chatReq.Messages, 2)
+	toolCalls := chatReq.Messages[0].ParseToolCalls()
+	require.Len(t, toolCalls, 1)
+	require.Equal(t, "call_custom", toolCalls[0].ID)
+	require.Equal(t, "web.run", toolCalls[0].Function.Name)
+	require.Equal(t, `{"search_query":[{"q":"new-api"}]}`, toolCalls[0].Function.Arguments)
+	require.Equal(t, "tool", chatReq.Messages[1].Role)
+	require.Equal(t, "call_custom", chatReq.Messages[1].ToolCallId)
+	require.Equal(t, "result", chatReq.Messages[1].StringContent())
+}
+
 func TestResponsesRequestToChatCompletionsRequestPreservesExplicitZeroValues(t *testing.T) {
 	stream := false
 	maxTokens := uint(0)
@@ -305,4 +435,42 @@ func TestChatCompletionsResponseToResponsesResponseToolCalls(t *testing.T) {
 	require.Equal(t, "call_123", resp.Output[0].CallId)
 	require.Equal(t, "lookup", resp.Output[0].Name)
 	require.Equal(t, `{"q":"new-api"}`, resp.Output[0].ArgumentsString())
+}
+
+func TestChatCompletionsResponseToResponsesResponseRestoresWrappedToolNames(t *testing.T) {
+	message := dto.Message{Role: "assistant", Content: ""}
+	message.SetToolCalls([]dto.ToolCallRequest{
+		{
+			ID:   "call_123",
+			Type: "function",
+			Function: dto.FunctionRequest{
+				Name:      "web_run",
+				Arguments: `{"input":"search new-api"}`,
+			},
+		},
+	})
+	chatResp := &dto.OpenAITextResponse{
+		Model: "MiniMax-M2.7",
+		Choices: []dto.OpenAITextResponseChoice{
+			{
+				Index:        0,
+				Message:      message,
+				FinishReason: "tool_calls",
+			},
+		},
+	}
+
+	resp, _, err := ChatCompletionsResponseToResponsesResponseWithToolMappings(chatResp, "resp_123", map[string]dto.ResponsesCompatToolMapping{
+		"web_run": {
+			SafeName:     "web_run",
+			OriginalName: "web.run",
+			OriginalType: "custom",
+			Wrapped:      true,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Output, 1)
+	require.Equal(t, "custom_tool_call", resp.Output[0].Type)
+	require.Equal(t, "web.run", resp.Output[0].Name)
+	require.Equal(t, `"search new-api"`, string(resp.Output[0].Input))
 }

@@ -26,6 +26,7 @@ const (
 type ChannelOtherSettings struct {
 	AzureResponsesVersion                 string                            `json:"azure_responses_version,omitempty"`
 	ResponsesCompatMode                   string                            `json:"responses_compat_mode,omitempty"`
+	ResponsesCompatToolMode               string                            `json:"responses_compat_tool_mode,omitempty"`
 	VertexKeyType                         VertexKeyType                     `json:"vertex_key_type,omitempty"` // "json" or "api_key"
 	OpenRouterEnterprise                  *bool                             `json:"openrouter_enterprise,omitempty"`
 	ClaudeBetaQuery                       bool                              `json:"claude_beta_query,omitempty"`         // Claude 渠道是否强制追加 ?beta=true
@@ -52,6 +53,21 @@ const (
 	ResponsesCompatModeNative          = "native"
 	ResponsesCompatModeChatCompletions = "chat_completions"
 )
+
+const (
+	ResponsesCompatToolModeFunctionOnly        = "function_only"
+	ResponsesCompatToolModeWrapNonFunction     = "wrap_non_function_tools"
+	ResponsesCompatToolModeStrictError         = "strict_error"
+	ContextKeyResponsesCompatToolMappings      = "responses_compat_tool_mappings"
+	ContextKeyResponsesCompatToolReverseLookup = "responses_compat_tool_reverse_lookup"
+)
+
+type ResponsesCompatToolMapping struct {
+	SafeName     string `json:"safe_name"`
+	OriginalName string `json:"original_name"`
+	OriginalType string `json:"original_type"`
+	Wrapped      bool   `json:"wrapped"`
+}
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
 	if s == nil || s.OpenRouterEnterprise == nil {

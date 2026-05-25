@@ -23,6 +23,7 @@ type responsesCompatToolState struct {
 	ItemID      string
 	CallID      string
 	Name        string
+	Type        string
 	Arguments   strings.Builder
 	Done        bool
 }
@@ -45,7 +46,7 @@ func ChatCompletionsToResponsesHandler(c *gin.Context, info *relaycommon.RelayIn
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
 
-	responsesResp, usage, err := service.ChatCompletionsResponseToResponsesResponse(&chatResp, responsesCompatResponseID(c))
+	responsesResp, usage, err := service.ChatCompletionsResponseToResponsesResponseWithToolMappings(&chatResp, responsesCompatResponseID(c), responsesCompatToolMappings(c))
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
@@ -183,7 +184,7 @@ func ChatCompletionsToResponsesStreamHandler(c *gin.Context, info *relaycommon.R
 				state.CallID = tool.ID
 			}
 			if tool.Function.Name != "" {
-				state.Name = tool.Function.Name
+				responsesCompatApplyToolMapping(state, tool.Function.Name, responsesCompatToolMappings(c))
 			}
 			return state, true
 		}
@@ -196,7 +197,9 @@ func ChatCompletionsToResponsesStreamHandler(c *gin.Context, info *relaycommon.R
 			ItemID:      "fc_" + callID,
 			CallID:      callID,
 			Name:        tool.Function.Name,
+			Type:        "function_call",
 		}
+		responsesCompatApplyToolMapping(state, tool.Function.Name, responsesCompatToolMappings(c))
 		nextOutputIndex++
 		toolByIndex[index] = state
 		toolOrder = append(toolOrder, state)
@@ -442,13 +445,71 @@ func responsesCompatMessageOutput(id string, status string, text string) map[str
 }
 
 func responsesCompatToolOutput(state *responsesCompatToolState, status string) map[string]any {
-	return map[string]any{
-		"id":        state.ItemID,
-		"type":      "function_call",
-		"status":    status,
-		"call_id":   state.CallID,
-		"name":      state.Name,
-		"arguments": state.Arguments.String(),
+	itemType := state.Type
+	if itemType == "" {
+		itemType = "function_call"
+	}
+	out := map[string]any{
+		"id":      state.ItemID,
+		"type":    itemType,
+		"status":  status,
+		"call_id": state.CallID,
+		"name":    state.Name,
+	}
+	if itemType == "custom_tool_call" {
+		out["input"] = responsesCompatCustomToolInput(state.Arguments.String())
+	} else {
+		out["arguments"] = state.Arguments.String()
+	}
+	return out
+}
+
+func responsesCompatCustomToolInput(arguments string) any {
+	var object map[string]any
+	if err := common.Unmarshal([]byte(arguments), &object); err == nil {
+		if input, ok := object["input"].(string); ok {
+			return input
+		}
+	}
+	return arguments
+}
+
+func responsesCompatToolMappings(c *gin.Context) map[string]dto.ResponsesCompatToolMapping {
+	if c == nil {
+		return nil
+	}
+	value, exists := c.Get(dto.ContextKeyResponsesCompatToolMappings)
+	if !exists {
+		return nil
+	}
+	mappings, ok := value.(map[string]dto.ResponsesCompatToolMapping)
+	if !ok {
+		return nil
+	}
+	return mappings
+}
+
+func responsesCompatApplyToolMapping(state *responsesCompatToolState, safeName string, mappings map[string]dto.ResponsesCompatToolMapping) {
+	if state == nil {
+		return
+	}
+	state.Type = "function_call"
+	state.Name = safeName
+	if len(mappings) == 0 {
+		return
+	}
+	mapping, ok := mappings[safeName]
+	if !ok {
+		return
+	}
+	if mapping.OriginalName != "" {
+		state.Name = mapping.OriginalName
+	}
+	if mapping.Wrapped {
+		state.Type = "custom_tool_call"
+		if strings.HasPrefix(state.ItemID, "fc_") {
+			state.ItemID = "ctc_" + strings.TrimPrefix(state.ItemID, "fc_")
+		}
 	}
 }
 
