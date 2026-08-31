@@ -3,12 +3,55 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting"
 
 	"github.com/gin-gonic/gin"
 )
+
+func getConfiguredImageLogModels() []string {
+	modelSet := map[string]bool{}
+	models := make([]string, 0)
+	for _, item := range setting.ImageModelSettings {
+		if strings.TrimSpace(item.Model) == "" || len(item.Modes) == 0 {
+			continue
+		}
+		if modelSet[item.Model] {
+			continue
+		}
+		modelSet[item.Model] = true
+		models = append(models, item.Model)
+	}
+	return models
+}
+
+func getLogModelFilters(c *gin.Context) (string, []string) {
+	modelName := c.Query("model_name")
+	modelNames := c.QueryArray("model_names")
+	if len(modelNames) == 0 {
+		rawModelNames := strings.TrimSpace(c.Query("model_names"))
+		if rawModelNames != "" {
+			modelNames = strings.Split(rawModelNames, ",")
+		}
+	}
+	normalizedModelNames := make([]string, 0, len(modelNames))
+	modelSet := map[string]bool{}
+	for _, item := range modelNames {
+		model := strings.TrimSpace(item)
+		if model == "" || modelSet[model] {
+			continue
+		}
+		modelSet[model] = true
+		normalizedModelNames = append(normalizedModelNames, model)
+	}
+	if c.Query("image_only") == "true" && modelName == "" && len(normalizedModelNames) == 0 {
+		normalizedModelNames = getConfiguredImageLogModels()
+	}
+	return modelName, normalizedModelNames
+}
 
 func GetAllLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
@@ -17,12 +60,12 @@ func GetAllLogs(c *gin.Context) {
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	username := c.Query("username")
 	tokenName := c.Query("token_name")
-	modelName := c.Query("model_name")
+	modelName, modelNames := getLogModelFilters(c)
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
 	requestId := c.Query("request_id")
 	upstreamRequestId := c.Query("upstream_request_id")
-	logs, total, err := model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), channel, group, requestId, upstreamRequestId)
+	logs, total, err := model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, modelNames, username, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), channel, group, requestId, upstreamRequestId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -43,11 +86,11 @@ func GetUserLogs(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	tokenName := c.Query("token_name")
-	modelName := c.Query("model_name")
+	modelName, modelNames := getLogModelFilters(c)
 	group := c.Query("group")
 	requestId := c.Query("request_id")
 	upstreamRequestId := c.Query("upstream_request_id")
-	logs, total, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), group, requestId, upstreamRequestId)
+	logs, total, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, modelNames, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), group, requestId, upstreamRequestId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -104,10 +147,10 @@ func GetLogsStat(c *gin.Context) {
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	tokenName := c.Query("token_name")
 	username := c.Query("username")
-	modelName := c.Query("model_name")
+	modelName, modelNames := getLogModelFilters(c)
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
-	stat, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)
+	stat, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, modelNames, username, tokenName, channel, group)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -117,9 +160,11 @@ func GetLogsStat(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data": gin.H{
-			"quota": stat.Quota,
-			"rpm":   stat.Rpm,
-			"tpm":   stat.Tpm,
+			"quota":             stat.Quota,
+			"prompt_tokens":     stat.PromptTokens,
+			"completion_tokens": stat.CompletionTokens,
+			"rpm":               stat.Rpm,
+			"tpm":               stat.Tpm,
 		},
 	})
 	return
@@ -131,10 +176,10 @@ func GetLogsSelfStat(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	tokenName := c.Query("token_name")
-	modelName := c.Query("model_name")
+	modelName, modelNames := getLogModelFilters(c)
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
-	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)
+	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, modelNames, username, tokenName, channel, group)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -144,9 +189,11 @@ func GetLogsSelfStat(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data": gin.H{
-			"quota": quotaNum.Quota,
-			"rpm":   quotaNum.Rpm,
-			"tpm":   quotaNum.Tpm,
+			"quota":             quotaNum.Quota,
+			"prompt_tokens":     quotaNum.PromptTokens,
+			"completion_tokens": quotaNum.CompletionTokens,
+			"rpm":               quotaNum.Rpm,
+			"tpm":               quotaNum.Tpm,
 			//"token": tokenNum,
 		},
 	})

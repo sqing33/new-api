@@ -156,6 +156,17 @@ func main() {
 	controller.RegisterScheduledSystemTasks()
 	service.StartSystemTaskRunner()
 
+	// Channel upstream pricing monitor task
+	controller.StartUpstreamPricingMonitorTask()
+
+	if common.IsMasterNode && constant.UpdateTask {
+		gopool.Go(func() {
+			controller.UpdateMidjourneyTaskBulk()
+		})
+		gopool.Go(func() {
+			controller.UpdateTaskBulk()
+		})
+	}
 	if os.Getenv("BATCH_UPDATE_ENABLED") == "true" {
 		common.BatchUpdateEnabled = true
 		common.SysLog("batch update enabled with interval " + strconv.Itoa(common.BatchUpdateInterval) + "s")

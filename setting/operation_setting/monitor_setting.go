@@ -1,7 +1,6 @@
 package operation_setting
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 
@@ -9,28 +8,25 @@ import (
 )
 
 type MonitorSetting struct {
-	AutoTestChannelEnabled bool    `json:"auto_test_channel_enabled"`
-	AutoTestChannelMinutes float64 `json:"auto_test_channel_minutes"`
-	ChannelTestMode        string  `json:"channel_test_mode"`
-	ChannelTestConcurrency int     `json:"channel_test_concurrency"`
+	AutoTestChannelEnabled                bool    `json:"auto_test_channel_enabled"`
+	AutoTestChannelMinutes                float64 `json:"auto_test_channel_minutes"`
+	UpstreamPricingMonitorIntervalMinutes int     `json:"upstream_pricing_monitor_interval_minutes"`
 }
 
-const (
-	ChannelTestModeScheduledAll    = "scheduled_all"
-	ChannelTestModeAutoBanOnly     = "auto_ban_only"
-	ChannelTestModePassiveRecovery = "passive_recovery"
-
-	ChannelTestConcurrencyOptionKey = "monitor_setting.channel_test_concurrency"
-	DefaultChannelTestConcurrency   = 1
-	MaxChannelTestConcurrency       = 32
-)
+func defaultUpstreamPricingMonitorIntervalMinutes() int {
+	if raw := os.Getenv("UPSTREAM_PRICING_MONITOR_TASK_INTERVAL_MINUTES"); raw != "" {
+		if interval, err := strconv.Atoi(raw); err == nil && interval > 0 {
+			return interval
+		}
+	}
+	return 60
+}
 
 // 默认配置
 var monitorSetting = MonitorSetting{
-	AutoTestChannelEnabled: false,
-	AutoTestChannelMinutes: 10,
-	ChannelTestMode:        ChannelTestModeScheduledAll,
-	ChannelTestConcurrency: DefaultChannelTestConcurrency,
+	AutoTestChannelEnabled:                false,
+	AutoTestChannelMinutes:                10,
+	UpstreamPricingMonitorIntervalMinutes: defaultUpstreamPricingMonitorIntervalMinutes(),
 }
 
 func init() {
@@ -44,38 +40,10 @@ func GetMonitorSetting() *MonitorSetting {
 		if err == nil && frequency > 0 {
 			monitorSetting.AutoTestChannelEnabled = true
 			monitorSetting.AutoTestChannelMinutes = float64(frequency)
-			monitorSetting.ChannelTestMode = ChannelTestModeScheduledAll
 		}
 	}
-	if enabled, ok := os.LookupEnv("CHANNEL_TEST_ENABLED"); ok {
-		parsed, err := strconv.ParseBool(enabled)
-		if err == nil {
-			monitorSetting.AutoTestChannelEnabled = parsed
-		}
+	if monitorSetting.UpstreamPricingMonitorIntervalMinutes < 1 {
+		monitorSetting.UpstreamPricingMonitorIntervalMinutes = 60
 	}
-	switch monitorSetting.ChannelTestMode {
-	case ChannelTestModeAutoBanOnly, ChannelTestModePassiveRecovery:
-	default:
-		monitorSetting.ChannelTestMode = ChannelTestModeScheduledAll
-	}
-	monitorSetting.ChannelTestConcurrency = NormalizeChannelTestConcurrency(monitorSetting.ChannelTestConcurrency)
 	return &monitorSetting
-}
-
-func NormalizeChannelTestConcurrency(concurrency int) int {
-	if concurrency < 1 {
-		return DefaultChannelTestConcurrency
-	}
-	if concurrency > MaxChannelTestConcurrency {
-		return MaxChannelTestConcurrency
-	}
-	return concurrency
-}
-
-func ValidateChannelTestConcurrency(value string) error {
-	concurrency, err := strconv.Atoi(value)
-	if err != nil || concurrency < 1 || concurrency > MaxChannelTestConcurrency {
-		return fmt.Errorf("channel test concurrency must be between 1 and %d", MaxChannelTestConcurrency)
-	}
-	return nil
 }

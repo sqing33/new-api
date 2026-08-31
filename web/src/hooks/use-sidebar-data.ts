@@ -17,39 +17,40 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import {
-  Activity,
-  Box,
-  CreditCard,
-  FileText,
-  FlaskConical,
-  Key,
   LayoutDashboard,
-  ListTodo,
-  MessageSquare,
-  PlugZap,
-  Radio,
-  ServerCog,
-  Settings,
+  Activity,
+  Key,
+  FileText,
+  Wallet,
+  Box,
+  Users,
   Ticket,
   User,
-  Users,
-  Wallet,
+  Command,
+  ImageIcon,
+  Radio,
+  FlaskConical,
+  MessageSquare,
+  CreditCard,
+  ListTodo,
+  Settings,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-
+import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
 import { type SidebarData } from '@/components/layout/types'
-import { ROLE } from '@/lib/roles'
 
-/**
- * Root navigation groups for the application sidebar.
- *
- * These are shown when the URL does not match any nested sidebar view
- * registered in `layout/lib/sidebar-view-registry.ts`.
- */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
 
   return {
+    workspaces: [
+      {
+        id: WORKSPACE_IDS.DEFAULT,
+        name: '', // Dynamically fetches system name
+        logo: Command,
+        plan: '', // Dynamically fetches system version
+      },
+    ],
     navGroups: [
       {
         id: 'chat',
@@ -59,6 +60,11 @@ export function useSidebarData(): SidebarData {
             title: t('Playground'),
             url: '/playground',
             icon: FlaskConical,
+          },
+          {
+            title: t('Image Studio'),
+            url: '/image-studio',
+            icon: ImageIcon,
           },
           {
             title: t('Chat'),
@@ -141,21 +147,9 @@ export function useSidebarData(): SidebarData {
             icon: Ticket,
           },
           {
-            title: t('Subscriptions'),
+            title: t('Subscription Management'),
             url: '/subscriptions',
             icon: CreditCard,
-          },
-          {
-            title: t('System Info'),
-            url: '/system-info',
-            icon: ServerCog,
-            requiredRole: ROLE.SUPER_ADMIN,
-          },
-          {
-            title: t('Task Plugins'),
-            url: '/task-plugins',
-            icon: PlugZap,
-            requiredRole: ROLE.SUPER_ADMIN,
           },
           {
             title: t('System Settings'),

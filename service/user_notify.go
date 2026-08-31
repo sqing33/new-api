@@ -47,6 +47,32 @@ func NotifyUpstreamModelUpdateWatchers(subject string, content string) {
 	common.SysLog(fmt.Sprintf("upstream model update notifications sent: %d", sentCount))
 }
 
+func NotifyUpstreamPricingChangeWatchers(subject string, content string) {
+	var users []model.User
+	if err := model.DB.
+		Select("id", "email", "role", "status", "setting").
+		Where("status = ? AND role >= ?", common.UserStatusEnabled, common.RoleAdminUser).
+		Find(&users).Error; err != nil {
+		common.SysLog(fmt.Sprintf("failed to query pricing change notification users: %s", err.Error()))
+		return
+	}
+
+	notification := dto.NewNotify(dto.NotifyTypePricingChange, subject, content, nil)
+	sentCount := 0
+	for _, user := range users {
+		userSetting := user.GetSetting()
+		if !userSetting.UpstreamPricingChangeNotifyEnabled {
+			continue
+		}
+		if err := NotifyUser(user.Id, user.Email, userSetting, notification); err != nil {
+			common.SysLog(fmt.Sprintf("failed to notify user %d for pricing change: %s", user.Id, err.Error()))
+			continue
+		}
+		sentCount++
+	}
+	common.SysLog(fmt.Sprintf("upstream pricing change notifications sent: %d", sentCount))
+}
+
 func NotifyUser(userId int, userEmail string, userSetting dto.UserSetting, data dto.Notify) error {
 	notifyType := userSetting.NotifyType
 	if notifyType == "" {

@@ -86,6 +86,11 @@ func runSubscriptionQuotaResetOnce() {
 		if _, err := model.CleanupSubscriptionPreConsumeRecords(7 * 24 * 3600); err == nil {
 			subscriptionCleanupLast.Store(time.Now().Unix())
 		}
+		if n, err := model.CleanupExpiredToolInstallTokens(common.GetTimestamp()); err != nil {
+			logger.LogWarn(ctx, fmt.Sprintf("tool install token cleanup failed: %v", err))
+		} else if n > 0 {
+			logger.LogInfo(ctx, fmt.Sprintf("cleaned up %d expired tool install tokens", n))
+		}
 	}
 	if common.DebugEnabled && (totalReset > 0 || totalExpired > 0) {
 		logger.LogDebug(ctx, "subscription maintenance: reset_count=%d, expired_count=%d", totalReset, totalExpired)
