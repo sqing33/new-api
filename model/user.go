@@ -1471,3 +1471,11 @@ func RootUserExists() bool {
 	}
 	return true
 }
+
+func InvalidateUserCache(userId int) error {
+	if true {
+		return nil
+	}
+	// cache disabled
+	return nil
+}

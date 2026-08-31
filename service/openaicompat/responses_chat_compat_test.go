@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
+	relaykitdto "github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,7 +19,7 @@ func TestResponsesRequestToChatCompletionsRequestBasic(t *testing.T) {
 	stream := true
 	maxTokens := uint(128)
 	temperature := 0.2
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model:           "MiniMax-M2.7",
 		Input:           rawJSON(t, "hello"),
 		Instructions:    rawJSON(t, "be precise"),
@@ -78,7 +78,7 @@ func TestResponsesRequestToChatCompletionsRequestBasic(t *testing.T) {
 }
 
 func TestResponsesRequestToChatCompletionsRequestWrapsNonFunctionTools(t *testing.T) {
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model: "MiniMax-M2.7",
 		Input: rawJSON(t, "hello"),
 		Tools: rawJSON(t, []map[string]any{
@@ -105,7 +105,7 @@ func TestResponsesRequestToChatCompletionsRequestWrapsNonFunctionTools(t *testin
 		}),
 	}
 
-	chatReq, mappings, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, dto.ResponsesCompatToolModeWrapNonFunction)
+	chatReq, mappings, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, relaykitdto.ResponsesCompatToolModeWrapNonFunction)
 	require.NoError(t, err)
 	require.Len(t, chatReq.Tools, 2)
 	require.Equal(t, "functions_apply_patch", chatReq.Tools[0].Function.Name)
@@ -132,7 +132,7 @@ func TestResponsesRequestToChatCompletionsRequestWrapsNonFunctionTools(t *testin
 }
 
 func TestResponsesRequestToChatCompletionsRequestFunctionOnlySkipsNonFunctionTools(t *testing.T) {
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model: "MiniMax-M2.7",
 		Tools: rawJSON(t, []map[string]any{
 			{"type": "custom", "name": "web.run"},
@@ -140,7 +140,7 @@ func TestResponsesRequestToChatCompletionsRequestFunctionOnlySkipsNonFunctionToo
 		}),
 	}
 
-	chatReq, mappings, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, dto.ResponsesCompatToolModeFunctionOnly)
+	chatReq, mappings, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, relaykitdto.ResponsesCompatToolModeFunctionOnly)
 	require.NoError(t, err)
 	require.Len(t, chatReq.Tools, 1)
 	require.Equal(t, "lookup", chatReq.Tools[0].Function.Name)
@@ -148,14 +148,14 @@ func TestResponsesRequestToChatCompletionsRequestFunctionOnlySkipsNonFunctionToo
 }
 
 func TestResponsesRequestToChatCompletionsRequestSanitizesFunctionNamesWithoutWrappingType(t *testing.T) {
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model: "MiniMax-M2.7",
 		Tools: rawJSON(t, []map[string]any{
 			{"type": "function", "name": "functions.apply_patch"},
 		}),
 	}
 
-	chatReq, mappings, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, dto.ResponsesCompatToolModeWrapNonFunction)
+	chatReq, mappings, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, relaykitdto.ResponsesCompatToolModeWrapNonFunction)
 	require.NoError(t, err)
 	require.Len(t, chatReq.Tools, 1)
 	require.Equal(t, "functions_apply_patch", chatReq.Tools[0].Function.Name)
@@ -164,20 +164,20 @@ func TestResponsesRequestToChatCompletionsRequestSanitizesFunctionNamesWithoutWr
 }
 
 func TestResponsesRequestToChatCompletionsRequestStrictErrorsOnNonFunctionTools(t *testing.T) {
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model: "MiniMax-M2.7",
 		Tools: rawJSON(t, []map[string]any{
 			{"type": "custom", "name": "web.run"},
 		}),
 	}
 
-	_, _, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, dto.ResponsesCompatToolModeStrictError)
+	_, _, err := ResponsesRequestToChatCompletionsRequestWithToolMode(req, relaykitdto.ResponsesCompatToolModeStrictError)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot be represented")
 }
 
 func TestResponsesRequestToChatCompletionsRequestCustomToolHistory(t *testing.T) {
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model: "MiniMax-M2.7",
 		Input: rawJSON(t, []map[string]any{
 			{
@@ -212,7 +212,7 @@ func TestResponsesRequestToChatCompletionsRequestPreservesExplicitZeroValues(t *
 	maxTokens := uint(0)
 	temperature := 0.0
 	topP := 0.0
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model:             "MiniMax-M2.7",
 		Input:             rawJSON(t, "hello"),
 		Stream:            &stream,
@@ -237,7 +237,7 @@ func TestResponsesRequestToChatCompletionsRequestPreservesExplicitZeroValues(t *
 }
 
 func TestResponsesRequestToChatCompletionsRequestIgnoresNullInputAndInstructions(t *testing.T) {
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model:        "MiniMax-M2.7",
 		Input:        rawJSON(t, nil),
 		Instructions: rawJSON(t, nil),
@@ -249,7 +249,7 @@ func TestResponsesRequestToChatCompletionsRequestIgnoresNullInputAndInstructions
 }
 
 func TestResponsesRequestToChatCompletionsRequestNormalizesDeveloperRole(t *testing.T) {
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model: "MiniMax-M2.7",
 		Input: rawJSON(t, []map[string]any{
 			{
@@ -274,7 +274,7 @@ func TestResponsesRequestToChatCompletionsRequestNormalizesDeveloperRole(t *test
 }
 
 func TestResponsesRequestToChatCompletionsRequestCollapsesSystemMessages(t *testing.T) {
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model:        "MiniMax-M2.7",
 		Instructions: rawJSON(t, "top-level instructions"),
 		Input: rawJSON(t, []map[string]any{
@@ -301,7 +301,7 @@ func TestResponsesRequestToChatCompletionsRequestCollapsesSystemMessages(t *test
 }
 
 func TestResponsesRequestToChatCompletionsRequestToolHistory(t *testing.T) {
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model: "MiniMax-M2.7",
 		Input: rawJSON(t, []map[string]any{
 			{
@@ -341,7 +341,7 @@ func TestResponsesRequestToChatCompletionsRequestToolHistory(t *testing.T) {
 }
 
 func TestResponsesRequestToChatCompletionsRequestOrphanToolOutputBecomesUserContext(t *testing.T) {
-	req := &dto.OpenAIResponsesRequest{
+	req := &relaykitdto.OpenAIResponsesRequest{
 		Model: "MiniMax-M2.7",
 		Input: rawJSON(t, []map[string]any{
 			{
@@ -367,22 +367,22 @@ func TestResponsesRequestToChatCompletionsRequestOrphanToolOutputBecomesUserCont
 }
 
 func TestChatCompletionsResponseToResponsesResponseText(t *testing.T) {
-	chatResp := &dto.OpenAITextResponse{
+	chatResp := &relaykitdto.OpenAITextResponse{
 		Id:      "chatcmpl_123",
 		Object:  "chat.completion",
 		Created: float64(12345),
 		Model:   "MiniMax-M2.7",
-		Choices: []dto.OpenAITextResponseChoice{
+		Choices: []relaykitdto.OpenAITextResponseChoice{
 			{
 				Index: 0,
-				Message: dto.Message{
+				Message: relaykitdto.Message{
 					Role:    "assistant",
 					Content: "hello",
 				},
 				FinishReason: "stop",
 			},
 		},
-		Usage: dto.Usage{
+		Usage: relaykitdto.Usage{
 			PromptTokens:     3,
 			CompletionTokens: 5,
 			TotalTokens:      8,
@@ -406,20 +406,20 @@ func TestChatCompletionsResponseToResponsesResponseText(t *testing.T) {
 }
 
 func TestChatCompletionsResponseToResponsesResponseToolCalls(t *testing.T) {
-	message := dto.Message{Role: "assistant", Content: ""}
-	message.SetToolCalls([]dto.ToolCallRequest{
+	message := relaykitdto.Message{Role: "assistant", Content: ""}
+	message.SetToolCalls([]relaykitdto.ToolCallRequest{
 		{
 			ID:   "call_123",
 			Type: "function",
-			Function: dto.FunctionRequest{
+			Function: relaykitdto.FunctionRequest{
 				Name:      "lookup",
 				Arguments: `{"q":"new-api"}`,
 			},
 		},
 	})
-	chatResp := &dto.OpenAITextResponse{
+	chatResp := &relaykitdto.OpenAITextResponse{
 		Model: "MiniMax-M2.7",
-		Choices: []dto.OpenAITextResponseChoice{
+		Choices: []relaykitdto.OpenAITextResponseChoice{
 			{
 				Index:        0,
 				Message:      message,
@@ -438,20 +438,20 @@ func TestChatCompletionsResponseToResponsesResponseToolCalls(t *testing.T) {
 }
 
 func TestChatCompletionsResponseToResponsesResponseRestoresWrappedToolNames(t *testing.T) {
-	message := dto.Message{Role: "assistant", Content: ""}
-	message.SetToolCalls([]dto.ToolCallRequest{
+	message := relaykitdto.Message{Role: "assistant", Content: ""}
+	message.SetToolCalls([]relaykitdto.ToolCallRequest{
 		{
 			ID:   "call_123",
 			Type: "function",
-			Function: dto.FunctionRequest{
+			Function: relaykitdto.FunctionRequest{
 				Name:      "web_run",
 				Arguments: `{"input":"search new-api"}`,
 			},
 		},
 	})
-	chatResp := &dto.OpenAITextResponse{
+	chatResp := &relaykitdto.OpenAITextResponse{
 		Model: "MiniMax-M2.7",
-		Choices: []dto.OpenAITextResponseChoice{
+		Choices: []relaykitdto.OpenAITextResponseChoice{
 			{
 				Index:        0,
 				Message:      message,
@@ -460,7 +460,7 @@ func TestChatCompletionsResponseToResponsesResponseRestoresWrappedToolNames(t *t
 		},
 	}
 
-	resp, _, err := ChatCompletionsResponseToResponsesResponseWithToolMappings(chatResp, "resp_123", map[string]dto.ResponsesCompatToolMapping{
+	resp, _, err := ChatCompletionsResponseToResponsesResponseWithToolMappings(chatResp, "resp_123", map[string]relaykitdto.ResponsesCompatToolMapping{
 		"web_run": {
 			SafeName:     "web_run",
 			OriginalName: "web.run",

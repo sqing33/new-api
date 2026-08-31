@@ -49,7 +49,6 @@ const (
 	LogTypeSystem  = 4
 	LogTypeError   = 5
 	LogTypeRefund  = 6
-	LogTypeLogin   = 7
 )
 
 func formatUserLogs(logs []*Log, startIdx int) {
@@ -268,7 +267,6 @@ type RecordTaskBillingLogParams struct {
 	TokenId   int
 	Group     string
 	Other     map[string]interface{}
-	NodeName  string // 任务发起节点；为空时回退当前节点
 }
 
 func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
@@ -567,84 +565,5 @@ func FormatAdminLogs(logs []*Log) {
 		}
 		delete(otherMap, "root_info")
 		logs[i].Other = common.MapToJsonStr(otherMap)
-	}
-}
-
-func CountOldLog(ctx context.Context, targetTimestamp int64) (int64, error) {
-	var count int64
-	if err := LOG_DB.WithContext(ctx).Model(&Log{}).Where("created_at < ?", targetTimestamp).Count(&count).Error; err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-func DeleteOldLogBatch(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {
-	if limit <= 0 {
-		limit = 1000
-	}
-	result := LOG_DB.WithContext(ctx).Where("created_at < ?", targetTimestamp).Limit(limit).Delete(&Log{})
-	if result.Error != nil {
-		return 0, result.Error
-	}
-	return result.RowsAffected, nil
-}
-
-func RecordOperationAuditLog(logUserId int, content string, ip string, action string, params map[string]interface{}, adminInfo map[string]interface{}, auditInfo map[string]interface{}) {
-	username, _ := GetUsernameById(logUserId, false)
-	other := map[string]interface{}{
-		"op": buildOpField(action, params),
-	}
-	if len(adminInfo) > 0 {
-		other["admin_info"] = adminInfo
-	}
-	if len(auditInfo) > 0 {
-		other["audit_info"] = auditInfo
-	}
-	log := &Log{
-		UserId:    logUserId,
-		Username:  username,
-		CreatedAt: common.GetTimestamp(),
-		Type:      LogTypeManage,
-		Content:   content,
-		Ip:        ip,
-		Other:     common.MapToJsonStr(other),
-	}
-	if err := createLog(log); err != nil {
-		common.SysLog("failed to record operation audit log: " + err.Error())
-	}
-}
-
-func createLog(log *Log) error {
-	return LOG_DB.Create(log).Error
-}
-
-func buildOpField(action string, params map[string]interface{}) map[string]interface{} {
-	op := map[string]interface{}{
-		"action": action,
-	}
-	if len(params) > 0 {
-		op["params"] = params
-	}
-	return op
-}
-
-
-func RecordLoginLog(userId int, username string, content string, ip string, action string, params map[string]interface{}, extra map[string]interface{}) {
-	other := map[string]interface{}{}
-	for k, v := range extra {
-		other[k] = v
-	}
-	other["op"] = buildOpField(action, params)
-	log := &Log{
-		UserId:    userId,
-		Username:  username,
-		CreatedAt: common.GetTimestamp(),
-		Type:      LogTypeLogin,
-		Content:   content,
-		Ip:        ip,
-		Other:     common.MapToJsonStr(other),
-	}
-	if err := createLog(log); err != nil {
-		common.SysLog("failed to record login log: " + err.Error())
 	}
 }
