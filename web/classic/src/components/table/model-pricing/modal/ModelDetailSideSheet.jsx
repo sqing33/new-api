@@ -34,6 +34,7 @@ const ModelDetailSideSheet = ({
   visible,
   onClose,
   modelData,
+  notFound = false,
   groupRatio,
   currency,
   siteDisplayType,
@@ -73,9 +74,17 @@ const ModelDetailSideSheet = ({
       onCancel={onClose}
     >
       <div style={{ paddingTop: 16, paddingBottom: 16 }}>
-        {!modelData && (
+        {!modelData && !notFound && (
           <div className='flex justify-center items-center py-10'>
             <Text type='secondary'>{t('加载中...')}</Text>
+          </div>
+        )}
+        {!modelData && notFound && (
+          <div className='flex flex-col items-center py-10 gap-1'>
+            <Text type='secondary'>{t('未找到该模型的定价信息')}</Text>
+            <Text type='tertiary' size='small'>
+              {t('该模型可能是名称匹配规则模型，或暂无已启用渠道')}
+            </Text>
           </div>
         )}
         {modelData && (

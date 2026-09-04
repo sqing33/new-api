@@ -65,11 +65,15 @@ const routerMap = {
   setting: '/setting',
   about: '/about',
   detail: '/dashboard',
+  performance: '/performance',
   pricing: '/pricing',
+  rankings: '/rankings',
   task: '/task',
   models: '/models',
   deployment: '/deployment',
   'tool-install-setting': '/tool-install-setting',
+  'system-info': '/system-info',
+  'task-plugins': '/task-plugins',
   playground: '/playground',
   'image-studio': '/image-studio',
   'image-presets': '/image-presets',
@@ -193,6 +197,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
             : 'tableHiddle',
       },
       {
+        text: t('性能指标'),
+        itemKey: 'performance',
+        to: '/performance',
+      },
+      {
         text: t('清荫日志'),
         itemKey: 'image-log',
         to: '/image-logs',
@@ -308,6 +317,18 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className: isRoot() ? '' : 'tableHiddle',
       },
       {
+        text: t('系统信息'),
+        itemKey: 'system-info',
+        to: '/system-info',
+        className: isRoot() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('任务插件'),
+        itemKey: 'task-plugins',
+        to: '/task-plugins',
+        className: isRoot() ? '' : 'tableHiddle',
+      },
+      {
         text: t('系统设置'),
         itemKey: 'setting',
         to: '/setting',
@@ -350,6 +371,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('清荫模型馆'),
         itemKey: 'pricing',
         to: '/pricing',
+      },
+      {
+        text: t('排行榜'),
+        itemKey: 'rankings',
+        to: '/rankings',
       },
       {
         text: t('清荫手册'),

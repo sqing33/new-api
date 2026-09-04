@@ -49,6 +49,8 @@ import ImageStudio from './pages/ImageStudio';
 import ImagePresets from './pages/ImagePresets';
 import VideoStudio from './pages/VideoStudio';
 import Pricing from './pages/Pricing';
+import Rankings from './pages/Rankings';
+import PerformancePage from './pages/Performance';
 import Task from './pages/Task';
 import ModelPage from './pages/Model';
 import ModelDeploymentPage from './pages/ModelDeployment';
@@ -56,6 +58,8 @@ import Playground from './pages/Playground';
 import Subscription from './pages/Subscription';
 import Tools from './pages/Tools';
 import ToolInstallSettingPage from './pages/ToolInstallSetting';
+import SystemInfoPage from './pages/SystemInfo';
+import TaskPluginsPage from './pages/TaskPlugins';
 import OAuth2Callback from './components/auth/OAuth2Callback';
 import PersonalSetting from './components/settings/PersonalSetting';
 import Setup from './pages/Setup';
@@ -143,6 +147,22 @@ function App() {
           element={
             <AdminRoute>
               <ToolInstallSettingPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path='/system-info'
+          element={
+            <AdminRoute>
+              <SystemInfoPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path='/task-plugins'
+          element={
+            <AdminRoute>
+              <TaskPluginsPage />
             </AdminRoute>
           }
         />
@@ -380,6 +400,24 @@ function App() {
                 <Pricing />
               </Suspense>
             </PrivateRoute>
+          }
+        />
+        <Route
+          path='/performance'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <PerformancePage />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/rankings'
+          element={
+            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+              <Rankings />
+            </Suspense>
           }
         />
         <Route

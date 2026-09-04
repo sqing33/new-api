@@ -29,14 +29,17 @@ import EditModelModal from './modals/EditModelModal';
 import EditVendorModal from './modals/EditVendorModal';
 import ColumnSelectorModal from './modals/ColumnSelectorModal';
 import { useModelsData } from '../../../hooks/models/useModelsData';
+import { useModelPricingDrawer } from '../../../hooks/models/useModelPricingDrawer';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
+import ModelDetailSideSheet from '../model-pricing/modal/ModelDetailSideSheet';
 
 const MARKETPLACE_DISPLAY_NOTICE_STORAGE_KEY =
   'models_marketplace_display_notice_dismissed';
 
 const ModelsPage = () => {
   const modelsData = useModelsData();
+  const pricingDrawer = useModelPricingDrawer();
   const isMobile = useIsMobile();
 
   const {
@@ -212,8 +215,28 @@ const ModelsPage = () => {
         })}
         t={modelsData.t}
       >
-        <ModelsTable {...modelsData} />
+        <ModelsTable
+          {...modelsData}
+          onModelNameClick={pricingDrawer.openForModel}
+        />
       </CardPro>
+      <ModelDetailSideSheet
+        visible={pricingDrawer.visible}
+        onClose={pricingDrawer.close}
+        modelData={pricingDrawer.modelData}
+        notFound={pricingDrawer.notFound}
+        groupRatio={pricingDrawer.groupRatio}
+        currency={pricingDrawer.currency}
+        siteDisplayType={pricingDrawer.siteDisplayType}
+        tokenUnit='M'
+        displayPrice={pricingDrawer.displayPrice}
+        showRatio={true}
+        usableGroup={pricingDrawer.usableGroup}
+        vendorsMap={pricingDrawer.vendorsMap}
+        endpointMap={pricingDrawer.endpointMap}
+        autoGroups={pricingDrawer.autoGroups}
+        t={pricingDrawer.t}
+      />
     </>
   );
 };

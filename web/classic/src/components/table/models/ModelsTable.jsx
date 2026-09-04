@@ -46,6 +46,7 @@ const ModelsTable = (modelsData) => {
     imageModelSettingsMap,
     MODEL_COLUMN_KEYS,
     visibleColumns,
+    onModelNameClick,
     t,
   } = modelsData;
 
@@ -60,6 +61,7 @@ const ModelsTable = (modelsData) => {
       vendorMap,
       imageModelSettingsMap,
       MODEL_COLUMN_KEYS,
+      onModelNameClick,
     });
   }, [
     t,
@@ -70,6 +72,7 @@ const ModelsTable = (modelsData) => {
     vendorMap,
     imageModelSettingsMap,
     MODEL_COLUMN_KEYS,
+    onModelNameClick,
   ]);
 
   const visibleColumnsList = useMemo(() => {
