@@ -198,9 +198,17 @@ func GitHubBind(c *gin.Context) {
 		return
 	}
 	session := sessions.Default(c)
-	id := session.Get("id")
-	// id := c.GetInt("id")  // critical bug!
-	user.Id = id.(int)
+	rawID := session.Get("id")
+	id, ok := rawID.(int)
+	if !ok || id == 0 {
+		// session 损坏或过期。安全起见不再继续走 bind 流程。
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "会话已失效，请重新登录后再绑定 GitHub",
+		})
+		return
+	}
+	user.Id = id
 	err = user.FillUserById()
 	if err != nil {
 		common.ApiError(c, err)

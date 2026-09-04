@@ -67,7 +67,12 @@ func InitEnv() {
 	}
 	initUserSessionSettings()
 	if os.Getenv("SQLITE_PATH") != "" {
-		SQLitePath = os.Getenv("SQLITE_PATH")
+		// 强制把 WAL / busy_timeout / _txlock=immediate pragma 注入到 DSN。
+		// 见 common/database.go SQLitePath 注释与 #6805。
+		SQLitePath = NormalizeSQLiteDSN(os.Getenv("SQLITE_PATH"))
+	} else {
+		// 默认 DSN 也走一次 normalize,容忍运维改了 SQLitePath 但缺 pragma。
+		SQLitePath = NormalizeSQLiteDSN(SQLitePath)
 	}
 	if *LogDir != "" {
 		var err error

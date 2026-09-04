@@ -270,9 +270,64 @@ func InitLogDB() (err error) {
 
 var userQuotaColumns = []string{"quota", "used_quota", "aff_quota", "aff_history"}
 
-// ensureUserQuotaColumns rejects a legacy 32-bit wallet schema before any
-// migrations run. The 64-bit-only build intentionally does not auto-upgrade
-// an existing wallet; operators must migrate it explicitly before starting.
+// migrateUserQuotaColumnsToBigint 把 users 表的 quota/used_quota/aff_quota/aff_history
+// 从 32-bit int 升级到 64-bit bigint。安全幂等:每列都先查 information_schema
+// 看 data_type,已是大整型就跳过。SQLite 用 type affinity 不需操作。
+// 失败不 panic,让 ensureUserQuotaColumns 把诊断信息吐给操作员。
+func migrateUserQuotaColumnsToBigint(db *gorm.DB, dbType common.DatabaseType) error {
+	if db == nil || dbType == common.DatabaseTypeSQLite {
+		return nil
+	}
+	if !db.Migrator().HasTable(&User{}) {
+		return nil
+	}
+	for _, col := range userQuotaColumns {
+		if !db.Migrator().HasColumn(&User{}, col) {
+			continue
+		}
+		var dataType string
+		if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
+			if err := db.Raw(
+				`SELECT data_type FROM information_schema.columns
+				 WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = ?`,
+				col,
+			).Scan(&dataType).Error; err != nil {
+				return fmt.Errorf("inspect users.%s type: %w", col, err)
+			}
+			if dataType == "bigint" || dataType == "int8" {
+				continue
+			}
+			alterSQL := fmt.Sprintf(`ALTER TABLE users ALTER COLUMN %s TYPE BIGINT`, col)
+			if err := db.Exec(alterSQL).Error; err != nil {
+				return fmt.Errorf("upgrade users.%s to BIGINT: %w", col, err)
+			}
+			common.SysLog(fmt.Sprintf("upgraded users.%s from %s to BIGINT", col, dataType))
+		} else if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
+			if err := db.Raw(
+				`SELECT DATA_TYPE FROM information_schema.columns
+				 WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = ?`,
+				col,
+			).Scan(&dataType).Error; err != nil {
+				return fmt.Errorf("inspect users.%s type: %w", col, err)
+			}
+			if strings.ToLower(dataType) == "bigint" {
+				continue
+			}
+			alterSQL := fmt.Sprintf("ALTER TABLE users MODIFY COLUMN %s BIGINT NOT NULL DEFAULT 0", col)
+			if err := db.Exec(alterSQL).Error; err != nil {
+				return fmt.Errorf("upgrade users.%s to BIGINT: %w", col, err)
+			}
+			common.SysLog(fmt.Sprintf("upgraded users.%s from %s to BIGINT", col, dataType))
+		}
+	}
+	return nil
+}
+
+// ensureUserQuotaColumns verifies (and tries to auto-upgrade) the user quota
+// schema before any migrations run. On first start against an existing 32-bit
+// wallet, it attempts an in-place ALTER to BIGINT; if that fails (insufficient
+// privileges, etc.), it surfaces the residual 32-bit columns so the operator
+// can either fix the DB role or run the manual SQL documented in AGENTS.md.
 func ensureUserQuotaColumns(db *gorm.DB, dbType common.DatabaseType) error {
 	if common.GetEnvOrDefaultBool("SKIP_64BIT_QUOTA_SCHEMA_CHECK", false) {
 		common.SysLog("SKIP_64BIT_QUOTA_SCHEMA_CHECK=true; skipping user quota schema check")
@@ -283,6 +338,9 @@ func ensureUserQuotaColumns(db *gorm.DB, dbType common.DatabaseType) error {
 	}
 	if !db.Migrator().HasTable(&User{}) {
 		return nil
+	}
+	if err := migrateUserQuotaColumnsToBigint(db, dbType); err != nil {
+		common.SysLog(fmt.Sprintf("auto-upgrade of user quota columns failed (will re-check): %v", err))
 	}
 	columnTypes, err := db.Migrator().ColumnTypes(&User{})
 	if err != nil {
@@ -295,7 +353,7 @@ func ensureUserQuotaColumns(db *gorm.DB, dbType common.DatabaseType) error {
 			}
 			dataType := actual.DatabaseTypeName()
 			if !is64BitIntegerType(dbType, dataType) {
-				return fmt.Errorf("users.%s uses %s; 32-bit is not supported", expected, dataType)
+				return fmt.Errorf("users.%s uses %s; 32-bit is not supported (set SKIP_64BIT_QUOTA_SCHEMA_CHECK=true after manual ALTER to BIGINT, or fix DB role for ALTER TABLE)", expected, dataType)
 			}
 		}
 	}
@@ -358,6 +416,8 @@ func migrateDB() error {
 		&SubscriptionPreConsumeRecord{},
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
+		&ToolInstallToken{},
+		&ToolInstallTool{},
 		&PerfMetric{},
 		&SystemInstance{},
 		&SystemTask{},
@@ -369,6 +429,9 @@ func migrateDB() error {
 		return err
 	}
 	if err := InitializeUserAuthVersions(); err != nil {
+		return err
+	}
+	if err := EnsureDefaultToolInstallTools(); err != nil {
 		return err
 	}
 	if err := InitializeExternalIdentityClaims(); err != nil {

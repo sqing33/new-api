@@ -29,6 +29,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -578,6 +579,11 @@ func (a *TaskAdaptor) doFetchDescriptor(baseURL, proxy string, value any) (*http
 	}
 	for name, value := range descriptor.Headers {
 		req.Header.Set(name, value)
+	}
+	// SSRF 防护:task plugin 描述里的 URL 走 system FetchSetting 黑/白名单,
+	// 内网/loopback/link-local 都拒掉,跟其它 SSRF-protected fetch 一致。
+	if err := system_setting.ValidateUpstreamURLForSSRF(descriptor.URL); err != nil {
+		return nil, fmt.Errorf("jsplugin task URL %q 被 SSRF 防护拒绝: %w", descriptor.URL, err)
 	}
 	client, err := service.GetHttpClientWithProxy(proxy)
 	if err != nil {

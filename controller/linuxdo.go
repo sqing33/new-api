@@ -13,6 +13,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -56,8 +57,16 @@ func LinuxDoBind(c *gin.Context) {
 	}
 
 	session := sessions.Default(c)
-	id := session.Get("id")
-	user.Id = id.(int)
+	rawID := session.Get("id")
+	id, ok := rawID.(int)
+	if !ok || id == 0 {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "会话已失效，请重新登录后再绑定 LinuxDO",
+		})
+		return
+	}
+	user.Id = id
 
 	err = user.FillUserById()
 	if err != nil {
@@ -93,7 +102,16 @@ func getLinuxdoUserInfoByCode(code string, c *gin.Context) (*LinuxdoUser, error)
 	if c.Request.TLS != nil {
 		scheme = "https"
 	}
-	redirectURI := fmt.Sprintf("%s://%s/api/oauth/linuxdo", scheme, c.Request.Host)
+	// 不再用 c.Request.Host(攻击者可改 Host 头),从 system_setting.ServerAddress 取受信任的对外地址
+	serverAddr := strings.TrimSpace(system_setting.ServerAddress)
+	if serverAddr == "" {
+		serverAddr = scheme + "://" + strings.TrimSpace(c.Request.Host)
+	} else if !strings.Contains(serverAddr, "://") {
+		serverAddr = scheme + "://" + serverAddr
+	}
+	// 去掉尾部 / 避免双斜杠
+	serverAddr = strings.TrimRight(serverAddr, "/")
+	redirectURI := serverAddr + "/api/oauth/linuxdo"
 
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")

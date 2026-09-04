@@ -40,10 +40,10 @@ import (
 	_ "net/http/pprof"
 )
 
-//go:embed web/dist
+//go:embed web/classic/dist
 var buildFS embed.FS
 
-//go:embed web/dist/index.html
+//go:embed web/classic/dist/index.html
 var indexPage []byte
 
 func main() {
@@ -309,6 +309,13 @@ func InitResources() error {
 
 	// 加载环境变量
 	common.InitEnv()
+
+	// 配置 http.DefaultClient / http.DefaultTransport / websocket.DefaultDialer
+	// 的安全默认值(ResponseHeaderTimeout / HandshakeTimeout),
+	// 覆盖使用 DefaultClient 而不走 newRelayHTTPTransport 的代码路径
+	// (video_proxy / ratio_sync / channel_upstream_pricing / codex_oauth 等)。
+	// 见 common/http_safety.go 与 b518d0033 / #6949。
+	common.InitDefaultSafeHTTPClient()
 
 	logger.SetupLogger()
 

@@ -27,33 +27,15 @@ type Redemption struct {
 }
 
 func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
-	// 开始事务
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	// Count + Find 都是只读查询,不再 wrap 在事务里(见 GetAllUsers 注释)。
 
-	// 获取总数
-	err = tx.Model(&Redemption{}).Count(&total).Error
+	err = DB.Model(&Redemption{}).Count(&total).Error
 	if err != nil {
-		tx.Rollback()
 		return nil, 0, err
 	}
 
-	// 获取分页数据
-	err = tx.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
+	err = DB.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
 	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// 提交事务
-	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -61,17 +43,11 @@ func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total 
 }
 
 func SearchRedemptions(keyword string, status string, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	// Count + Find 都是只读查询,不再 wrap 在事务里(见 GetAllUsers 注释)。
 
-	query := tx.Model(&Redemption{})
+	// Count + Find 都是只读查询,不再 wrap 在事务里(见 GetAllUsers 注释)。
+
+	query := DB.Model(&Redemption{})
 
 	if keyword != "" {
 		if id, err := strconv.Atoi(keyword); err == nil {
@@ -106,22 +82,16 @@ func SearchRedemptions(keyword string, status string, startIdx int, num int) (re
 	// Get total count
 	err = query.Count(&total).Error
 	if err != nil {
-		tx.Rollback()
 		return nil, 0, err
 	}
 
 	// Get paginated data
 	err = query.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
 	if err != nil {
-		tx.Rollback()
 		return nil, 0, err
 	}
 
-	if err = tx.Commit().Error; err != nil {
-		return nil, 0, err
-	}
-
-	return redemptions, total, nil
+		return redemptions, total, nil
 }
 
 func GetRedemptionById(id int) (*Redemption, error) {

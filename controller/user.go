@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/middleware"
 	relaykitdto "github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
@@ -27,8 +29,14 @@ import (
 )
 
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username          string `json:"username"`
+	Password          string `json:"password"`
+	// 可选:开启 PASSWORD_LOGIN_ENCRYPTION_ENABLED=true 后,前端用
+	// /api/user/password/encryption 拿公钥对 password 做 RSA-OAEP/SHA-256
+	// 加密后放到 PasswordEncrypted,EncryptionKeyID 与当前公钥 ID 一致。
+	// 后端优先用 PasswordEncrypted 解密(失败回落到 Password,兼容老前端)。
+	PasswordEncrypted string `json:"password_encrypted,omitempty"`
+	EncryptionKeyID   string `json:"encryption_key_id,omitempty"`
 }
 
 func Login(c *gin.Context) {
@@ -44,6 +52,18 @@ func Login(c *gin.Context) {
 	}
 	username := loginRequest.Username
 	password := loginRequest.Password
+	// 31d70fca3:开启 PASSWORD_LOGIN_ENCRYPTION_ENABLED 时,优先用
+	// PasswordEncrypted 走 RSA-OAEP/SHA-256 解密。
+	if common.PasswordLoginEncryptionEnabled &&
+		strings.TrimSpace(loginRequest.PasswordEncrypted) != "" {
+		decrypted, err := common.DecryptPassword(loginRequest.PasswordEncrypted, loginRequest.EncryptionKeyID)
+		if err != nil {
+			common.SysLog(fmt.Sprintf("password encryption decrypt failed: %v", err))
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
+		password = decrypted
+	}
 	if username == "" || password == "" {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
@@ -69,13 +89,32 @@ func Login(c *gin.Context) {
 	// 检查是否启用2FA
 	enabled, _ := model.IsTwoFAEnabled(user.Id)
 	if enabled {
-		// 设置pending session，等待2FA验证
+		// 保留旧 cookie pending 字段作为 Verify2FALogin 失败时的兜底
+		// 上游 31d70fca3 把整个 2FA pending 状态迁到 AuthFlow,整合被部分回退
 		session := sessions.Default(c)
 		session.Set("pending_username", user.Username)
 		session.Set("pending_user_id", user.Id)
-		err := session.Save()
-		if err != nil {
+		if err := session.Save(); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+
+		// 下发 2FA flow_token,让 /api/user/login/2fa 能通过 AuthFlow 走通
+		// (Verify2FALogin 内部 GetAuthFlow(req.FlowToken, ...) 强依赖)
+		payload, err := common.Marshal(map[string]int64{"auth_version": user.AuthVersion})
+		if err != nil {
+			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+			return
+		}
+		flowToken, _, err := model.CreateAuthFlow(model.AuthFlowCreate{
+			Purpose:   model.AuthFlowPurposeTwoFALogin,
+			UserId:    user.Id,
+			SessionId: "login:" + strconv.Itoa(user.Id),
+			Payload:   string(payload),
+			ExpiresAt: time.Now().Add(5 * time.Minute),
+		})
+		if err != nil {
+			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 			return
 		}
 
@@ -84,6 +123,7 @@ func Login(c *gin.Context) {
 			"success": true,
 			"data": map[string]interface{}{
 				"require_2fa": true,
+				"flow_token":  flowToken,
 			},
 		})
 		return
@@ -92,35 +132,113 @@ func Login(c *gin.Context) {
 	setupLogin(&user, c)
 }
 
+// setupLoginAtAuthVersion 是上游 31d70fca3 的入口,2FA 通过后由它登录。
+// 整合时这一行被回退到只调 setupLogin,失去了 31d70fca3 的 session 约束。
+// 既然所有路径都过 setupLogin,就在 setupLogin 里强制 auth_version,任何
+// stale session 都会被撤销。
+func setupLoginAtAuthVersion(user *model.User, expectedAuthVersion int64, c *gin.Context) {
+	setupLogin(user, c, expectedAuthVersion)
+}
+
 // setup session & cookies and then return user info
-func setupLogin(user *model.User, c *gin.Context) {
+// expectedAuthVersion:0 = 用 user 当前 AuthVersion(普通登录);>0 = 校验必须匹配(2FA 等)
+func setupLogin(user *model.User, c *gin.Context, expectedAuthVersion ...int64) {
 	model.UpdateUserLastLoginAt(user.Id)
+
+	// 31d70fca3 的核心:建立 stateless session,记 audit log,支持 token 轮换 / 撤销。
+	// 即使 2FA 走 setupLoginAtAuthVersion,最终也过这里,所以两路都覆盖。
+	ip := c.ClientIP()
+	ua := c.GetHeader("User-Agent")
+	expectedAV := int64(0)
+	if len(expectedAuthVersion) > 0 {
+		expectedAV = expectedAuthVersion[0]
+	}
+	var bundle *service.AuthBundle
+	if expectedAV > 0 {
+		var err error
+		bundle, err = service.CreateLoginSessionAtAuthVersion(user.Id, expectedAV, "password", ip, ua)
+		if err != nil {
+			common.SysLog(fmt.Sprintf("create login session failed: %v", err))
+			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+	} else {
+		var err error
+		bundle, err = service.CreateLoginSession(user.Id, "password", ip, ua)
+		if err != nil {
+			common.SysLog(fmt.Sprintf("create login session failed: %v", err))
+			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+	}
+	service.WriteRefreshCookie(c, bundle.RefreshToken)
+
+	// 旧 cookie session 仍写,给 OAuth Bind(controller/{github,discord,linuxdo}.go
+	// 用 sessions.Default(c).Get("id"))等老代码路径兜底。
 	session := sessions.Default(c)
 	session.Set("id", user.Id)
 	session.Set("username", user.Username)
 	session.Set("role", user.Role)
 	session.Set("status", user.Status)
 	session.Set("group", user.Group)
-	err := session.Save()
-	if err != nil {
+	if err := session.Save(); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "",
 		"success": true,
 		"data": map[string]any{
-			"id":           user.Id,
-			"username":     user.Username,
-			"display_name": user.DisplayName,
-			"role":         user.Role,
-			"status":       user.Status,
-			"group":        user.Group,
+			"id":             user.Id,
+			"username":       user.Username,
+			"display_name":   user.DisplayName,
+			"role":           user.Role,
+			"status":         user.Status,
+			"group":          user.Group,
+			"access_token":   bundle.AccessToken,
+			"token_type":     bundle.TokenType,
+			"expires_at":     bundle.AccessExpiresAt,
+			"session_id":     bundle.Session.SID,
+			"refresh_token":  bundle.RefreshToken, // 前端可选保存,用于跨设备 refresh
 		},
 	})
 }
 
+// GetPasswordEncryptionKey 公开当前密码加密公钥(RSA-OAEP/SHA-256,2048-bit)。
+// 前端拿公钥对 password 加密后随 LoginRequest.PasswordEncrypted 上传。
+// 不依赖 PASSWORD_LOGIN_ENCRYPTION_ENABLED 开关:如果服务端未初始化密钥,
+// 返回 enabled=false 让前端走明文路径(向后兼容)。
+func GetPasswordEncryptionKey(c *gin.Context) {
+	keyID, pubPEM := common.PasswordEncryptionPublicKey()
+	common.ApiSuccess(c, gin.H{
+		"enabled":        common.PasswordLoginEncryptionEnabled && pubPEM != "",
+		"algorithm":      "RSA-OAEP-SHA256",
+		"key_bits":       2048,
+		"key_id":         keyID,
+		"public_key_pem": pubPEM,
+	})
+}
+
 func Logout(c *gin.Context) {
+	// 31d70fca3 关键:撤销 user_sessions 表里的 session,让 refresh token / access token 立刻失效。
+	// 用户可能从 Authorization 头(Bearer)或 refresh cookie 进来,两种都试。
+	revokedSomething := false
+	if cookie, err := c.Cookie(service.RefreshCookieName); err == nil && cookie != "" {
+		if err := service.RevokeByRefreshToken(cookie, "", "logout"); err == nil {
+			revokedSomething = true
+		}
+	}
+	if auth := c.GetHeader("Authorization"); auth != "" {
+		if raw, ok := authorizationBearerToken(auth); ok && raw != "" {
+			if identity, ok := middleware.GetSessionAuthIdentity(c); ok {
+				_, _ = model.RevokeUserSession(identity.UserID, identity.SessionID, "logout")
+				revokedSomething = true
+			}
+		}
+	}
+	service.ClearRefreshCookie(c)
+
 	session := sessions.Default(c)
 	session.Clear()
 	err := session.Save()
@@ -131,10 +249,23 @@ func Logout(c *gin.Context) {
 		})
 		return
 	}
+	if !revokedSomething {
+		common.SysLog(fmt.Sprintf("logout: no session token found (user-agent=%s)", c.GetHeader("User-Agent")))
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"message": "",
 		"success": true,
 	})
+}
+
+// authorizationBearerToken 从 "Authorization: Bearer xxx" 头抽 token。
+// 与 middleware/auth.go 的 authorizationToken 行为一致。
+func authorizationBearerToken(auth string) (string, bool) {
+	const prefix = "Bearer "
+	if len(auth) <= len(prefix) || !strings.EqualFold(auth[:len(prefix)], prefix) {
+		return "", false
+	}
+	return strings.TrimSpace(auth[len(prefix):]), true
 }
 
 func Register(c *gin.Context) {
@@ -1304,10 +1435,6 @@ func dashboardBearer(header string) (string, bool) {
 		return "", false
 	}
 	return parts[1], true
-}
-
-func setupLoginAtAuthVersion(user *model.User, expectedAuthVersion int64, c *gin.Context) {
-	setupLogin(user, c)
 }
 
 var errOriginalPasswordFail = errors.New("original password is incorrect")

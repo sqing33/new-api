@@ -387,34 +387,22 @@ func GetMaxUserId() int {
 }
 
 func GetAllUsers(pageInfo *common.PageInfo, sortOptions ...UserSortOptions) (users []*User, total int64, err error) {
-	// Start transaction
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	// Count + Find 都是只读查询,不再 wrap 在事务里:
+	//   - 在 SQLite 上 _txlock=immediate 会让每次 Begin 拿 RESERVED 锁,把所有
+	//     admin list 类请求串行化。
+	//   - 没有写操作的 tx 不提供任何隔离性收益,只增加锁开销。
+	//   - MySQL/PostgreSQL 行为不变(默认 autocommit SELECT)。
+	// 轻微代价:Count 和 Find 之间新增/删除的 user 可能让分页 count 与实际
+	// 行差 1,这是 admin 列表场景可接受的。
 
-	// Get total count within transaction
-	err = tx.Unscoped().Model(&User{}).Count(&total).Error
+	err = DB.Unscoped().Model(&User{}).Count(&total).Error
 	if err != nil {
-		tx.Rollback()
 		return nil, 0, err
 	}
 
-	// Get paginated users within same transaction
 	order := resolveUserSortOptions(sortOptions)
-	err = order.Apply(tx.Unscoped()).Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password", "access_token").Find(&users).Error
+	err = order.Apply(DB.Unscoped()).Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password", "access_token").Find(&users).Error
 	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// Commit transaction
-	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -426,19 +414,11 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	var total int64
 	var err error
 
-	// 开始事务
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	// 与 GetAllUsers 同理:Count + Find 都是只读查询,不再 wrap 在事务里。
+	// 见 GetAllUsers 注释,SQLite 上 _txlock=immediate 场景。
 
 	// 构建基础查询
-	query := tx.Unscoped().Model(&User{})
+	query := DB.Unscoped().Model(&User{})
 
 	// 构建搜索条件
 	likeCondition := "username LIKE ? OR email LIKE ? OR display_name LIKE ?"
@@ -447,7 +427,7 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	// 尝试将关键字转换为整数ID
 	keywordInt, err := strconv.Atoi(keyword)
 	if err == nil {
-		// 如果是数字，同时搜索ID和其他字段
+		// 如果是数字,同时搜索ID和其他字段
 		likeCondition = "id = ? OR " + likeCondition
 		likeArgs = append([]interface{}{keywordInt}, likeArgs...)
 	}
@@ -470,7 +450,6 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	// 获取总数
 	err = query.Count(&total).Error
 	if err != nil {
-		tx.Rollback()
 		return nil, 0, err
 	}
 
@@ -478,12 +457,6 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	order := resolveUserSortOptions(sortOptions)
 	err = order.Apply(query.Omit("password", "access_token")).Limit(num).Offset(startIdx).Find(&users).Error
 	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// 提交事务
-	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
 
