@@ -68,7 +68,7 @@ const Rankings = () => {
       <div className='flex flex-col md:flex-row md:items-end md:justify-between gap-3'>
         <div>
           <Title heading={4} className='!mb-1'>
-            {t('排行榜')}
+            {t('清荫行榜')}
           </Title>
           <div
             className='text-sm'

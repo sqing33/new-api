@@ -257,6 +257,16 @@ func UpdateOption(c *gin.Context) {
 				return
 			}
 		}
+	case "ConsoleBackgroundURL":
+		url := strings.TrimSpace(option.Value.(string))
+		if url != "" && !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "/") {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "控制台背景必须是 http(s):// 或以 / 开头的站内路径，留空恢复默认",
+			})
+			return
+		}
+		option.Value = url
 	case "GroupRatio":
 		err = ratio_setting.CheckGroupRatio(option.Value.(string))
 		if err != nil {

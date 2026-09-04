@@ -69,6 +69,16 @@ const MarketShareSection = ({ data, period, t }) => {
         label: { style: { fontSize: 10 } },
       },
       legend: { visible: false },
+      tooltip: {
+        mark: {
+          content: [
+            {
+              key: (datum) => datum['vendor'],
+              value: (datum) => formatShare(datum['share']),
+            },
+          ],
+        },
+      },
       bar: {
         columnWidthRatio: 0.6,
         seriesGapWidth: 1,

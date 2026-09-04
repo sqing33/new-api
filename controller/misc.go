@@ -105,6 +105,9 @@ func GetStatus(c *gin.Context) {
 		"HomePageMode":        common.OptionMap["HomePageMode"],
 		"HomeGalleryImages":   common.OptionMap["HomeGalleryImages"],
 
+		// 控制台自定义背景(空字符串表示使用默认打包背景)
+		"ConsoleBackgroundURL": common.OptionMap["ConsoleBackgroundURL"],
+
 		"oidc_enabled":                system_setting.GetOIDCSettings().Enabled,
 		"oidc_client_id":              system_setting.GetOIDCSettings().ClientId,
 		"oidc_authorization_endpoint": system_setting.GetOIDCSettings().AuthorizationEndpoint,

@@ -342,7 +342,7 @@ export default function SettingsSidebarModulesUser() {
         },
         {
           key: 'rankings',
-          title: t('排行榜'),
+          title: t('清荫行榜'),
           description: t('模型用量与厂商份额排名'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },

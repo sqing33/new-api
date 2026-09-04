@@ -373,7 +373,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/pricing',
       },
       {
-        text: t('排行榜'),
+        text: t('清荫行榜'),
         itemKey: 'rankings',
         to: '/rankings',
       },
@@ -558,7 +558,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
                 ellipsis
                 className='!text-[11px] !text-semi-color-text-2'
               >
-                {t('当前余额')}：{balance}
+                {t('余额')}：{balance}
               </Typography.Text>
             </span>
           )}

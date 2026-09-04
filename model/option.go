@@ -80,6 +80,7 @@ func InitOptionMap() {
 	common.OptionMap["HomePageContent"] = ""
 	common.OptionMap["HomePageMode"] = "image_showcase"
 	common.OptionMap["HomeGalleryImages"] = ""
+	common.OptionMap["ConsoleBackgroundURL"] = ""
 	common.OptionMap["ImagePromptPresets"] = ""
 	common.OptionMap["Footer"] = common.Footer
 	common.OptionMap["SystemName"] = common.SystemName
