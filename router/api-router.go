@@ -280,6 +280,10 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.POST("/upstream_updates/detect_all", controller.DetectAllChannelUpstreamModelUpdates)
 			channelRoute.POST("/upstream_pricing/detect", controller.DetectChannelUpstreamPricingChanges)
 			channelRoute.POST("/upstream_pricing/detect_all", controller.DetectAllChannelUpstreamPricingChanges)
+			// 渠道启用/禁用走专用状态接口:UpdateChannel 拒绝携带 status 的
+			// 请求,前端禁用/启用按钮调用的是这两个路由
+			channelRoute.POST("/:id/status", middleware.RequirePermission(authz.ChannelOperate), controller.UpdateChannelStatus)
+			channelRoute.POST("/status/batch", middleware.RequirePermission(authz.ChannelOperate), controller.BatchUpdateChannelStatus)
 		}
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.UserAuth())
