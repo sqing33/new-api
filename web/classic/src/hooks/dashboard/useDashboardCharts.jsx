@@ -26,6 +26,7 @@ import {
   modelToColor,
   getQuotaWithUnit,
 } from '../../helpers';
+import { formatTokens } from '../../components/rankings/format';
 import {
   processRawData,
   calculateTrendData,
@@ -67,7 +68,6 @@ export const useDashboardCharts = (
   const [spec_pie, setSpecPie] = useState({
     type: 'pie',
     background: DASHBOARD_CHART_BACKGROUND,
-    animation: false, // 关闭入场动画:数据一次性更新,多图同时重放动画导致卡顿
     data: [
       {
         id: 'id0',
@@ -126,7 +126,6 @@ export const useDashboardCharts = (
   const [spec_line, setSpecLine] = useState({
     type: 'bar',
     background: DASHBOARD_CHART_BACKGROUND,
-    animation: false, // 关闭入场动画:数据一次性更新,多图同时重放动画导致卡顿
     data: [
       {
         id: 'barData',
@@ -202,7 +201,6 @@ export const useDashboardCharts = (
   const [spec_model_line, setSpecModelLine] = useState({
     type: 'line',
     background: DASHBOARD_CHART_BACKGROUND,
-    animation: false, // 关闭入场动画:数据一次性更新,多图同时重放动画导致卡顿
     data: [
       {
         id: 'lineData',
@@ -262,7 +260,6 @@ export const useDashboardCharts = (
   const [spec_rank_bar, setSpecRankBar] = useState({
     type: 'bar',
     background: DASHBOARD_CHART_BACKGROUND,
-    animation: false, // 关闭入场动画:数据一次性更新,多图同时重放动画导致卡顿
     data: [
       {
         id: 'rankData',
@@ -304,11 +301,90 @@ export const useDashboardCharts = (
     },
   });
 
+  // ===== 消耗量(按时间段的模型 token 用量,堆叠柱状图,单位 K/M/B) =====
+  const [spec_tokens_bar, setSpecTokensBar] = useState({
+    type: 'bar',
+    background: DASHBOARD_CHART_BACKGROUND,
+    data: [
+      {
+        id: 'tokensBarData',
+        values: [],
+      },
+    ],
+    xField: 'Time',
+    yField: 'Tokens',
+    seriesField: 'Model',
+    stack: true,
+    legends: {
+      visible: true,
+      selectMode: 'single',
+    },
+    title: {
+      visible: true,
+      text: t('模型消耗量分布'),
+      subtext: '',
+    },
+    bar: {
+      state: {
+        hover: {
+          stroke: '#000',
+          lineWidth: 1,
+        },
+      },
+    },
+    valueAxis: {
+      label: {
+        // 轴刻度统一压缩为 K/M/B,回调可能传字符串形式的数字
+        formatMethod: (value) => formatTokens(value),
+        style: { fontSize: 10 },
+      },
+    },
+    tooltip: {
+      mark: {
+        content: [
+          {
+            key: (datum) => datum['Model'],
+            value: (datum) => formatTokens(datum['rawTokens'] || 0),
+          },
+        ],
+      },
+      dimension: {
+        content: [
+          {
+            key: (datum) => datum['Model'],
+            value: (datum) => datum['rawTokens'] || 0,
+          },
+        ],
+        updateContent: (array) => {
+          array.sort((a, b) => b.value - a.value);
+          let sum = 0;
+          for (let i = 0; i < array.length; i++) {
+            let value = parseFloat(array[i].value);
+            if (isNaN(value)) {
+              value = 0;
+            }
+            if (array[i].datum && array[i].datum.TimeSum) {
+              sum = array[i].datum.TimeSum;
+            }
+            array[i].value = formatTokens(value);
+          }
+          array.unshift({
+            key: t('总计'),
+            value: formatTokens(sum),
+          });
+          return array;
+        },
+      },
+    },
+    color: {
+      specified: modelColorMap,
+    },
+  });
+
   // ========== Admin: 用户消耗排行 ==========
   const [spec_user_rank, setSpecUserRank] = useState({
     type: 'bar',
     background: DASHBOARD_CHART_BACKGROUND,
-    animation: false, // 关闭入场动画:数据一次性更新,多图同时重放动画导致卡顿
     data: [{ id: 'userRankData', values: [] }],
     xField: 'rawQuota',
     yField: 'User',
@@ -357,7 +433,6 @@ export const useDashboardCharts = (
   const [spec_user_trend, setSpecUserTrend] = useState({
     type: 'area',
     background: DASHBOARD_CHART_BACKGROUND,
-    animation: false, // 关闭入场动画:数据一次性更新,多图同时重放动画导致卡顿
     data: [{ id: 'userTrendData', values: [] }],
     xField: 'Time',
     yField: 'rawQuota',
@@ -523,6 +598,42 @@ export const useDashboardCharts = (
         'barData',
       );
 
+      // ===== 消耗量堆叠柱状图:与消耗分布同构,数据换成 token 用量 =====
+      let tokensBarData = [];
+      chartTimePoints.forEach((time) => {
+        let timeData = Array.from(uniqueModels).map((model) => {
+          const key = `${time}-${model}`;
+          const aggregated = aggregatedData.get(key);
+          return {
+            Time: time,
+            Model: model,
+            rawTokens: aggregated?.tokens || 0,
+            Tokens: aggregated?.tokens || 0,
+          };
+        });
+
+        const timeTokensSum = timeData.reduce(
+          (sum, item) => sum + item.rawTokens,
+          0,
+        );
+        timeData.sort((a, b) => b.rawTokens - a.rawTokens);
+        timeData = timeData.map((item) => ({
+          ...item,
+          TimeSum: timeTokensSum,
+        }));
+        tokensBarData.push(...timeData);
+      });
+
+      tokensBarData.sort((a, b) => a.Time.localeCompare(b.Time));
+
+      updateChartSpec(
+        setSpecTokensBar,
+        tokensBarData,
+        `${t('总计')}：${formatTokens(totalTokens)}`,
+        newModelColors,
+        'tokensBarData',
+      );
+
       // ===== 模型调用次数折线图 =====
       let modelLineData = [];
       chartTimePoints.forEach((time) => {
@@ -652,6 +763,7 @@ export const useDashboardCharts = (
   return {
     spec_pie,
     spec_line,
+    spec_tokens_bar,
     spec_model_line,
     spec_rank_bar,
     spec_user_rank,

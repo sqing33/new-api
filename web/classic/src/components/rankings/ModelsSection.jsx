@@ -85,8 +85,6 @@ const ModelsSection = ({ data, period, t }) => {
       seriesField: 'model',
       stack: true,
       padding: 'auto',
-      // 周期切换时全量重放入场动画非常卡,图表保持静态渲染
-      animation: false,
       categoryAxis: {
         label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
         line: false,
