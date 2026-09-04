@@ -23,11 +23,7 @@ import { VChart } from '@visactor/react-vchart';
 import { useNavigate } from 'react-router-dom';
 import { CHART_CONFIG } from '../../constants/dashboard.constants';
 import { getLobeHubIcon } from '../../helpers';
-import {
-  buildVendorColorMap,
-  formatShare,
-  formatTokens,
-} from './format';
+import { buildVendorColorMap, formatShare, formatTokens } from './format';
 
 const { Text } = Typography;
 
@@ -84,7 +80,7 @@ const MarketShareSection = ({ data, period, t }) => {
         <Text strong className='text-base'>
           {t('市场份额')}
         </Text>
-        <div className='text-xs text-gray-500 mt-0.5'>
+        <div className='text-xs semi-text-tertiary mt-0.5'>
           {t(PERIOD_DESCRIPTIONS[period] || PERIOD_DESCRIPTIONS.week)}
         </div>
       </div>
@@ -131,7 +127,7 @@ const VendorRow = ({ vendor, t, onVendorClick }) => {
       className='flex items-center gap-3 py-2.5 border-b border-dashed last:border-0'
       style={{ borderColor: 'var(--semi-color-border)' }}
     >
-      <span className='font-mono text-xs text-gray-400 w-6 text-right shrink-0'>
+      <span className='font-mono text-xs semi-text-tertiary w-6 text-right shrink-0'>
         {vendor.rank}.
       </span>
       {vendor.vendor_icon ? getLobeHubIcon(vendor.vendor_icon, 20) : null}
@@ -144,12 +140,12 @@ const VendorRow = ({ vendor, t, onVendorClick }) => {
       >
         {vendor.vendor}
       </button>
-      <span className='text-xs text-gray-400 whitespace-nowrap'>
+      <span className='text-xs semi-text-tertiary whitespace-nowrap'>
         {formatShare(vendor.share)}
       </span>
       {vendor.top_model ? (
         <span
-          className='text-xs text-gray-400 truncate'
+          className='text-xs semi-text-tertiary truncate'
           title={`${t('最热模型')}：${vendor.top_model}`}
         >
           {vendor.top_model}

@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Card, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Space, Typography } from '@douyinfe/semi-ui';
 import SystemInstancesPanel from '../../components/table/system-info/SystemInstancesPanel';
 import SystemTasksPanel from '../../components/table/system-info/SystemTasksPanel';
 import { useSystemInfoData } from '../../hooks/system-info/useSystemInfoData';
@@ -27,17 +27,38 @@ const { Title } = Typography;
 
 const SystemInfoPage = () => {
   const data = useSystemInfoData();
+  const { t } = data;
 
   return (
-    <div className='mt-[60px] px-2 space-y-4'>
-      <Title heading={4} className='!mb-0'>
-        {data.t('系统信息')}
-      </Title>
+    <div className='px-2 space-y-4'>
+      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
+        <div>
+          <Title heading={4} className='!mb-1'>
+            {t('系统信息')}
+          </Title>
+          <div
+            className='text-sm'
+            style={{ color: 'var(--semi-color-text-1)' }}
+          >
+            {t('上报心跳的本部署节点及其最新状态')}
+          </div>
+        </div>
+        <Space>
+          <Button
+            theme='outline'
+            size='small'
+            loading={data.instancesRefreshing}
+            onClick={() => data.loadInstances(true)}
+          >
+            {t('刷新')}
+          </Button>
+        </Space>
+      </div>
       <Card className='!rounded-xl'>
-        <SystemInstancesPanel data={data} t={data.t} />
+        <SystemInstancesPanel data={data} t={t} />
       </Card>
       <Card className='!rounded-xl'>
-        <SystemTasksPanel data={data} t={data.t} />
+        <SystemTasksPanel data={data} t={t} />
       </Card>
     </div>
   );

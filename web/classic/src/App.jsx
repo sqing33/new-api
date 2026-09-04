@@ -415,9 +415,11 @@ function App() {
         <Route
           path='/rankings'
           element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <Rankings />
-            </Suspense>
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <Rankings />
+              </Suspense>
+            </PrivateRoute>
           }
         />
         <Route

@@ -77,11 +77,13 @@ const renderResourcePercent = (value, tooltip) => {
           ? 'var(--semi-color-warning)'
           : 'var(--semi-color-success)'
       : undefined;
-  const content = (
-    <Text style={color ? { color } : undefined}>{text}</Text>
-  );
+  const content = <Text style={color ? { color } : undefined}>{text}</Text>;
   if (!tooltip) return content;
-  return <Tooltip content={tooltip} showArrow>{content}</Tooltip>;
+  return (
+    <Tooltip content={tooltip} showArrow>
+      {content}
+    </Tooltip>
+  );
 };
 
 const SystemInstancesPanel = ({ data, t }) => {
@@ -146,7 +148,11 @@ const SystemInstancesPanel = ({ data, t }) => {
                   flexShrink: 0,
                 }}
               />
-              <Text strong ellipsis={{ showTooltip: true }} style={{ maxWidth: 200 }}>
+              <Text
+                strong
+                ellipsis={{ showTooltip: true }}
+                style={{ maxWidth: 200 }}
+              >
                 {getNodeName(record)}
               </Text>
               {shouldConfigure && (
@@ -162,7 +168,7 @@ const SystemInstancesPanel = ({ data, t }) => {
                 </Tooltip>
               )}
             </div>
-            <div className='text-xs text-gray-500 truncate'>
+            <div className='text-xs semi-text-tertiary truncate'>
               {record.info?.host?.hostname || '-'}
             </div>
           </div>
@@ -175,7 +181,11 @@ const SystemInstancesPanel = ({ data, t }) => {
       width: 100,
       render: (status) => {
         const cfg = STATUS_TAG[status] || STATUS_TAG.stale;
-        return <Tag color={cfg.color} size='small'>{t(cfg.label)}</Tag>;
+        return (
+          <Tag color={cfg.color} size='small'>
+            {t(cfg.label)}
+          </Tag>
+        );
       },
     },
     {
@@ -205,7 +215,8 @@ const SystemInstancesPanel = ({ data, t }) => {
       title: 'CPU',
       dataIndex: 'info',
       width: 80,
-      render: (info) => renderResourcePercent(info?.resources?.cpu?.usage_percent),
+      render: (info) =>
+        renderResourcePercent(info?.resources?.cpu?.usage_percent),
     },
     {
       title: t('内存'),
@@ -304,7 +315,7 @@ const SystemInstancesPanel = ({ data, t }) => {
           <Text strong className='text-base'>
             {t('实例')}
           </Text>
-          <div className='text-xs text-gray-500 mt-0.5'>
+          <div className='text-xs semi-text-tertiary mt-0.5'>
             {t('上报心跳的本部署节点及其最新状态')}
           </div>
         </div>

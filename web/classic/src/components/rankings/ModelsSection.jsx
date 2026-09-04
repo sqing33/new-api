@@ -36,13 +36,19 @@ const PERIOD_DESCRIPTIONS = {
 
 const GrowthText = ({ value, t }) => {
   if (typeof value !== 'number' || Number.isNaN(value) || value === 0) {
-    return <Text type='tertiary' className='font-mono text-xs'>-</Text>;
+    return (
+      <Text type='tertiary' className='font-mono text-xs'>
+        -
+      </Text>
+    );
   }
   const up = value > 0;
   return (
     <Text
       className='font-mono text-xs whitespace-nowrap'
-      style={{ color: up ? 'var(--semi-color-success)' : 'var(--semi-color-danger)' }}
+      style={{
+        color: up ? 'var(--semi-color-success)' : 'var(--semi-color-danger)',
+      }}
     >
       {up ? '↑' : '↓'}
       {Math.abs(value).toFixed(Math.abs(value) >= 10 ? 0 : 1)}%
@@ -103,7 +109,7 @@ const ModelsSection = ({ data, period, t }) => {
           <Text strong className='text-base'>
             {t('热门模型')}
           </Text>
-          <div className='text-xs text-gray-500 mt-0.5'>
+          <div className='text-xs semi-text-tertiary mt-0.5'>
             {t(PERIOD_DESCRIPTIONS[period] || PERIOD_DESCRIPTIONS.week)}
           </div>
         </div>
@@ -111,7 +117,7 @@ const ModelsSection = ({ data, period, t }) => {
           <span className='font-mono text-xl font-semibold tabular-nums'>
             {formatTokens(totalTokens)}
           </span>
-          <span className='text-xs uppercase tracking-widest text-gray-400 ml-2'>
+          <span className='text-xs uppercase tracking-widest semi-text-tertiary ml-2'>
             tokens
           </span>
         </div>
@@ -135,12 +141,10 @@ const ModelsSection = ({ data, period, t }) => {
                   className='flex items-center gap-3 py-2.5 border-b border-dashed last:border-0'
                   style={{ borderColor: 'var(--semi-color-border)' }}
                 >
-                  <span className='font-mono text-xs text-gray-400 w-6 text-right shrink-0'>
+                  <span className='font-mono text-xs semi-text-tertiary w-6 text-right shrink-0'>
                     {row.rank}.
                   </span>
-                  {row.vendor_icon
-                    ? getLobeHubIcon(row.vendor_icon, 20)
-                    : null}
+                  {row.vendor_icon ? getLobeHubIcon(row.vendor_icon, 20) : null}
                   <button
                     type='button'
                     className='text-sm font-medium truncate cursor-pointer hover:underline bg-transparent border-0 p-0 text-left'
@@ -150,7 +154,7 @@ const ModelsSection = ({ data, period, t }) => {
                   >
                     {row.model_name}
                   </button>
-                  <span className='text-xs italic text-gray-400 truncate shrink-0'>
+                  <span className='text-xs italic semi-text-tertiary truncate shrink-0'>
                     {t('供应商')} {row.vendor}
                   </span>
                   <span className='ml-auto font-mono text-sm tabular-nums whitespace-nowrap'>

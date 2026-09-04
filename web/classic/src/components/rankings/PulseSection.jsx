@@ -41,7 +41,7 @@ const MoverRow = ({ mover, up, onModelClick }) => {
       >
         {mover.model_name}
       </button>
-      <span className='text-xs text-gray-400 whitespace-nowrap'>
+      <span className='text-xs semi-text-tertiary whitespace-nowrap'>
         #{mover.current_rank} · {mover.vendor}
       </span>
       <span
@@ -75,7 +75,7 @@ const PulseSection = ({ data, t }) => {
             <Text strong className='text-base'>
               {t('上升榜')}
             </Text>
-            <div className='text-xs text-gray-500'>
+            <div className='text-xs semi-text-tertiary'>
               {t('排名正在上升的模型')}
             </div>
           </div>
@@ -108,7 +108,7 @@ const PulseSection = ({ data, t }) => {
             <Text strong className='text-base'>
               {t('下降榜')}
             </Text>
-            <div className='text-xs text-gray-500'>
+            <div className='text-xs semi-text-tertiary'>
               {t('排名正在下滑的模型')}
             </div>
           </div>

@@ -41,13 +41,16 @@ const PerformancePage = () => {
   } = perf;
 
   return (
-    <div className='mt-[60px] px-2 space-y-4'>
+    <div className='px-2 space-y-4'>
       <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
         <div>
           <Title heading={4} className='!mb-1'>
             {t('性能指标')}
           </Title>
-          <div className='text-sm text-gray-500'>
+          <div
+            className='text-sm'
+            style={{ color: 'var(--semi-color-text-1)' }}
+          >
             {t('各模型的延迟、成功率与吞吐表现，数据来自网关调用日志。')}
           </div>
         </div>

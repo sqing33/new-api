@@ -18,7 +18,15 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button, Progress, Space, Table, Tag, Tooltip, Typography } from '@douyinfe/semi-ui';
+import {
+  Button,
+  Progress,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+} from '@douyinfe/semi-ui';
 import { getRelativeTime, timestamp2string } from '../../../helpers';
 import { TASK_TYPE_LABELS } from '../../../hooks/system-info/useSystemInfoData';
 
@@ -45,7 +53,7 @@ const buildColumns = (t) => [
     render: (type) => (
       <div>
         <Text strong>{t(TASK_TYPE_LABELS[type] || type)}</Text>
-        <div className='font-mono text-xs text-gray-400'>{type}</div>
+        <div className='font-mono text-xs semi-text-tertiary'>{type}</div>
       </div>
     ),
   },
@@ -55,7 +63,11 @@ const buildColumns = (t) => [
     width: 100,
     render: (status) => {
       const cfg = STATUS_TAG[status] || STATUS_TAG.failed;
-      return <Tag color={cfg.color} size='small'>{t(cfg.label)}</Tag>;
+      return (
+        <Tag color={cfg.color} size='small'>
+          {t(cfg.label)}
+        </Tag>
+      );
     },
   },
   {
@@ -84,7 +96,11 @@ const buildColumns = (t) => [
     dataIndex: 'locked_by',
     width: 200,
     render: (lockedBy) => (
-      <Text type='secondary' className='font-mono text-xs' ellipsis={{ showTooltip: true }}>
+      <Text
+        type='secondary'
+        className='font-mono text-xs'
+        ellipsis={{ showTooltip: true }}
+      >
         {lockedBy || '-'}
       </Text>
     ),
@@ -107,7 +123,16 @@ const buildColumns = (t) => [
     render: (error) =>
       error ? (
         <Tooltip content={error} showArrow position='top'>
-          <Text type='danger' className='text-xs' ellipsis={{ showTooltip: false }} style={{ maxWidth: 220, display: 'inline-block', verticalAlign: 'bottom' }}>
+          <Text
+            type='danger'
+            className='text-xs'
+            ellipsis={{ showTooltip: false }}
+            style={{
+              maxWidth: 220,
+              display: 'inline-block',
+              verticalAlign: 'bottom',
+            }}
+          >
             {error}
           </Text>
         </Tooltip>
@@ -136,7 +161,7 @@ const SystemTasksPanel = ({ data, t }) => {
           <Text strong className='text-base'>
             {t('系统任务')}
           </Text>
-          <div className='text-xs text-gray-500 mt-0.5'>
+          <div className='text-xs semi-text-tertiary mt-0.5'>
             {t('各实例正在执行与维护中的后台任务状态')}
           </div>
         </div>
@@ -161,7 +186,7 @@ const SystemTasksPanel = ({ data, t }) => {
           <div className='flex items-center justify-between mb-2'>
             <div>
               <Text strong>{t('运行中任务')}</Text>
-              <div className='text-xs text-gray-500'>
+              <div className='text-xs semi-text-tertiary'>
                 {t('当前等待或正在执行的任务')}
               </div>
             </div>
@@ -177,16 +202,14 @@ const SystemTasksPanel = ({ data, t }) => {
             size='small'
             rowKey='task_id'
             scroll={{ x: 'max-content' }}
-            empty={
-              <Text type='secondary'>{t('暂无运行中系统任务')}</Text>
-            }
+            empty={<Text type='secondary'>{t('暂无运行中系统任务')}</Text>}
           />
         </div>
         <div>
           <div className='flex items-center justify-between mb-2'>
             <div>
               <Text strong>{t('任务历史')}</Text>
-              <div className='text-xs text-gray-500'>
+              <div className='text-xs semi-text-tertiary'>
                 {t('最近完成或失败的系统任务记录')}
               </div>
             </div>

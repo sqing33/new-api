@@ -37,7 +37,7 @@ const StatCard = ({ label, value, color, t }) => (
     className='rounded-lg border p-3'
     style={{ borderColor: 'var(--semi-color-border)' }}
   >
-    <div className='text-xs text-gray-500 mb-1'>{label}</div>
+    <div className='text-xs semi-text-tertiary mb-1'>{label}</div>
     <div
       className='font-mono text-lg font-semibold tabular-nums'
       style={color ? { color } : undefined}
@@ -62,8 +62,7 @@ const ModelPerformanceSheet = ({
   const overall = useMemo(() => {
     if (groups.length === 0) return null;
     const avg = (key) =>
-      groups.reduce((sum, g) => sum + (Number(g[key]) || 0), 0) /
-      groups.length;
+      groups.reduce((sum, g) => sum + (Number(g[key]) || 0), 0) / groups.length;
     return {
       avgLatencyMs: avg('avg_latency_ms'),
       avgTtftMs: avg('avg_ttft_ms'),
@@ -95,8 +94,7 @@ const ModelPerformanceSheet = ({
         label: {
           autoHide: true,
           autoRotate: false,
-          formatMethod: (value) =>
-            dayjs(value).format('MM-DD HH:mm'),
+          formatMethod: (value) => dayjs(value).format('MM-DD HH:mm'),
           style: { fontSize: 10 },
         },
         line: false,
@@ -200,7 +198,10 @@ const ModelPerformanceSheet = ({
                 label={t('平均延迟')}
                 value={formatLatency(overall?.avgLatencyMs)}
               />
-              <StatCard label='TTFT' value={formatLatency(overall?.avgTtftMs)} />
+              <StatCard
+                label='TTFT'
+                value={formatLatency(overall?.avgTtftMs)}
+              />
               <StatCard
                 label={t('成功率')}
                 value={formatUptimePct(overall?.successRate)}

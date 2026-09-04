@@ -19,13 +19,16 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React, { useContext, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Skeleton, Typography } from '@douyinfe/semi-ui';
+import { Card, Skeleton, Typography } from '@douyinfe/semi-ui';
 import { StatusContext } from '../../context/Status';
 import { UserContext } from '../../context/User';
 import ModelsSection from '../../components/rankings/ModelsSection';
 import MarketShareSection from '../../components/rankings/MarketShareSection';
 import PulseSection from '../../components/rankings/PulseSection';
-import { RANKINGS_PERIODS, useRankingsData } from '../../hooks/rankings/useRankingsData';
+import {
+  RANKINGS_PERIODS,
+  useRankingsData,
+} from '../../hooks/rankings/useRankingsData';
 import PeriodTabs from '../../components/rankings/PeriodTabs';
 
 const { Title } = Typography;
@@ -61,45 +64,48 @@ const Rankings = () => {
   }
 
   return (
-    <div className='mt-[60px] px-2'>
-      <div className='max-w-[1280px] mx-auto space-y-4 pt-4 pb-10'>
-        <div className='flex flex-col md:flex-row md:items-end md:justify-between gap-3'>
-          <div>
-            <Title heading={4} className='!mb-1'>
-              {t('排行榜')}
-            </Title>
-            <div className='text-sm text-gray-500'>
-              {t(
-                '发现平台上使用最多的模型与上升中的厂商，数据来自实时用量统计。',
-              )}
-            </div>
+    <div className='px-2 space-y-4'>
+      <div className='flex flex-col md:flex-row md:items-end md:justify-between gap-3'>
+        <div>
+          <Title heading={4} className='!mb-1'>
+            {t('排行榜')}
+          </Title>
+          <div
+            className='text-sm'
+            style={{ color: 'var(--semi-color-text-1)' }}
+          >
+            {t(
+              '发现平台上使用最多的模型与上升中的厂商，数据来自实时用量统计。',
+            )}
           </div>
-          <PeriodTabs
-            periods={RANKINGS_PERIODS}
-            labels={PERIOD_LABELS}
-            active={period}
-            onChange={setPeriod}
-            t={t}
-          />
         </div>
-        {loading ? (
-          <div className='space-y-4'>
-            <Skeleton className='!h-[420px] !rounded-xl' active />
-            <Skeleton className='!h-[360px] !rounded-xl' active />
-            <Skeleton className='!h-[180px] !rounded-xl' active />
-          </div>
-        ) : error ? (
-          <div className='!rounded-xl border p-10 text-center' style={{ borderColor: 'var(--semi-color-border)' }}>
+        <PeriodTabs
+          periods={RANKINGS_PERIODS}
+          labels={PERIOD_LABELS}
+          active={period}
+          onChange={setPeriod}
+          t={t}
+        />
+      </div>
+      {loading ? (
+        <div className='space-y-4'>
+          <Skeleton className='!h-[420px] !rounded-xl' active />
+          <Skeleton className='!h-[360px] !rounded-xl' active />
+          <Skeleton className='!h-[180px] !rounded-xl' active />
+        </div>
+      ) : error ? (
+        <Card className='!rounded-xl'>
+          <div className='p-6 text-center'>
             <Typography.Text type='danger'>{error}</Typography.Text>
           </div>
-        ) : (
-          <>
-            <ModelsSection data={data} period={period} t={t} />
-            <MarketShareSection data={data} period={period} t={t} />
-            <PulseSection data={data} t={t} />
-          </>
-        )}
-      </div>
+        </Card>
+      ) : (
+        <>
+          <ModelsSection data={data} period={period} t={t} />
+          <MarketShareSection data={data} period={period} t={t} />
+          <PulseSection data={data} t={t} />
+        </>
+      )}
     </div>
   );
 };

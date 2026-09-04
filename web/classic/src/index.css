@@ -2862,3 +2862,8 @@ html.dark .with-pastel-balls::before {
 .ec-dbcd0a3c01b55203 {
   forced-color-adjust: auto;
 }
+
+/* 三级文本色工具类:跟随 Semi 明暗主题,供页面描述、辅助说明等次级文本使用 */
+.semi-text-tertiary {
+  color: var(--semi-color-text-2);
+}
