@@ -332,17 +332,20 @@ export const useDashboardCharts = (
         },
       },
     },
-    valueAxis: {
-      label: {
-        // 轴数据已在 updateChartData 中预缩放为 0.5/1.5 等展示值,单位见轴标题
-        style: { fontSize: 10 },
+    // 原生 axes 数组配置(该版本不认 valueAxis 速记);左轴标题由
+    // updateChartData 按本次数据的统一单位动态填写(如 M tokens)
+    axes: [
+      {
+        orient: 'bottom',
+        label: { style: { fontSize: 10 } },
       },
-      title: {
-        visible: true,
-        text: 'tokens (K/M/B)',
-        style: { fontSize: 10, fontWeight: 'normal' },
+      {
+        orient: 'left',
+        grid: { visible: true, style: { lineDash: [3, 3] } },
+        label: { style: { fontSize: 10 } },
+        title: { visible: false, text: '' },
       },
-    },
+    ],
     tooltip: {
       mark: {
         content: [
@@ -662,12 +665,38 @@ export const useDashboardCharts = (
       );
 
       // ===== 消耗量堆叠柱状图:与消耗分布同构,数据换成 token 用量 =====
+      // 全图统一一个换算单位(按所有柱子的最大原始值选择 M 或 B),
+      // 保证柱子高度与真实用量成比例;刻度标注统一换算后的数值
+      const tokensBarMax = (() => {
+        let max = 0;
+        for (let [, value] of aggregatedData) {
+          if ((value.tokens || 0) > max) max = value.tokens || 0;
+        }
+        return max;
+      })();
+      const tokensUnitDivisor =
+        tokensBarMax >= 1e9
+          ? 1e9
+          : tokensBarMax >= 1e6
+            ? 1e6
+            : tokensBarMax >= 1e3
+              ? 1e3
+              : 1;
+      const tokensUnitLabel =
+        tokensUnitDivisor === 1e9
+          ? 'B tokens'
+          : tokensUnitDivisor === 1e6
+            ? 'M tokens'
+            : tokensUnitDivisor === 1e3
+              ? 'K tokens'
+              : 'tokens';
       const scaleTokens = (value) => {
         if (!value) return 0;
-        if (value >= 1e9) return Number((value / 1e9).toFixed(2));
-        if (value >= 1e6) return Number((value / 1e6).toFixed(1));
-        if (value >= 1e3) return Number((value / 1e3).toFixed(1));
-        return value;
+        return Number(
+          (value / tokensUnitDivisor).toFixed(
+            tokensUnitDivisor === 1e3 ? 1 : 2,
+          ),
+        );
       };
       let tokensBarData = [];
       chartTimePoints.forEach((time) => {
@@ -703,6 +732,24 @@ export const useDashboardCharts = (
         newModelColors,
         'tokensBarData',
       );
+      // 轴标题标注本次数据的实际单位(全图统一,如 M tokens)
+      setSpecTokensBar((prev) => ({
+        ...prev,
+        axes: prev.axes
+          ? prev.axes.map((axis) =>
+              axis.orient === 'left'
+                ? {
+                    ...axis,
+                    title: {
+                      visible: tokensUnitDivisor !== 1,
+                      text: tokensUnitLabel,
+                      style: { fontSize: 10, fontWeight: 'normal' },
+                    },
+                  }
+                : axis,
+            )
+          : prev.axes,
+      }));
 
       // ===== 消耗量占比饼图:每模型的 token 用量合计 =====
       const tokensPieData = Array.from(

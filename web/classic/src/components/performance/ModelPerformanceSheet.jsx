@@ -76,7 +76,8 @@ const ModelPerformanceSheet = ({
     for (const group of groups) {
       for (const point of group.series || []) {
         points.push({
-          ts: point.ts * 1000,
+          // X 轴数据直接预处理为可读时间(该版本对轴 formatMethod 不生效)
+          time: dayjs(point.ts * 1000).format('MM-DD HH:mm'),
           group: group.group,
           value: point[yField] ?? null,
         });
@@ -86,26 +87,26 @@ const ModelPerformanceSheet = ({
     return {
       type: 'line',
       data: [{ id: 'modelTrendData', values: points }],
-      xField: 'ts',
+      xField: 'time',
       yField: 'value',
       seriesField: 'group',
       padding: 'auto',
-      categoryAxis: {
-        label: {
-          autoHide: true,
-          autoRotate: false,
-          formatMethod: (value) => dayjs(value).format('MM-DD HH:mm'),
-          style: { fontSize: 10 },
+      // 原生 axes 数组配置(该版本不认 categoryAxis/valueAxis 速记)
+      axes: [
+        {
+          orient: 'bottom',
+          label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
+          line: { visible: false },
+          tick: { visible: false },
         },
-        line: false,
-        tick: false,
-      },
-      valueAxis: {
-        grid: { lineStyle: { lineDash: [3, 3] } },
-        label: formatMethod
-          ? { formatMethod, style: { fontSize: 10 } }
-          : { style: { fontSize: 10 } },
-      },
+        {
+          orient: 'left',
+          grid: { visible: true, style: { lineDash: [3, 3] } },
+          label: formatMethod
+            ? { formatMethod, style: { fontSize: 10 } }
+            : { style: { fontSize: 10 } },
+        },
+      ],
       legend: { visible: groups.length > 1 },
       line: {
         symbol: false,

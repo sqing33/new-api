@@ -53,9 +53,32 @@ const SuccessRateDot = ({ value }) => (
   </div>
 );
 
-// 近 N 个时间桶的成功率迷你趋势线(与完整页同款 SVG 折线)
+// 近 N 个时间桶的成功率迷你趋势线(与完整页同款 SVG 折线);
+// 数据不足两个点时显示单个状态点,保证该列视觉上不空缺
 const SuccessRateSparkline = ({ values }) => {
-  if (!Array.isArray(values) || values.length < 2) return null;
+  if (!Array.isArray(values) || values.length === 0) {
+    return (
+      <svg width={64} height={20} aria-hidden='true' className='shrink-0'>
+        <line
+          x1='1'
+          y1='10'
+          x2='63'
+          y2='10'
+          stroke='var(--semi-color-border)'
+          strokeWidth='1'
+          strokeDasharray='3 3'
+        />
+      </svg>
+    );
+  }
+  if (values.length === 1) {
+    const color = getSuccessRateColor(values[0]);
+    return (
+      <svg width={64} height={20} aria-hidden='true' className='shrink-0'>
+        <circle cx='32' cy='10' r='3' fill={color} />
+      </svg>
+    );
+  }
   const width = 64;
   const height = 20;
   const points = values
@@ -66,15 +89,28 @@ const SuccessRateSparkline = ({ values }) => {
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(' ');
+  const lastValue = values[values.length - 1];
   return (
     <svg width={width} height={height} aria-hidden='true' className='shrink-0'>
       <polyline
         points={points}
         fill='none'
-        stroke={getSuccessRateColor(values[values.length - 1])}
+        stroke={getSuccessRateColor(lastValue)}
         strokeWidth='1.5'
         strokeLinecap='round'
         strokeLinejoin='round'
+      />
+      {/* 末点加圆点标记,当前状态一目了然 */}
+      <circle
+        cx={width - 1}
+        cy={
+          20 -
+          1 -
+          ((Math.min(100, Math.max(0, Number(lastValue) || 0)) - 0) / 100) *
+            (20 - 2)
+        }
+        r='2.5'
+        fill={getSuccessRateColor(lastValue)}
       />
     </svg>
   );
