@@ -18,6 +18,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -66,6 +67,14 @@ func (b *nativeRouteBilling) Reserve(quota int) error {
 func TestKlingNativeRouteSubmitPollSettleAndQuery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	service.InitHttpClient()
+
+	// 测试轮询走 jsplugin task 适配器,其 FetchTask 有 SSRF 防护;
+	// 这里用 httptest loopback 随机端口做上游,测试期间临时关闭。
+	fetchSetting := system_setting.GetFetchSetting()
+	require.NotNil(t, fetchSetting)
+	originalFetchSetting := *fetchSetting
+	fetchSetting.EnableSSRFProtection = false
+	t.Cleanup(func() { *fetchSetting = originalFetchSetting })
 
 	previousDB := model.DB
 	previousLogDB := model.LOG_DB

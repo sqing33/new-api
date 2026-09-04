@@ -70,6 +70,11 @@ func GetAllLogs(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if c.GetInt("role") < common.RoleRootUser {
+		model.FormatAdminLogs(logs)
+	} else {
+		model.FormatRootLogs(logs)
+	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
@@ -206,10 +211,17 @@ func DeleteHistoryLogs(c *gin.Context) {
 		})
 		return
 	}
-	count, err := model.DeleteOldLog(c.Request.Context(), targetTimestamp, 100)
-	if err != nil {
-		common.ApiError(c, err)
-		return
+	var count int64
+	for {
+		n, err := model.DeleteOldLogBatch(c.Request.Context(), targetTimestamp, 1000)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		count += n
+		if n < 1000 {
+			break
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

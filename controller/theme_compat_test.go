@@ -43,5 +43,6 @@ func TestGetStatusAdvertisesDefaultDashboard(t *testing.T) {
 	}
 	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &payload))
 	assert.True(t, payload.Success)
-	assert.Equal(t, "default", payload.Data["theme"])
+	// 本仓库是 classic-only 部署:唯一的前端主题就是 classic。
+	assert.Equal(t, "classic", payload.Data["theme"])
 }
