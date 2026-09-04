@@ -203,8 +203,16 @@ func DiscordBind(c *gin.Context) {
 		return
 	}
 	session := sessions.Default(c)
-	id := session.Get("id")
-	user.Id = id.(int)
+	rawID := session.Get("id")
+	id, ok := rawID.(int)
+	if !ok || id == 0 {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "会话已失效，请重新登录后再绑定 Discord",
+		})
+		return
+	}
+	user.Id = id
 	err = user.FillUserById()
 	if err != nil {
 		common.ApiError(c, err)

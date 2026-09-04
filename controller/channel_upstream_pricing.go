@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
+	relaykitdto "github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -119,7 +119,7 @@ func comparePricingSnapshots(oldSnapshot map[string]map[string]interface{}, newS
 	return changes
 }
 
-func checkChannelUpstreamPricing(channel *model.Channel, settings *dto.ChannelOtherSettings, force bool) ([]UpstreamPricingChange, error) {
+func checkChannelUpstreamPricing(channel *model.Channel, settings *relaykitdto.ChannelOtherSettings, force bool) ([]UpstreamPricingChange, error) {
 	now := common.GetTimestamp()
 	if !force {
 		minInterval := int64(common.GetEnvOrDefault("UPSTREAM_PRICING_MONITOR_MIN_CHECK_INTERVAL_SECONDS", upstreamPricingMonitorMinCheckIntervalSeconds))
@@ -157,7 +157,7 @@ func checkChannelUpstreamPricing(channel *model.Channel, settings *dto.ChannelOt
 	return changes, nil
 }
 
-func updateChannelUpstreamPricingSettings(channel *model.Channel, settings dto.ChannelOtherSettings) {
+func updateChannelUpstreamPricingSettings(channel *model.Channel, settings relaykitdto.ChannelOtherSettings) {
 	channel.SetOtherSettings(settings)
 	model.DB.Model(&model.Channel{}).Where("id = ?", channel.Id).Updates(map[string]interface{}{
 		"settings": channel.OtherSettings,

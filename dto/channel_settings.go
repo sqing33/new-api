@@ -49,25 +49,6 @@ type ChannelOtherSettings struct {
 	UpstreamPricingLastSnapshot           map[string]map[string]interface{} `json:"upstream_pricing_last_snapshot,omitempty"`             // 上次上游定价快照
 }
 
-const (
-	ResponsesCompatModeNative          = "native"
-	ResponsesCompatModeChatCompletions = "chat_completions"
-)
-
-const (
-	ResponsesCompatToolModeFunctionOnly        = "function_only"
-	ResponsesCompatToolModeWrapNonFunction     = "wrap_non_function_tools"
-	ResponsesCompatToolModeStrictError         = "strict_error"
-	ContextKeyResponsesCompatToolMappings      = "responses_compat_tool_mappings"
-	ContextKeyResponsesCompatToolReverseLookup = "responses_compat_tool_reverse_lookup"
-)
-
-type ResponsesCompatToolMapping struct {
-	SafeName     string `json:"safe_name"`
-	OriginalName string `json:"original_name"`
-	OriginalType string `json:"original_type"`
-	Wrapped      bool   `json:"wrapped"`
-}
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
 	if s == nil || s.OpenRouterEnterprise == nil {

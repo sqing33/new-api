@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/types"
+	relaykittypes "github.com/QuantumNous/new-api/relaykit/types"
 )
 
 //type OpenAIError struct {
@@ -15,7 +15,7 @@ import (
 //}
 
 type OpenAIErrorWithStatusCode struct {
-	Error      types.OpenAIError `json:"error"`
+	Error      relaykittypes.OpenAIError `json:"error"`
 	StatusCode int               `json:"status_code"`
 	LocalError bool
 }
@@ -38,8 +38,8 @@ type GeneralErrorResponse struct {
 	} `json:"response"`
 }
 
-func (e GeneralErrorResponse) TryToOpenAIError() *types.OpenAIError {
-	var openAIError types.OpenAIError
+func (e GeneralErrorResponse) TryToOpenAIError() *relaykittypes.OpenAIError {
+	var openAIError relaykittypes.OpenAIError
 	if len(e.Error) > 0 {
 		err := common.Unmarshal(e.Error, &openAIError)
 		if err == nil && openAIError.Message != "" {
@@ -53,7 +53,7 @@ func (e GeneralErrorResponse) ToMessage() string {
 	if len(e.Error) > 0 {
 		switch common.GetJsonType(e.Error) {
 		case "object":
-			var openAIError types.OpenAIError
+			var openAIError relaykittypes.OpenAIError
 			err := common.Unmarshal(e.Error, &openAIError)
 			if err == nil && openAIError.Message != "" {
 				return openAIError.Message

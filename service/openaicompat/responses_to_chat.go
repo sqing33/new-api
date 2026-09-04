@@ -4,17 +4,17 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/QuantumNous/new-api/dto"
+	relaykitdto "github.com/QuantumNous/new-api/relaykit/dto"
 )
 
-func ResponsesResponseToChatCompletionsResponse(resp *dto.OpenAIResponsesResponse, id string) (*dto.OpenAITextResponse, *dto.Usage, error) {
+func ResponsesResponseToChatCompletionsResponse(resp *relaykitdto.OpenAIResponsesResponse, id string) (*relaykitdto.OpenAITextResponse, *relaykitdto.Usage, error) {
 	if resp == nil {
 		return nil, nil, errors.New("response is nil")
 	}
 
 	text := ExtractOutputTextFromResponses(resp)
 
-	usage := &dto.Usage{}
+	usage := &relaykitdto.Usage{}
 	if resp.Usage != nil {
 		if resp.Usage.InputTokens != 0 {
 			usage.PromptTokens = resp.Usage.InputTokens
@@ -41,7 +41,7 @@ func ResponsesResponseToChatCompletionsResponse(resp *dto.OpenAIResponsesRespons
 
 	created := resp.CreatedAt
 
-	var toolCalls []dto.ToolCallResponse
+	var toolCalls []relaykitdto.ToolCallResponse
 	if text == "" && len(resp.Output) > 0 {
 		for _, out := range resp.Output {
 			if out.Type != "function_call" {
@@ -55,10 +55,10 @@ func ResponsesResponseToChatCompletionsResponse(resp *dto.OpenAIResponsesRespons
 			if callId == "" {
 				callId = strings.TrimSpace(out.ID)
 			}
-			toolCalls = append(toolCalls, dto.ToolCallResponse{
+			toolCalls = append(toolCalls, relaykitdto.ToolCallResponse{
 				ID:   callId,
 				Type: "function",
-				Function: dto.FunctionResponse{
+				Function: relaykitdto.FunctionResponse{
 					Name:      name,
 					Arguments: out.ArgumentsString(),
 				},
@@ -71,7 +71,7 @@ func ResponsesResponseToChatCompletionsResponse(resp *dto.OpenAIResponsesRespons
 		finishReason = "tool_calls"
 	}
 
-	msg := dto.Message{
+	msg := relaykitdto.Message{
 		Role:    "assistant",
 		Content: text,
 	}
@@ -80,12 +80,12 @@ func ResponsesResponseToChatCompletionsResponse(resp *dto.OpenAIResponsesRespons
 		msg.Content = ""
 	}
 
-	out := &dto.OpenAITextResponse{
+	out := &relaykitdto.OpenAITextResponse{
 		Id:      id,
 		Object:  "chat.completion",
 		Created: created,
 		Model:   resp.Model,
-		Choices: []dto.OpenAITextResponseChoice{
+		Choices: []relaykitdto.OpenAITextResponseChoice{
 			{
 				Index:        0,
 				Message:      msg,
@@ -98,7 +98,7 @@ func ResponsesResponseToChatCompletionsResponse(resp *dto.OpenAIResponsesRespons
 	return out, usage, nil
 }
 
-func ExtractOutputTextFromResponses(resp *dto.OpenAIResponsesResponse) string {
+func ExtractOutputTextFromResponses(resp *relaykitdto.OpenAIResponsesResponse) string {
 	if resp == nil || len(resp.Output) == 0 {
 		return ""
 	}

@@ -9,13 +9,17 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	relaykitdto "github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
@@ -23,11 +27,18 @@ import (
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// 可选:开启 PASSWORD_LOGIN_ENCRYPTION_ENABLED=true 后,前端用
+	// /api/user/password/encryption 拿公钥对 password 做 RSA-OAEP/SHA-256
+	// 加密后放到 PasswordEncrypted,EncryptionKeyID 与当前公钥 ID 一致。
+	// 后端优先用 PasswordEncrypted 解密(失败回落到 Password,兼容老前端)。
+	PasswordEncrypted string `json:"password_encrypted,omitempty"`
+	EncryptionKeyID   string `json:"encryption_key_id,omitempty"`
 }
 
 func Login(c *gin.Context) {
@@ -43,6 +54,18 @@ func Login(c *gin.Context) {
 	}
 	username := loginRequest.Username
 	password := loginRequest.Password
+	// 31d70fca3:开启 PASSWORD_LOGIN_ENCRYPTION_ENABLED 时,优先用
+	// PasswordEncrypted 走 RSA-OAEP/SHA-256 解密。
+	if common.PasswordLoginEncryptionEnabled &&
+		strings.TrimSpace(loginRequest.PasswordEncrypted) != "" {
+		decrypted, err := common.DecryptPassword(loginRequest.PasswordEncrypted, loginRequest.EncryptionKeyID)
+		if err != nil {
+			common.SysLog(fmt.Sprintf("password encryption decrypt failed: %v", err))
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
+		password = decrypted
+	}
 	if username == "" || password == "" {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
@@ -66,14 +89,34 @@ func Login(c *gin.Context) {
 	}
 
 	// 检查是否启用2FA
-	if model.IsTwoFAEnabled(user.Id) {
-		// 设置pending session，等待2FA验证
+	enabled, _ := model.IsTwoFAEnabled(user.Id)
+	if enabled {
+		// 保留旧 cookie pending 字段作为 Verify2FALogin 失败时的兜底
+		// 上游 31d70fca3 把整个 2FA pending 状态迁到 AuthFlow,整合被部分回退
 		session := sessions.Default(c)
 		session.Set("pending_username", user.Username)
 		session.Set("pending_user_id", user.Id)
-		err := session.Save()
-		if err != nil {
+		if err := session.Save(); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+
+		// 下发 2FA flow_token,让 /api/user/login/2fa 能通过 AuthFlow 走通
+		// (Verify2FALogin 内部 GetAuthFlow(req.FlowToken, ...) 强依赖)
+		payload, err := common.Marshal(map[string]int64{"auth_version": user.AuthVersion})
+		if err != nil {
+			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+			return
+		}
+		flowToken, _, err := model.CreateAuthFlow(model.AuthFlowCreate{
+			Purpose:   model.AuthFlowPurposeTwoFALogin,
+			UserId:    user.Id,
+			SessionId: "login:" + strconv.Itoa(user.Id),
+			Payload:   string(payload),
+			ExpiresAt: time.Now().Add(5 * time.Minute),
+		})
+		if err != nil {
+			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 			return
 		}
 
@@ -82,6 +125,7 @@ func Login(c *gin.Context) {
 			"success": true,
 			"data": map[string]interface{}{
 				"require_2fa": true,
+				"flow_token":  flowToken,
 			},
 		})
 		return
@@ -90,35 +134,113 @@ func Login(c *gin.Context) {
 	setupLogin(&user, c)
 }
 
+// setupLoginAtAuthVersion 是上游 31d70fca3 的入口,2FA 通过后由它登录。
+// 整合时这一行被回退到只调 setupLogin,失去了 31d70fca3 的 session 约束。
+// 既然所有路径都过 setupLogin,就在 setupLogin 里强制 auth_version,任何
+// stale session 都会被撤销。
+func setupLoginAtAuthVersion(user *model.User, expectedAuthVersion int64, c *gin.Context) {
+	setupLogin(user, c, expectedAuthVersion)
+}
+
 // setup session & cookies and then return user info
-func setupLogin(user *model.User, c *gin.Context) {
+// expectedAuthVersion:0 = 用 user 当前 AuthVersion(普通登录);>0 = 校验必须匹配(2FA 等)
+func setupLogin(user *model.User, c *gin.Context, expectedAuthVersion ...int64) {
 	model.UpdateUserLastLoginAt(user.Id)
+
+	// 31d70fca3 的核心:建立 stateless session,记 audit log,支持 token 轮换 / 撤销。
+	// 即使 2FA 走 setupLoginAtAuthVersion,最终也过这里,所以两路都覆盖。
+	ip := c.ClientIP()
+	ua := c.GetHeader("User-Agent")
+	expectedAV := int64(0)
+	if len(expectedAuthVersion) > 0 {
+		expectedAV = expectedAuthVersion[0]
+	}
+	var bundle *service.AuthBundle
+	if expectedAV > 0 {
+		var err error
+		bundle, err = service.CreateLoginSessionAtAuthVersion(user.Id, expectedAV, "password", ip, ua)
+		if err != nil {
+			common.SysLog(fmt.Sprintf("create login session failed: %v", err))
+			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+	} else {
+		var err error
+		bundle, err = service.CreateLoginSession(user.Id, "password", ip, ua)
+		if err != nil {
+			common.SysLog(fmt.Sprintf("create login session failed: %v", err))
+			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+	}
+	service.WriteRefreshCookie(c, bundle.RefreshToken)
+
+	// 旧 cookie session 仍写,给 OAuth Bind(controller/{github,discord,linuxdo}.go
+	// 用 sessions.Default(c).Get("id"))等老代码路径兜底。
 	session := sessions.Default(c)
 	session.Set("id", user.Id)
 	session.Set("username", user.Username)
 	session.Set("role", user.Role)
 	session.Set("status", user.Status)
 	session.Set("group", user.Group)
-	err := session.Save()
-	if err != nil {
+	if err := session.Save(); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "",
 		"success": true,
 		"data": map[string]any{
-			"id":           user.Id,
-			"username":     user.Username,
-			"display_name": user.DisplayName,
-			"role":         user.Role,
-			"status":       user.Status,
-			"group":        user.Group,
+			"id":            user.Id,
+			"username":      user.Username,
+			"display_name":  user.DisplayName,
+			"role":          user.Role,
+			"status":        user.Status,
+			"group":         user.Group,
+			"access_token":  bundle.AccessToken,
+			"token_type":    bundle.TokenType,
+			"expires_at":    bundle.AccessExpiresAt,
+			"session_id":    bundle.Session.SID,
+			"refresh_token": bundle.RefreshToken, // 前端可选保存,用于跨设备 refresh
 		},
 	})
 }
 
+// GetPasswordEncryptionKey 公开当前密码加密公钥(RSA-OAEP/SHA-256,2048-bit)。
+// 前端拿公钥对 password 加密后随 LoginRequest.PasswordEncrypted 上传。
+// 不依赖 PASSWORD_LOGIN_ENCRYPTION_ENABLED 开关:如果服务端未初始化密钥,
+// 返回 enabled=false 让前端走明文路径(向后兼容)。
+func GetPasswordEncryptionKey(c *gin.Context) {
+	keyID, pubPEM := common.PasswordEncryptionPublicKey()
+	common.ApiSuccess(c, gin.H{
+		"enabled":        common.PasswordLoginEncryptionEnabled && pubPEM != "",
+		"algorithm":      "RSA-OAEP-SHA256",
+		"key_bits":       2048,
+		"key_id":         keyID,
+		"public_key_pem": pubPEM,
+	})
+}
+
 func Logout(c *gin.Context) {
+	// 31d70fca3 关键:撤销 user_sessions 表里的 session,让 refresh token / access token 立刻失效。
+	// 用户可能从 Authorization 头(Bearer)或 refresh cookie 进来,两种都试。
+	revokedSomething := false
+	if cookie, err := c.Cookie(service.RefreshCookieName); err == nil && cookie != "" {
+		if err := service.RevokeByRefreshToken(cookie, "", "logout"); err == nil {
+			revokedSomething = true
+		}
+	}
+	if auth := c.GetHeader("Authorization"); auth != "" {
+		if raw, ok := authorizationBearerToken(auth); ok && raw != "" {
+			if identity, ok := middleware.GetSessionAuthIdentity(c); ok {
+				_, _ = model.RevokeUserSession(identity.UserID, identity.SessionID, "logout")
+				revokedSomething = true
+			}
+		}
+	}
+	service.ClearRefreshCookie(c)
+
 	session := sessions.Default(c)
 	session.Clear()
 	err := session.Save()
@@ -129,10 +251,23 @@ func Logout(c *gin.Context) {
 		})
 		return
 	}
+	if !revokedSomething {
+		common.SysLog(fmt.Sprintf("logout: no session token found (user-agent=%s)", c.GetHeader("User-Agent")))
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"message": "",
 		"success": true,
 	})
+}
+
+// authorizationBearerToken 从 "Authorization: Bearer xxx" 头抽 token。
+// 与 middleware/auth.go 的 authorizationToken 行为一致。
+func authorizationBearerToken(auth string) (string, bool) {
+	const prefix = "Bearer "
+	if len(auth) <= len(prefix) || !strings.EqualFold(auth[:len(prefix)], prefix) {
+		return "", false
+	}
+	return strings.TrimSpace(auth[len(prefix):]), true
 }
 
 func Register(c *gin.Context) {
@@ -252,7 +387,7 @@ func SearchUsers(c *gin.Context) {
 	keyword := c.Query("keyword")
 	group := c.Query("group")
 	pageInfo := common.GetPageQuery(c)
-	users, total, err := model.SearchUsers(keyword, group, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	users, total, err := model.SearchUsers(keyword, group, nil, nil, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -531,20 +666,27 @@ func GetUserModels(c *gin.Context) {
 		return
 	}
 	groups := service.GetUserUsableGroups(user.Group)
-	var models []string
-	for group := range groups {
-		for _, g := range model.GetGroupEnabledModels(group) {
-			if !common.StringsContains(models, g) {
-				models = append(models, g)
-			}
+	group := c.Query("group")
+	var groupsToQuery []string
+	switch {
+	case group == "":
+		for g := range groups {
+			groupsToQuery = append(groupsToQuery, g)
+		}
+	case group == "auto":
+		if _, ok := groups[group]; ok {
+			groupsToQuery = service.GetUserAutoGroup(user.Group)
+		}
+	default:
+		if _, ok := groups[group]; ok {
+			groupsToQuery = []string{group}
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    models,
+		"data":    service.GetGroupsEnabledModels(groupsToQuery),
 	})
-	return
 }
 
 func UpdateUser(c *gin.Context) {
@@ -741,6 +883,9 @@ func UpdateSelf(c *gin.Context) {
 }
 
 func checkUpdatePassword(originalPassword string, newPassword string, userId int) (updatePassword bool, err error) {
+	if newPassword == "" {
+		return
+	}
 	var currentUser *model.User
 	currentUser, err = model.GetUserById(userId, true)
 	if err != nil {
@@ -750,10 +895,7 @@ func checkUpdatePassword(originalPassword string, newPassword string, userId int
 	// 密码不为空,需要验证原密码
 	// 支持第一次账号绑定时原密码为空的情况
 	if !common.ValidatePasswordAndHash(originalPassword, currentUser.Password) && currentUser.Password != "" {
-		err = fmt.Errorf("原密码错误")
-		return
-	}
-	if newPassword == "" {
+		err = errOriginalPasswordFail
 		return
 	}
 	updatePassword = true
@@ -856,7 +998,7 @@ type ManageRequest struct {
 // ManageUser Only admin user can do this
 func ManageUser(c *gin.Context) {
 	var req ManageRequest
-	err := json.NewDecoder(c.Request.Body).Decode(&req)
+	err := common.DecodeJson(c.Request.Body, &req)
 
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
@@ -872,7 +1014,7 @@ func ManageUser(c *gin.Context) {
 		return
 	}
 	myRole := c.GetInt("role")
-	if myRole <= user.Role && myRole != common.RoleRootUser {
+	if !canManageTargetRole(myRole, user.Role) {
 		common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
 		return
 	}
@@ -902,6 +1044,16 @@ func ManageUser(c *gin.Context) {
 		if err := model.InvalidateUserTokensCache(user.Id); err != nil {
 			common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for user %d: %s", user.Id, err.Error()))
 		}
+		recordManageAuditFor(c, user.Id, "user.manage", map[string]interface{}{
+			"action":   req.Action,
+			"username": user.Username,
+			"id":       user.Id,
+		})
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "",
+		})
+		return
 	case "promote":
 		if myRole != common.RoleRootUser {
 			common.ApiErrorI18n(c, i18n.MsgUserAdminCannotPromote)
@@ -923,24 +1075,23 @@ func ManageUser(c *gin.Context) {
 		}
 		user.Role = common.RoleCommonUser
 	case "add_quota":
-		adminName := c.GetString("username")
-		adminId := c.GetInt("id")
-		adminInfo := map[string]interface{}{
-			"admin_id":       adminId,
-			"admin_username": adminName,
-		}
 		switch req.Mode {
 		case "add":
 			if req.Value <= 0 {
 				common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)
 				return
 			}
+			if err := common.ValidateWalletQuota(req.Value); err != nil {
+				common.ApiError(c, err)
+				return
+			}
 			if err := model.IncreaseUserQuota(user.Id, req.Value, true); err != nil {
 				common.ApiError(c, err)
 				return
 			}
-			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
-				fmt.Sprintf("管理员增加用户额度 %s", logger.LogQuota(req.Value)), adminInfo)
+			recordManageAuditFor(c, user.Id, "user.quota_add", map[string]interface{}{
+				"quota": logger.LogQuota(req.Value),
+			})
 		case "subtract":
 			if req.Value <= 0 {
 				common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)
@@ -950,16 +1101,23 @@ func ManageUser(c *gin.Context) {
 				common.ApiError(c, err)
 				return
 			}
-			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
-				fmt.Sprintf("管理员减少用户额度 %s", logger.LogQuota(req.Value)), adminInfo)
+			recordManageAuditFor(c, user.Id, "user.quota_subtract", map[string]interface{}{
+				"quota": logger.LogQuota(req.Value),
+			})
 		case "override":
+			if err := common.ValidateWalletQuota(req.Value); err != nil {
+				common.ApiError(c, err)
+				return
+			}
 			oldQuota := user.Quota
 			if err := model.DB.Model(&model.User{}).Where("id = ?", user.Id).Update("quota", req.Value).Error; err != nil {
 				common.ApiError(c, err)
 				return
 			}
-			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
-				fmt.Sprintf("管理员覆盖用户额度从 %s 为 %s", logger.LogQuota(oldQuota), logger.LogQuota(req.Value)), adminInfo)
+			recordManageAuditFor(c, user.Id, "user.quota_override", map[string]interface{}{
+				"from": logger.LogQuota(oldQuota),
+				"to":   logger.LogQuota(req.Value),
+			})
 		default:
 			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 			return
@@ -969,24 +1127,51 @@ func ManageUser(c *gin.Context) {
 			"message": "",
 		})
 		return
-	}
-
-	if err := user.Update(false); err != nil {
-		common.ApiError(c, err)
+	default:
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	// 禁用 / 角色调整后，强制失效用户缓存与其全部令牌缓存，
-	// 避免在 Redis TTL 过期前仍使用旧状态（尤其是禁用后仍可发起请求的问题）。
-	// InvalidateUserCache 会让下一次 GetUserCache 从数据库重新加载，
-	// InvalidateUserTokensCache 则确保令牌侧的缓存也同步刷新。
-	if req.Action == "disable" || req.Action == "promote" || req.Action == "demote" {
-		if err := model.InvalidateUserCache(user.Id); err != nil {
-			common.SysLog(fmt.Sprintf("failed to invalidate user cache for user %d: %s", user.Id, err.Error()))
+
+	if req.Action == "demote" {
+		if err := model.DB.Transaction(func(tx *gorm.DB) error {
+			if err := user.UpdateWithTx(tx, false); err != nil {
+				return err
+			}
+			return authz.ClearUserAuthorizationInTx(tx, user.Id)
+		}); err != nil {
+			common.ApiError(c, err)
+			return
 		}
-		if err := model.InvalidateUserTokensCache(user.Id); err != nil {
-			common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for user %d: %s", user.Id, err.Error()))
+		if err := authz.ReloadPolicy(); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if err := model.PublishUserAuthCache(user.Id); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if _, err := model.RevokeAllUserSessions(user.Id, "admin_demote"); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	} else {
+		if err := user.Update(false); err != nil {
+			common.ApiError(c, err)
+			return
 		}
 	}
+	// Update/UpdateWithTx has already published the new user hash and revoked
+	// browser sessions exactly once. Only PAT/relay token caches still need an
+	// explicit invalidation; deleting the user hash here would discard the
+	// freshly published auth-version floor.
+	if err := model.InvalidateUserTokensCache(user.Id); err != nil {
+		common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for user %d: %s", user.Id, err.Error()))
+	}
+	recordManageAuditFor(c, user.Id, "user.manage", map[string]interface{}{
+		"action":   req.Action,
+		"username": user.Username,
+		"id":       user.Id,
+	})
 	clearUser := model.User{
 		Role:   user.Role,
 		Status: user.Status,
@@ -1234,7 +1419,7 @@ func UpdateUserSetting(c *gin.Context) {
 	}
 
 	// 构建设置
-	settings := dto.UserSetting{
+	settings := relaykitdto.UserSetting{
 		NotifyType:                         req.QuotaWarningType,
 		QuotaWarningThreshold:              req.QuotaWarningThreshold,
 		UpstreamModelUpdateNotifyEnabled:   upstreamModelUpdateNotifyEnabled,
@@ -1282,3 +1467,26 @@ func UpdateUserSetting(c *gin.Context) {
 
 	common.ApiSuccessI18n(c, i18n.MsgSettingSaved, nil)
 }
+
+func canManageTargetRole(myRole int, targetRole int) bool {
+	return myRole == common.RoleRootUser || myRole > targetRole
+}
+
+func authRotationData(bundle *service.AuthBundle) gin.H {
+	return gin.H{
+		"access_token":      bundle.AccessToken,
+		"token_type":        bundle.TokenType,
+		"access_expires_at": bundle.AccessExpiresAt,
+		"session":           bundle.Session,
+	}
+}
+
+func dashboardBearer(header string) (string, bool) {
+	parts := strings.Fields(header)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+		return "", false
+	}
+	return parts[1], true
+}
+
+var errOriginalPasswordFail = errors.New("original password is incorrect")

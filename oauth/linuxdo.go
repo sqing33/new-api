@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -59,7 +60,15 @@ func (p *LinuxDOProvider) ExchangeToken(ctx context.Context, code string, c *gin
 	if c.Request.TLS != nil {
 		scheme = "https"
 	}
-	redirectURI := fmt.Sprintf("%s://%s/api/oauth/linuxdo", scheme, c.Request.Host)
+	// 不再用 c.Request.Host(攻击者可改 Host 头),从 system_setting.ServerAddress 取受信任的对外地址
+	serverAddr := strings.TrimSpace(system_setting.ServerAddress)
+	if serverAddr == "" {
+		serverAddr = scheme + "://" + strings.TrimSpace(c.Request.Host)
+	} else if !strings.Contains(serverAddr, "://") {
+		serverAddr = scheme + "://" + serverAddr
+	}
+	serverAddr = strings.TrimRight(serverAddr, "/")
+	redirectURI := serverAddr + "/api/oauth/linuxdo"
 
 	logger.LogDebug(ctx, "[OAuth-LinuxDO] ExchangeToken: token_endpoint=%s, redirect_uri=%s", tokenEndpoint, redirectURI)
 
@@ -182,6 +191,11 @@ func (p *LinuxDOProvider) SetProviderUserID(user *model.User, providerUserID str
 
 func (p *LinuxDOProvider) GetProviderPrefix() string {
 	return "linuxdo_"
+}
+
+// ProviderUserIDColumn returns the users-table column storing this provider's user ID.
+func (p *LinuxDOProvider) ProviderUserIDColumn() string {
+	return "linux_do_id"
 }
 
 // TrustLevelError indicates the user's trust level is too low

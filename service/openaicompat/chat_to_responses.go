@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
+	relaykitdto "github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/samber/lo"
 )
 
@@ -20,12 +20,12 @@ func normalizeChatImageURLToString(v any) any {
 			return url
 		}
 		return v
-	case dto.MessageImageUrl:
+	case relaykitdto.MessageImageUrl:
 		if vv.Url != "" {
 			return vv.Url
 		}
 		return v
-	case *dto.MessageImageUrl:
+	case *relaykitdto.MessageImageUrl:
 		if vv != nil && vv.Url != "" {
 			return vv.Url
 		}
@@ -35,7 +35,7 @@ func normalizeChatImageURLToString(v any) any {
 	}
 }
 
-func convertChatResponseFormatToResponsesText(reqFormat *dto.ResponseFormat) json.RawMessage {
+func convertChatResponseFormatToResponsesText(reqFormat *relaykitdto.ResponseFormat) json.RawMessage {
 	if reqFormat == nil || strings.TrimSpace(reqFormat.Type) == "" {
 		return nil
 	}
@@ -73,7 +73,7 @@ func convertChatResponseFormatToResponsesText(reqFormat *dto.ResponseFormat) jso
 	return textRaw
 }
 
-func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*dto.OpenAIResponsesRequest, error) {
+func ChatCompletionsRequestToResponsesRequest(req *relaykitdto.GeneralOpenAIRequest) (*relaykitdto.OpenAIResponsesRequest, error) {
 	if req == nil {
 		return nil, errors.New("request is nil")
 	}
@@ -139,7 +139,7 @@ func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*d
 			parts := msg.ParseContent()
 			var sb strings.Builder
 			for _, part := range parts {
-				if part.Type == dto.ContentTypeText && strings.TrimSpace(part.Text) != "" {
+				if part.Type == relaykitdto.ContentTypeText && strings.TrimSpace(part.Text) != "" {
 					if sb.Len() > 0 {
 						sb.WriteString("\n")
 					}
@@ -214,7 +214,7 @@ func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*d
 		contentParts := make([]map[string]any, 0, len(parts))
 		for _, part := range parts {
 			switch part.Type {
-			case dto.ContentTypeText:
+			case relaykitdto.ContentTypeText:
 				textType := "input_text"
 				if role == "assistant" {
 					textType = "output_text"
@@ -223,22 +223,22 @@ func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*d
 					"type": textType,
 					"text": part.Text,
 				})
-			case dto.ContentTypeImageURL:
+			case relaykitdto.ContentTypeImageURL:
 				contentParts = append(contentParts, map[string]any{
 					"type":      "input_image",
 					"image_url": normalizeChatImageURLToString(part.ImageUrl),
 				})
-			case dto.ContentTypeInputAudio:
+			case relaykitdto.ContentTypeInputAudio:
 				contentParts = append(contentParts, map[string]any{
 					"type":        "input_audio",
 					"input_audio": part.InputAudio,
 				})
-			case dto.ContentTypeFile:
+			case relaykitdto.ContentTypeFile:
 				contentParts = append(contentParts, map[string]any{
 					"type": "input_file",
 					"file": part.File,
 				})
-			case dto.ContentTypeVideoUrl:
+			case relaykitdto.ContentTypeVideoUrl:
 				contentParts = append(contentParts, map[string]any{
 					"type":      "input_video",
 					"video_url": part.VideoUrl,
@@ -372,7 +372,7 @@ func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*d
 		topP = common.GetPointer(lo.FromPtr(req.TopP))
 	}
 
-	out := &dto.OpenAIResponsesRequest{
+	out := &relaykitdto.OpenAIResponsesRequest{
 		Model:             req.Model,
 		Input:             inputRaw,
 		Instructions:      instructionsRaw,
@@ -392,7 +392,7 @@ func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*d
 	}
 
 	if req.ReasoningEffort != "" {
-		out.Reasoning = &dto.Reasoning{
+		out.Reasoning = &relaykitdto.Reasoning{
 			Effort:  req.ReasoningEffort,
 			Summary: "detailed",
 		}

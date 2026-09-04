@@ -13,10 +13,11 @@ import (
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/QuantumNous/new-api/logger"
 
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/samber/lo"
@@ -156,6 +157,17 @@ func FetchUpstreamRatios(c *gin.Context) {
 					u.Endpoint = defaultEndpoint
 				}
 				u.BaseURL = strings.TrimRight(u.BaseURL, "/")
+				// SSRF 防护:admin 端点接受任意 baseURL 是 RCE-as-a-service 的入口。
+				// 用 system_setting.FetchSetting 走 SSRF 黑/白名单校验,内网/loopback/
+				// link-local 都拒掉,跟其它 SSRF-protected fetch 一致。
+				fullURL := u.BaseURL + "/" + strings.TrimLeft(u.Endpoint, "/")
+				if err := system_setting.ValidateUpstreamURLForSSRF(fullURL); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{
+						"success": false,
+						"message": "upstream baseURL 被 SSRF 防护拒绝: " + err.Error(),
+					})
+					return
+				}
 				upstreams = append(upstreams, u)
 			}
 		}
