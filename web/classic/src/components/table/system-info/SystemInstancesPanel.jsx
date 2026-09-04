@@ -309,7 +309,7 @@ const SystemInstancesPanel = ({ data, t }) => {
   ];
 
   return (
-    <div>
+    <div className='flex flex-col h-full min-h-0'>
       <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3'>
         <div>
           <Text strong className='text-base'>
@@ -345,6 +345,7 @@ const SystemInstancesPanel = ({ data, t }) => {
         </Space>
       </div>
       <Table
+        className='flex-1 instances-table'
         columns={columns}
         dataSource={instances}
         loading={instancesLoading}
@@ -352,7 +353,7 @@ const SystemInstancesPanel = ({ data, t }) => {
         size='small'
         rowKey='node_name'
         // 不再按内容宽度铺开(max-content),改为占满容器、列宽按比例分配
-        scroll={{ x: '100%' }}
+        scroll={{ x: '100%', y: '100%' }}
         empty={<Text type='secondary'>{t('暂无实例上报')}</Text>}
       />
     </div>

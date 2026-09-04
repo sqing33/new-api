@@ -47,7 +47,7 @@ const MarketShareSection = ({ data, period, t }) => {
   const chartSpec = useMemo(() => {
     const points = history.points || [];
     if (points.length === 0) return null;
-    // 时间点形如 "Aug 28",tooltip 标题转成中文"8月28日"
+    // 时间点形如 "Aug 28",转成中文"8月28日"(X 轴与 tooltip 共用)
     const formatLabel = (label) => {
       const parsed = new Date(`${label} ${new Date().getFullYear()}`);
       if (Number.isNaN(parsed.getTime())) return label;
@@ -56,9 +56,13 @@ const MarketShareSection = ({ data, period, t }) => {
       const text = `${parsed.getMonth() + 1}月${parsed.getDate()}日`;
       return sameYear ? text : `${parsed.getFullYear()}年${text}`;
     };
+    const values = points.map((point) => ({
+      ...point,
+      label: formatLabel(point.label),
+    }));
     return {
       type: 'bar',
-      data: [{ id: 'vendorShareHistoryData', values: points }],
+      data: [{ id: 'vendorShareHistoryData', values }],
       xField: 'label',
       yField: 'share',
       seriesField: 'vendor',
@@ -66,19 +70,19 @@ const MarketShareSection = ({ data, period, t }) => {
       padding: 'auto',
       color: { specified: colorMap },
       categoryAxis: {
-        label: {
-          autoHide: true,
-          autoRotate: false,
-          formatMethod: (value) => formatLabel(value),
-          style: { fontSize: 10 },
-        },
+        label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
         line: false,
         tick: false,
       },
+      // 占比合计恒为 100%,固定 0-1 量程并按 25% 步进标注,避免出现 1.2
       valueAxis: {
+        min: 0,
         max: 1,
-        percent: true,
-        label: { style: { fontSize: 10 } },
+        tickCount: 5,
+        label: {
+          formatMethod: (value) => `${Math.round(Number(value) * 1000) / 10}%`,
+          style: { fontSize: 10 },
+        },
       },
       legend: { visible: false },
       tooltip: {
@@ -91,7 +95,7 @@ const MarketShareSection = ({ data, period, t }) => {
           ],
         },
         dimension: {
-          title: (datum) => formatLabel(datum?.['label']),
+          title: (datum) => datum?.['label'],
           content: [
             {
               key: (datum) => datum['vendor'],
@@ -99,7 +103,11 @@ const MarketShareSection = ({ data, period, t }) => {
             },
           ],
           updateContent: (array) => {
-            array.sort((a, b) => b.value - a.value);
+            array.sort((a, b) => {
+              const av = a?.datum?.share || 0;
+              const bv = b?.datum?.share || 0;
+              return bv - av;
+            });
             return array;
           },
         },

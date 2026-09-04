@@ -93,7 +93,7 @@ const PerformancePanel = ({ CARD_PROPS, t }) => {
         <Text
           className='font-mono text-xs'
           ellipsis={{ showTooltip: true }}
-          style={{ maxWidth: 140 }}
+          style={{ maxWidth: 160 }}
         >
           {name}
         </Text>
@@ -102,7 +102,6 @@ const PerformancePanel = ({ CARD_PROPS, t }) => {
     {
       title: t('平均延迟'),
       dataIndex: 'avg_latency_ms',
-      width: 90,
       render: (value) => (
         <Text className='font-mono text-xs tabular-nums'>
           {formatLatency(value)}
@@ -112,7 +111,6 @@ const PerformancePanel = ({ CARD_PROPS, t }) => {
     {
       title: t('成功率'),
       dataIndex: 'success_rate',
-      width: 150,
       render: (value, record) => (
         <div className='flex items-center gap-2'>
           <SuccessRateDot value={value} />

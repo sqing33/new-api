@@ -2942,3 +2942,40 @@ html.dark .with-pastel-balls::before {
 .system-info-card .semi-table-cell {
   white-space: normal;
 }
+
+/* 系统信息页滚动条与 table-scroll-card 的 6px 细样式保持一致 */
+.system-info-card .semi-table-body::-webkit-scrollbar,
+.system-info-card .semi-table-wrapper::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.system-info-card .semi-table-body::-webkit-scrollbar-thumb,
+.system-info-card .semi-table-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(var(--semi-grey-2), 0.3);
+  border-radius: 2px;
+}
+
+.system-info-card .semi-table-body::-webkit-scrollbar-thumb:hover,
+.system-info-card .semi-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--semi-grey-2), 0.5);
+}
+
+/* 实例表:表格本体撑满卡片剩余高度,滚动只发生在表体,表头固定 */
+.system-info-card.instances-card .instances-table {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.system-info-card.instances-card .semi-table-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+}
+
+.system-info-card.instances-card .semi-table-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto !important;
+}

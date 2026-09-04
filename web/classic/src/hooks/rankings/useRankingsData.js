@@ -77,6 +77,8 @@ export const useRankingsData = () => {
     const url = new URL(window.location.href);
     url.searchParams.set('period', next);
     window.history.replaceState(null, '', url);
+    // 切周期静默刷新:页面结构保持不变,仅更新数据,避免整页闪烁重挂
+    load(true);
   };
 
   useEffect(() => {

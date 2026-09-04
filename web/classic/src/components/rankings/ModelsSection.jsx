@@ -86,30 +86,44 @@ const ModelsSection = ({ data, period, t, periodSlot }) => {
       const text = `${parsed.getMonth() + 1}月${parsed.getDate()}日`;
       return sameYear ? text : `${parsed.getFullYear()}年${text}`;
     };
+    // 该 VChart 版本对堆叠柱状图的轴 label formatMethod 不生效,
+    // 直接在数据里预处理:X 轴换成中文日期,Y 轴用缩放后的展示值
+    const displayTokens = (value) => {
+      if (!value) return 0;
+      if (value >= 1e9) return Number((value / 1e9).toFixed(2));
+      if (value >= 1e6) return Number((value / 1e6).toFixed(1));
+      if (value >= 1e3) return Number((value / 1e3).toFixed(1));
+      return value;
+    };
+    const values = points.map((point) => ({
+      ...point,
+      label: formatLabel(point.label),
+      tokens: displayTokens(point.tokens),
+      rawTokens: point.tokens,
+    }));
     return {
       type: 'bar',
-      data: [{ id: 'modelsHistoryData', values: points }],
+      data: [{ id: 'modelsHistoryData', values }],
       xField: 'label',
       yField: 'tokens',
       seriesField: 'model',
       stack: true,
       padding: 'auto',
       categoryAxis: {
-        label: {
-          autoHide: true,
-          autoRotate: false,
-          formatMethod: (value) => formatLabel(value),
-          style: { fontSize: 10 },
-        },
+        label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
         line: false,
         tick: false,
       },
       valueAxis: {
         grid: { lineStyle: { lineDash: [3, 3] } },
         label: {
-          // formatMethod 接收原始值,统一压缩为 K/M/B
-          formatMethod: (value) => formatTokens(value),
+          // 数据已预缩放,刻度即 0.5/1.5 等展示值;单位在轴标题说明
           style: { fontSize: 10 },
+        },
+        title: {
+          visible: true,
+          text: 'tokens (K/M/B)',
+          style: { fontSize: 10, fontWeight: 'normal' },
         },
       },
       legend: { visible: false },
@@ -118,20 +132,24 @@ const ModelsSection = ({ data, period, t, periodSlot }) => {
           content: [
             {
               key: (datum) => datum['model'],
-              value: (datum) => formatTokens(datum['tokens']),
+              value: (datum) => formatTokens(datum['rawTokens']),
             },
           ],
         },
         dimension: {
-          title: (datum) => formatLabel(datum?.['label']),
+          title: (datum) => datum?.['label'],
           content: [
             {
               key: (datum) => datum['model'],
-              value: (datum) => formatTokens(datum['tokens']),
+              value: (datum) => formatTokens(datum['rawTokens']),
             },
           ],
           updateContent: (array) => {
-            array.sort((a, b) => b.value - a.value);
+            array.sort((a, b) => {
+              const av = a?.datum?.rawTokens || 0;
+              const bv = b?.datum?.rawTokens || 0;
+              return bv - av;
+            });
             return array;
           },
         },
@@ -184,13 +202,17 @@ const ModelsSection = ({ data, period, t, periodSlot }) => {
               {rows.map((row) => (
                 <li
                   key={row.model_name}
-                  className='flex items-center gap-3 py-2.5 border-b border-dashed last:border-0'
+                  className='grid grid-cols-[2rem_1.25rem_minmax(0,1.6fr)_minmax(0,1fr)_5rem_4rem] items-center gap-2 py-2.5 border-b border-dashed last:border-0'
                   style={{ borderColor: 'var(--semi-color-border)' }}
                 >
-                  <span className='font-mono text-xs semi-text-tertiary w-6 text-right shrink-0'>
+                  <span className='font-mono text-xs semi-text-tertiary text-right'>
                     {row.rank}.
                   </span>
-                  {row.vendor_icon ? getLobeHubIcon(row.vendor_icon, 20) : null}
+                  <span className='flex justify-center'>
+                    {row.vendor_icon
+                      ? getLobeHubIcon(row.vendor_icon, 20)
+                      : null}
+                  </span>
                   <button
                     type='button'
                     className='text-sm font-medium truncate cursor-pointer hover:underline bg-transparent border-0 p-0 text-left'
@@ -200,17 +222,17 @@ const ModelsSection = ({ data, period, t, periodSlot }) => {
                   >
                     {row.model_name}
                   </button>
-                  <span className='ml-auto font-mono text-sm tabular-nums whitespace-nowrap'>
-                    {formatTokens(row.total_tokens)}
-                  </span>
-                  <span className='w-16 text-right shrink-0'>
-                    <GrowthText value={row.growth_pct} t={t} />
-                  </span>
                   <span
-                    className='w-24 text-xs semi-text-tertiary truncate text-left shrink-0'
+                    className='text-xs semi-text-tertiary truncate'
                     title={row.vendor}
                   >
                     {row.vendor}
+                  </span>
+                  <span className='font-mono text-sm tabular-nums whitespace-nowrap text-right'>
+                    {formatTokens(row.total_tokens)}
+                  </span>
+                  <span className='text-right'>
+                    <GrowthText value={row.growth_pct} t={t} />
                   </span>
                 </li>
               ))}
