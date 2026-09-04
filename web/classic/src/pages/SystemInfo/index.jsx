@@ -18,7 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button, Card, Space, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Typography } from '@douyinfe/semi-ui';
+import { RefreshCw } from 'lucide-react';
 import SystemInstancesPanel from '../../components/table/system-info/SystemInstancesPanel';
 import SystemTasksPanel from '../../components/table/system-info/SystemTasksPanel';
 import { useSystemInfoData } from '../../hooks/system-info/useSystemInfoData';
@@ -43,16 +44,13 @@ const SystemInfoPage = () => {
             {t('上报心跳的本部署节点及其最新状态')}
           </div>
         </div>
-        <Space>
-          <Button
-            theme='outline'
-            size='small'
-            loading={data.instancesRefreshing}
-            onClick={() => data.loadInstances(true)}
-          >
-            {t('刷新')}
-          </Button>
-        </Space>
+        <Button
+          type='tertiary'
+          icon={<RefreshCw size={16} />}
+          loading={data.instancesRefreshing}
+          onClick={() => data.loadInstances(true)}
+          className='bg-blue-500 hover:bg-blue-600'
+        />
       </div>
       <Card className='!rounded-xl'>
         <SystemInstancesPanel data={data} t={t} />

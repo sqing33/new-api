@@ -172,7 +172,7 @@ const SystemTasksPanel = ({ data, t }) => {
               : t('无运行中任务时暂停自动刷新')}
           </Text>
           <Button
-            theme='outline'
+            theme='solid'
             size='small'
             loading={tasksRefreshing}
             onClick={() => loadTasks()}

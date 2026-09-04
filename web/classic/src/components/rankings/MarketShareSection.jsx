@@ -49,7 +49,7 @@ const MarketShareSection = ({ data, period, t }) => {
     if (points.length === 0) return null;
     return {
       type: 'bar',
-      data: points,
+      data: [{ id: 'vendorShareHistoryData', values: points }],
       xField: 'label',
       yField: 'share',
       seriesField: 'vendor',

@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React from 'react';
 import { Button, Card, Select, Space, Typography } from '@douyinfe/semi-ui';
+import { RefreshCw } from 'lucide-react';
 import PerformanceSummaryTable from '../../components/performance/PerformanceSummaryTable';
 import ModelPerformanceSheet from '../../components/performance/ModelPerformanceSheet';
 import {
@@ -66,13 +67,12 @@ const PerformancePage = () => {
             }))}
           />
           <Button
-            theme='outline'
-            size='small'
+            type='tertiary'
+            icon={<RefreshCw size={16} />}
             loading={summaryRefreshing}
             onClick={refresh}
-          >
-            {t('刷新')}
-          </Button>
+            className='bg-blue-500 hover:bg-blue-600'
+          />
         </Space>
       </div>
       <Card className='!rounded-xl' bodyStyle={{ padding: 16 }}>

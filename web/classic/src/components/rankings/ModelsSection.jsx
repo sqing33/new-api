@@ -34,6 +34,8 @@ const PERIOD_DESCRIPTIONS = {
   year: '过去一年按周统计的模型 token 用量',
 };
 
+const GROWTH_DISPLAY_CAP = 1000;
+
 const GrowthText = ({ value, t }) => {
   if (typeof value !== 'number' || Number.isNaN(value) || value === 0) {
     return (
@@ -43,6 +45,12 @@ const GrowthText = ({ value, t }) => {
     );
   }
   const up = value > 0;
+  const magnitude = Math.abs(value);
+  // 新模型或基数极小时百分比会大到几千几万,封顶展示避免撑爆布局
+  const shown =
+    magnitude > GROWTH_DISPLAY_CAP
+      ? `>${GROWTH_DISPLAY_CAP}%`
+      : `${magnitude.toFixed(magnitude >= 10 ? 0 : 1)}%`;
   return (
     <Text
       className='font-mono text-xs whitespace-nowrap'
@@ -51,7 +59,7 @@ const GrowthText = ({ value, t }) => {
       }}
     >
       {up ? '↑' : '↓'}
-      {Math.abs(value).toFixed(Math.abs(value) >= 10 ? 0 : 1)}%
+      {shown}
     </Text>
   );
 };
@@ -71,7 +79,7 @@ const ModelsSection = ({ data, period, t }) => {
     if (points.length === 0) return null;
     return {
       type: 'bar',
-      data: points,
+      data: [{ id: 'modelsHistoryData', values: points }],
       xField: 'label',
       yField: 'tokens',
       seriesField: 'model',

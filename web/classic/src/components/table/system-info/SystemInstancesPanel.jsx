@@ -335,7 +335,7 @@ const SystemInstancesPanel = ({ data, t }) => {
             </Button>
           )}
           <Button
-            theme='outline'
+            theme='solid'
             size='small'
             loading={instancesRefreshing}
             onClick={() => loadInstances()}
