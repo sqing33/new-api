@@ -351,7 +351,8 @@ const SystemInstancesPanel = ({ data, t }) => {
         pagination={false}
         size='small'
         rowKey='node_name'
-        scroll={{ x: 'max-content' }}
+        // 不再按内容宽度铺开(max-content),改为占满容器、列宽按比例分配
+        scroll={{ x: '100%' }}
         empty={<Text type='secondary'>{t('暂无实例上报')}</Text>}
       />
     </div>

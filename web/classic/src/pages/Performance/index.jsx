@@ -42,7 +42,9 @@ const PerformancePage = () => {
   } = perf;
 
   return (
-    <div className='px-2 space-y-4'>
+    // mt-[60px] 是控制台填充布局的样式钩子(CSS 已将其 margin 归零),
+    // 配合 table-scroll-card 让卡片占满内容区剩余高度,页面无外层滚动
+    <div className='mt-[60px] px-2 flex flex-col gap-4'>
       <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
         <div>
           <Title heading={4} className='!mb-1'>
@@ -75,7 +77,10 @@ const PerformancePage = () => {
           />
         </Space>
       </div>
-      <Card className='!rounded-xl' bodyStyle={{ padding: 16 }}>
+      <Card
+        className='!rounded-xl table-scroll-card'
+        bodyStyle={{ padding: 16 }}
+      >
         <PerformanceSummaryTable
           models={summary}
           loading={summaryLoading}

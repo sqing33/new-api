@@ -56,6 +56,8 @@ const MarketShareSection = ({ data, period, t }) => {
       stack: true,
       padding: 'auto',
       color: { specified: colorMap },
+      // 与热门模型图一致:静态渲染,避免周期切换时全量动画卡顿
+      animation: false,
       categoryAxis: {
         label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
         line: false,

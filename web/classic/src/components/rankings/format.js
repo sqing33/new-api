@@ -17,16 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-// token 数压缩为 K/M/B 单位
+// token 数压缩为 K/M/B 单位;轴刻度回调可能传入字符串形式的数字,这里统一兜底
 export const formatTokens = (value) => {
-  if (typeof value !== 'number' || Number.isNaN(value)) return '-';
+  const numeric = typeof value === 'string' ? Number(value) : value;
+  if (typeof numeric !== 'number' || Number.isNaN(numeric)) return '-';
   const units = ['', 'K', 'M', 'B', 'T'];
-  if (value < 1000) return `${value}`;
+  if (numeric < 1000) return `${numeric}`;
   const index = Math.min(
-    Math.floor(Math.log10(Math.abs(value)) / 3),
+    Math.floor(Math.log10(Math.abs(numeric)) / 3),
     units.length - 1,
   );
-  const scaled = value / 1000 ** index;
+  const scaled = numeric / 1000 ** index;
   return `${scaled.toFixed(scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2)}${units[index]}`;
 };
 

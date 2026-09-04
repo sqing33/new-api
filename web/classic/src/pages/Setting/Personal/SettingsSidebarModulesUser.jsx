@@ -77,6 +77,8 @@ export default function SettingsSidebarModulesUser() {
         'image-presets': isSidebarModuleAllowed('chat', 'image-presets'),
         'video-studio': isSidebarModuleAllowed('chat', 'video-studio'),
         tools: isSidebarModuleAllowed('chat', 'tools'),
+        pricing: isSidebarModuleAllowed('chat', 'pricing'),
+        rankings: isSidebarModuleAllowed('chat', 'rankings'),
         chat: isSidebarModuleAllowed('chat', 'chat'),
       };
     }
@@ -86,6 +88,7 @@ export default function SettingsSidebarModulesUser() {
       defaultConfig.console = {
         enabled: true,
         detail: isSidebarModuleAllowed('console', 'detail'),
+        performance: isSidebarModuleAllowed('console', 'performance'),
         token: isSidebarModuleAllowed('console', 'token'),
         log: isSidebarModuleAllowed('console', 'log'),
         midjourney: isSidebarModuleAllowed('console', 'midjourney'),
@@ -112,6 +115,13 @@ export default function SettingsSidebarModulesUser() {
         deployment: isSidebarModuleAllowed('admin', 'deployment'),
         redemption: isSidebarModuleAllowed('admin', 'redemption'),
         user: isSidebarModuleAllowed('admin', 'user'),
+        subscription: isSidebarModuleAllowed('admin', 'subscription'),
+        'tool-install-setting': isSidebarModuleAllowed(
+          'admin',
+          'tool-install-setting',
+        ),
+        'system-info': isSidebarModuleAllowed('admin', 'system-info'),
+        'task-plugins': isSidebarModuleAllowed('admin', 'task-plugins'),
         setting: isSidebarModuleAllowed('admin', 'setting'),
       };
     }
@@ -330,6 +340,11 @@ export default function SettingsSidebarModulesUser() {
           title: t('清荫模型馆'),
           description: t('模型列表与价格入口'),
         },
+        {
+          key: 'rankings',
+          title: t('排行榜'),
+          description: t('模型用量与厂商份额排名'),
+        },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
       ],
     },
@@ -339,6 +354,11 @@ export default function SettingsSidebarModulesUser() {
       description: t('数据管理和日志查看'),
       modules: [
         { key: 'detail', title: t('数据看板'), description: t('系统数据统计') },
+        {
+          key: 'performance',
+          title: t('性能指标'),
+          description: t('模型延迟成功率与吞吐'),
+        },
         { key: 'token', title: t('令牌管理'), description: t('API令牌管理') },
         { key: 'log', title: t('使用日志'), description: t('API使用记录') },
         {
@@ -385,6 +405,26 @@ export default function SettingsSidebarModulesUser() {
           description: t('兑换码生成管理'),
         },
         { key: 'user', title: t('用户管理'), description: t('用户账户管理') },
+        {
+          key: 'subscription',
+          title: t('订阅管理'),
+          description: t('订阅套餐管理'),
+        },
+        {
+          key: 'tool-install-setting',
+          title: t('工具管理'),
+          description: t('工具安装脚本管理'),
+        },
+        {
+          key: 'system-info',
+          title: t('系统信息'),
+          description: t('实例心跳与系统任务'),
+        },
+        {
+          key: 'task-plugins',
+          title: t('任务插件'),
+          description: t('内置与自定义任务插件'),
+        },
         {
           key: 'setting',
           title: t('系统设置'),

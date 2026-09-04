@@ -2867,3 +2867,42 @@ html.dark .with-pastel-balls::before {
 .semi-text-tertiary {
   color: var(--semi-color-text-2);
 }
+
+/* ==================== 系统信息页布局 ==================== */
+/* 两张卡片(实例/任务)平分视口剩余高度,表格在各自卡片内滚动 */
+@media (min-width: 769px) {
+  .console-bg-content .system-info-page {
+    height: 100%;
+  }
+
+  .console-bg-content .system-info-page .system-info-card {
+    flex: 1 1 50%;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+  }
+
+  .console-bg-content .system-info-page .system-info-card .semi-card-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .console-bg-content .system-info-page .system-info-card .semi-table-wrapper {
+    overflow-y: auto;
+  }
+}
+
+/* 实例表列宽自适应:占满容器宽度,不再按内容宽度溢出 */
+.system-info-card .semi-table {
+  width: 100%;
+}
+
+.system-info-card .semi-table-container {
+  min-width: 0 !important;
+}
+
+.system-info-card .semi-table-cell {
+  white-space: normal;
+}

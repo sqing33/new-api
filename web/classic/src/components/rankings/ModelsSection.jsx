@@ -85,6 +85,8 @@ const ModelsSection = ({ data, period, t }) => {
       seriesField: 'model',
       stack: true,
       padding: 'auto',
+      // 周期切换时全量重放入场动画非常卡,图表保持静态渲染
+      animation: false,
       categoryAxis: {
         label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
         line: false,
@@ -93,13 +95,21 @@ const ModelsSection = ({ data, period, t }) => {
       valueAxis: {
         grid: { lineStyle: { lineDash: [3, 3] } },
         label: {
+          // formatMethod 接收原始值,统一压缩为 K/M/B
           formatMethod: (value) => formatTokens(value),
           style: { fontSize: 10 },
         },
       },
       legend: { visible: false },
       tooltip: {
-        enable: true,
+        mark: {
+          content: [
+            {
+              key: (datum) => datum['model'],
+              value: (datum) => formatTokens(datum['tokens']),
+            },
+          ],
+        },
       },
       bar: {
         columnWidthRatio: 0.6,

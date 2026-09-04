@@ -201,7 +201,7 @@ const SystemTasksPanel = ({ data, t }) => {
             pagination={false}
             size='small'
             rowKey='task_id'
-            scroll={{ x: 'max-content' }}
+            scroll={{ x: '100%' }}
             empty={<Text type='secondary'>{t('暂无运行中系统任务')}</Text>}
           />
         </div>
@@ -224,7 +224,7 @@ const SystemTasksPanel = ({ data, t }) => {
             pagination={false}
             size='small'
             rowKey='task_id'
-            scroll={{ x: 'max-content' }}
+            scroll={{ x: '100%' }}
             empty={<Text type='secondary'>{t('暂无历史系统任务')}</Text>}
           />
         </div>
