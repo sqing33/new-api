@@ -334,9 +334,13 @@ export const useDashboardCharts = (
     },
     valueAxis: {
       label: {
-        // 轴刻度统一压缩为 K/M/B,回调可能传字符串形式的数字
-        formatMethod: (value) => formatTokens(value),
+        // 轴数据已在 updateChartData 中预缩放为 0.5/1.5 等展示值,单位见轴标题
         style: { fontSize: 10 },
+      },
+      title: {
+        visible: true,
+        text: 'tokens (K/M/B)',
+        style: { fontSize: 10, fontWeight: 'normal' },
       },
     },
     tooltip: {
@@ -374,6 +378,65 @@ export const useDashboardCharts = (
           });
           return array;
         },
+      },
+    },
+    color: {
+      specified: modelColorMap,
+    },
+  });
+
+  // ===== 消耗量占比(各模型 token 用量占比,饼图,与调用次数分布同款) =====
+  const [spec_tokens_pie, setSpecTokensPie] = useState({
+    type: 'pie',
+    background: DASHBOARD_CHART_BACKGROUND,
+    data: [
+      {
+        id: 'tokensPieData',
+        values: [{ type: 'null', value: '0' }],
+      },
+    ],
+    outerRadius: 0.8,
+    innerRadius: 0.5,
+    padAngle: 0.6,
+    valueField: 'value',
+    categoryField: 'type',
+    pie: {
+      style: {
+        cornerRadius: 10,
+      },
+      state: {
+        hover: {
+          outerRadius: 0.85,
+          stroke: '#000',
+          lineWidth: 1,
+        },
+        selected: {
+          outerRadius: 0.85,
+          stroke: '#000',
+          lineWidth: 1,
+        },
+      },
+    },
+    title: {
+      visible: true,
+      text: t('模型消耗量占比'),
+      subtext: `${t('总计')}：${formatTokens(0)}`,
+    },
+    legends: {
+      visible: true,
+      orient: 'left',
+    },
+    label: {
+      visible: true,
+    },
+    tooltip: {
+      mark: {
+        content: [
+          {
+            key: (datum) => datum['type'],
+            value: (datum) => formatTokens(datum['rawValue'] || 0),
+          },
+        ],
       },
     },
     color: {
@@ -599,6 +662,13 @@ export const useDashboardCharts = (
       );
 
       // ===== 消耗量堆叠柱状图:与消耗分布同构,数据换成 token 用量 =====
+      const scaleTokens = (value) => {
+        if (!value) return 0;
+        if (value >= 1e9) return Number((value / 1e9).toFixed(2));
+        if (value >= 1e6) return Number((value / 1e6).toFixed(1));
+        if (value >= 1e3) return Number((value / 1e3).toFixed(1));
+        return value;
+      };
       let tokensBarData = [];
       chartTimePoints.forEach((time) => {
         let timeData = Array.from(uniqueModels).map((model) => {
@@ -608,7 +678,7 @@ export const useDashboardCharts = (
             Time: time,
             Model: model,
             rawTokens: aggregated?.tokens || 0,
-            Tokens: aggregated?.tokens || 0,
+            Tokens: scaleTokens(aggregated?.tokens || 0),
           };
         });
 
@@ -633,6 +703,35 @@ export const useDashboardCharts = (
         newModelColors,
         'tokensBarData',
       );
+
+      // ===== 消耗量占比饼图:每模型的 token 用量合计 =====
+      const tokensPieData = Array.from(
+        (() => {
+          const totals = new Map();
+          for (let [, value] of aggregatedData) {
+            updateMapValue(totals, value.model, value.tokens || 0);
+          }
+          return totals;
+        })(),
+      )
+        .map(([model, tokens]) => ({
+          type: model,
+          value: scaleTokens(tokens),
+          rawValue: tokens,
+        }))
+        .sort((a, b) => b.rawValue - a.rawValue);
+
+      setSpecTokensPie((prev) => ({
+        ...prev,
+        data: [{ id: 'tokensPieData', values: tokensPieData }],
+        title: {
+          ...prev.title,
+          subtext: `${t('总计')}：${formatTokens(totalTokens)}`,
+        },
+        color: {
+          specified: newModelColors,
+        },
+      }));
 
       // ===== 模型调用次数折线图 =====
       let modelLineData = [];
@@ -764,6 +863,7 @@ export const useDashboardCharts = (
     spec_pie,
     spec_line,
     spec_tokens_bar,
+    spec_tokens_pie,
     spec_model_line,
     spec_rank_bar,
     spec_user_rank,

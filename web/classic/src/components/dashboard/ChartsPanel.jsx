@@ -27,6 +27,7 @@ const ChartsPanel = ({
   setActiveChartTab,
   spec_line,
   spec_tokens_bar,
+  spec_tokens_pie,
   spec_model_line,
   spec_pie,
   spec_rank_bar,
@@ -55,6 +56,7 @@ const ChartsPanel = ({
             onChange={setActiveChartTab}
           >
             <TabPane tab={<span>{t('消耗量')}</span>} itemKey='7' />
+            <TabPane tab={<span>{t('消耗量占比')}</span>} itemKey='8' />
             <TabPane tab={<span>{t('消耗分布')}</span>} itemKey='1' />
             <TabPane tab={<span>{t('调用趋势')}</span>} itemKey='2' />
             <TabPane tab={<span>{t('调用次数分布')}</span>} itemKey='3' />
@@ -84,6 +86,14 @@ const ChartsPanel = ({
             className='dashboard-vchart'
             style={{ background: 'transparent' }}
             spec={spec_tokens_bar}
+            option={CHART_CONFIG}
+          />
+        )}
+        {activeChartTab === '8' && (
+          <VChart
+            className='dashboard-vchart'
+            style={{ background: 'transparent' }}
+            spec={spec_tokens_pie}
             option={CHART_CONFIG}
           />
         )}

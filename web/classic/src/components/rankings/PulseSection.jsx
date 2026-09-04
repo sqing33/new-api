@@ -28,10 +28,12 @@ const { Text } = Typography;
 const MoverRow = ({ mover, up, onModelClick }) => {
   return (
     <li
-      className='flex items-center gap-3 py-2.5 border-b border-dashed last:border-0'
+      className='grid grid-cols-[1.25rem_minmax(0,1.6fr)_minmax(0,1fr)_3.5rem_3.5rem] items-center gap-2 py-2.5 border-b border-dashed last:border-0'
       style={{ borderColor: 'var(--semi-color-border)' }}
     >
-      {mover.vendor_icon ? getLobeHubIcon(mover.vendor_icon, 20) : null}
+      <span className='flex justify-center'>
+        {mover.vendor_icon ? getLobeHubIcon(mover.vendor_icon, 20) : null}
+      </span>
       <button
         type='button'
         className='font-mono text-xs truncate cursor-pointer bg-transparent border-0 p-0 text-left hover:underline'
@@ -41,11 +43,17 @@ const MoverRow = ({ mover, up, onModelClick }) => {
       >
         {mover.model_name}
       </button>
-      <span className='text-xs semi-text-tertiary whitespace-nowrap'>
-        #{mover.current_rank} · {mover.vendor}
+      <span
+        className='text-xs semi-text-tertiary truncate'
+        title={mover.vendor}
+      >
+        {mover.vendor}
+      </span>
+      <span className='font-mono text-xs semi-text-tertiary text-right whitespace-nowrap'>
+        #{mover.current_rank}
       </span>
       <span
-        className='ml-auto font-mono text-xs whitespace-nowrap'
+        className='font-mono text-xs text-right whitespace-nowrap'
         style={{
           color: up ? 'var(--semi-color-success)' : 'var(--semi-color-danger)',
         }}

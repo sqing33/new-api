@@ -77,8 +77,11 @@ const ModelsSection = ({ data, period, t, periodSlot }) => {
   const chartSpec = useMemo(() => {
     const points = history.points || [];
     if (points.length === 0) return null;
-    // 时间点形如 "Aug 28",转成中文"8月28日";跨年时带上年份
+    // 时间点形如 "Aug 28"(按天)或 "06:00"(今天周期按小时),转成中文展示
     const formatLabel = (label) => {
+      if (!label) return label;
+      // 今天周期:小时刻度原样保留
+      if (/^\d{1,2}:\d{2}$/.test(label)) return label;
       const parsed = new Date(`${label} ${new Date().getFullYear()}`);
       if (Number.isNaN(parsed.getTime())) return label;
       const now = new Date();
@@ -103,6 +106,7 @@ const ModelsSection = ({ data, period, t, periodSlot }) => {
     }));
     return {
       type: 'bar',
+      background: 'transparent',
       data: [{ id: 'modelsHistoryData', values }],
       xField: 'label',
       yField: 'tokens',
@@ -189,6 +193,7 @@ const ModelsSection = ({ data, period, t, periodSlot }) => {
       {chartSpec ? (
         <div className='h-64 sm:h-72 mb-4'>
           <VChart
+            className='dashboard-vchart'
             style={{ background: 'transparent' }}
             spec={chartSpec}
             option={CHART_CONFIG}

@@ -2979,3 +2979,9 @@ html.dark .with-pastel-balls::before {
   min-height: 0;
   overflow-y: auto !important;
 }
+
+/* 看板性能指标面板:内容水平居中 */
+.performance-panel-table .semi-table-row-head,
+.performance-panel-table .semi-table-row-cell {
+  text-align: center;
+}

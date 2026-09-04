@@ -85,7 +85,7 @@ const ModelPerformanceSheet = ({
     if (points.length === 0) return null;
     return {
       type: 'line',
-      data: points,
+      data: [{ id: 'modelTrendData', values: points }],
       xField: 'ts',
       yField: 'value',
       seriesField: 'group',

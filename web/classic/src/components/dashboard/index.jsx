@@ -177,6 +177,7 @@ const Dashboard = () => {
             setActiveChartTab={dashboardData.setActiveChartTab}
             spec_line={dashboardCharts.spec_line}
             spec_tokens_bar={dashboardCharts.spec_tokens_bar}
+            spec_tokens_pie={dashboardCharts.spec_tokens_pie}
             spec_model_line={dashboardCharts.spec_model_line}
             spec_pie={dashboardCharts.spec_pie}
             spec_rank_bar={dashboardCharts.spec_rank_bar}

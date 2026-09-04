@@ -47,8 +47,10 @@ const MarketShareSection = ({ data, period, t }) => {
   const chartSpec = useMemo(() => {
     const points = history.points || [];
     if (points.length === 0) return null;
-    // 时间点形如 "Aug 28",转成中文"8月28日"(X 轴与 tooltip 共用)
+    // 时间点形如 "Aug 28"(按天)或 "06:00"(今天周期按小时),转成中文展示
     const formatLabel = (label) => {
+      if (!label) return label;
+      if (/^\d{1,2}:\d{2}$/.test(label)) return label;
       const parsed = new Date(`${label} ${new Date().getFullYear()}`);
       if (Number.isNaN(parsed.getTime())) return label;
       const now = new Date();
@@ -62,6 +64,7 @@ const MarketShareSection = ({ data, period, t }) => {
     }));
     return {
       type: 'bar',
+      background: 'transparent',
       data: [{ id: 'vendorShareHistoryData', values }],
       xField: 'label',
       yField: 'share',
@@ -132,6 +135,7 @@ const MarketShareSection = ({ data, period, t }) => {
       {chartSpec ? (
         <div className='h-56 sm:h-64 mb-4'>
           <VChart
+            className='dashboard-vchart'
             style={{ background: 'transparent' }}
             spec={chartSpec}
             option={CHART_CONFIG}
@@ -169,35 +173,37 @@ const MarketShareSection = ({ data, period, t }) => {
 const VendorRow = ({ vendor, t, onVendorClick }) => {
   return (
     <li
-      className='flex items-center gap-3 py-2.5 border-b border-dashed last:border-0'
+      className='grid grid-cols-[2rem_1.25rem_minmax(0,1.2fr)_minmax(0,1fr)_5rem_4rem] items-center gap-2 py-2.5 border-b border-dashed last:border-0'
       style={{ borderColor: 'var(--semi-color-border)' }}
     >
-      <span className='font-mono text-xs semi-text-tertiary w-6 text-right shrink-0'>
+      <span className='font-mono text-xs semi-text-tertiary text-right'>
         {vendor.rank}.
       </span>
-      {vendor.vendor_icon ? getLobeHubIcon(vendor.vendor_icon, 20) : null}
+      <span className='flex justify-center'>
+        {vendor.vendor_icon ? getLobeHubIcon(vendor.vendor_icon, 20) : null}
+      </span>
       <button
         type='button'
-        className='max-w-40 truncate cursor-pointer bg-transparent border-0 p-0 text-left text-sm'
+        className='truncate cursor-pointer bg-transparent border-0 p-0 text-left text-sm'
         style={{ color: 'var(--semi-color-primary)' }}
         onClick={() => onVendorClick?.(vendor)}
         title={vendor.vendor}
       >
         {vendor.vendor}
       </button>
-      <span className='text-xs semi-text-tertiary whitespace-nowrap'>
-        {formatShare(vendor.share)}
+      <span
+        className='text-xs semi-text-tertiary truncate'
+        title={
+          vendor.top_model ? `${t('最热模型')}：${vendor.top_model}` : undefined
+        }
+      >
+        {vendor.top_model || '-'}
       </span>
-      {vendor.top_model ? (
-        <span
-          className='text-xs semi-text-tertiary truncate'
-          title={`${t('最热模型')}：${vendor.top_model}`}
-        >
-          {vendor.top_model}
-        </span>
-      ) : null}
-      <span className='ml-auto font-mono text-sm tabular-nums whitespace-nowrap'>
+      <span className='font-mono text-sm tabular-nums whitespace-nowrap text-right'>
         {formatTokens(vendor.total_tokens)}
+      </span>
+      <span className='font-mono text-xs tabular-nums whitespace-nowrap text-right semi-text-tertiary'>
+        {formatShare(vendor.share)}
       </span>
     </li>
   );

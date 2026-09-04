@@ -156,6 +156,7 @@ const PerformancePanel = ({ CARD_PROPS, t }) => {
       }
     >
       <Table
+        className='performance-panel-table'
         columns={columns}
         dataSource={perf.summary}
         loading={perf.summaryLoading}
