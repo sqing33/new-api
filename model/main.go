@@ -379,6 +379,12 @@ func migrateDB() error {
 	if err := migratePrefillGroupUniqueness(DB); err != nil {
 		return err
 	}
+	// 老库里由内联 UNIQUE 生成的 <table>_<column>_key 约束,与 GORM
+	// MigrateColumnUnique 期望的 uni_<table>_<column> 名字不一致,会让
+	// AutoMigrate 直接报 42704;先改名再交给 AutoMigrate 删除。
+	if err := migrateLegacyUniqueConstraintNames(DB); err != nil {
+		return err
+	}
 	// Migrate price_amount column from float/double to decimal for existing tables
 	migrateSubscriptionPlanPriceAmount()
 	// Migrate model_limits column from varchar to text for existing tables
