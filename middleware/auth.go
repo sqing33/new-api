@@ -19,6 +19,7 @@ import (
 	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -152,7 +153,9 @@ func authenticateDashboardRequest(c *gin.Context) (*model.UserBase, service.Auth
 func classifyDashboardCredential(c *gin.Context) (*model.UserBase, service.AuthIdentity, dashboardCredentialKind, error) {
 	raw, ok := authorizationToken(c.GetHeader("Authorization"))
 	if !ok {
-		return nil, service.AuthIdentity{}, dashboardCredentialUnmatched, nil
+		// classic 前端的 dashboard 请求不带 Authorization 头,
+		// 依赖 setupLogin 写入的旧 cookie 会话（浏览器同源自动携带）。
+		return legacySessionCredential(c)
 	}
 	identity, internal, err := service.ParseDashboardAccessToken(raw)
 	if internal {
@@ -177,6 +180,43 @@ func classifyDashboardCredential(c *gin.Context) (*model.UserBase, service.AuthI
 		return nil, service.AuthIdentity{}, dashboardCredentialPAT, err
 	}
 	return user, service.AuthIdentity{UserID: user.Id, UserAuthVersion: user.AuthVersion}, dashboardCredentialPAT, nil
+}
+
+// legacySessionCredential authenticates classic-frontend dashboard requests
+// that carry the legacy cookie session instead of a Bearer access token
+// (setupLogin still writes the cookie for classic compatibility). It mirrors
+// the pre-stateless TokenAuth cookie semantics, including the New-API-User
+// cross-check, and re-reads the user from the database so role/status
+// changes take effect without re-login.
+func legacySessionCredential(c *gin.Context) (*model.UserBase, service.AuthIdentity, dashboardCredentialKind, error) {
+	value, exists := c.Get(sessions.DefaultKey)
+	if !exists {
+		return nil, service.AuthIdentity{}, dashboardCredentialUnmatched, nil
+	}
+	s, ok := value.(sessions.Session)
+	if !ok {
+		return nil, service.AuthIdentity{}, dashboardCredentialUnmatched, nil
+	}
+	cookieID, ok := s.Get("id").(int)
+	if !ok || cookieID <= 0 {
+		return nil, service.AuthIdentity{}, dashboardCredentialUnmatched, nil
+	}
+	apiUserIdStr := c.GetHeader("New-Api-User")
+	if apiUserIdStr == "" {
+		return nil, service.AuthIdentity{}, dashboardCredentialUnmatched, service.ErrAuthTokenInvalid
+	}
+	apiUserId, err := strconv.Atoi(apiUserIdStr)
+	if err != nil || apiUserId != cookieID {
+		return nil, service.AuthIdentity{}, dashboardCredentialUnmatched, service.ErrAuthTokenInvalid
+	}
+	user, err := model.GetUserCache(cookieID)
+	if err != nil {
+		return nil, service.AuthIdentity{}, dashboardCredentialUnmatched, err
+	}
+	if user == nil || user.Id <= 0 {
+		return nil, service.AuthIdentity{}, dashboardCredentialUnmatched, service.ErrAuthTokenInvalid
+	}
+	return user, service.AuthIdentity{UserID: user.Id, UserAuthVersion: user.AuthVersion}, dashboardCredentialInternal, nil
 }
 
 func authorizationToken(header string) (string, bool) {
