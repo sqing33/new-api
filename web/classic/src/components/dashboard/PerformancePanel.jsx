@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React from 'react';
 import { Activity } from 'lucide-react';
-import { Card, Select, Table, Typography } from '@douyinfe/semi-ui';
+import { Card, Select, Table, Tooltip, Typography } from '@douyinfe/semi-ui';
 import ModelPerformanceSheet from '../performance/ModelPerformanceSheet';
 import {
   formatLatency,
@@ -53,7 +53,34 @@ const SuccessRateDot = ({ value }) => (
   </div>
 );
 
-// 数据看板右侧的性能指标面板:紧凑摘要(模型/延迟/成功率),
+// 近 N 个时间桶的成功率迷你趋势线(与完整页同款 SVG 折线)
+const SuccessRateSparkline = ({ values }) => {
+  if (!Array.isArray(values) || values.length < 2) return null;
+  const width = 64;
+  const height = 20;
+  const points = values
+    .map((value, index) => {
+      const x = (index / (values.length - 1)) * (width - 2) + 1;
+      const clamped = Math.min(100, Math.max(0, Number(value) || 0));
+      const y = height - 1 - ((clamped - 0) / 100) * (height - 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  return (
+    <svg width={width} height={height} aria-hidden='true' className='shrink-0'>
+      <polyline
+        points={points}
+        fill='none'
+        stroke={getSuccessRateColor(values[values.length - 1])}
+        strokeWidth='1.5'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+      />
+    </svg>
+  );
+};
+
+// 数据看板右侧的性能指标面板:紧凑摘要(模型/延迟/成功率+趋势),
 // 时段切换与"模型数据分析"卡片一致放在标题栏右侧,详情走侧滑抽屉。
 const PerformancePanel = ({ CARD_PROPS, t }) => {
   const perf = usePerformanceData();
@@ -85,8 +112,22 @@ const PerformancePanel = ({ CARD_PROPS, t }) => {
     {
       title: t('成功率'),
       dataIndex: 'success_rate',
-      width: 100,
-      render: (value) => <SuccessRateDot value={value} />,
+      width: 150,
+      render: (value, record) => (
+        <div className='flex items-center gap-2'>
+          <SuccessRateDot value={value} />
+          <Tooltip
+            content={(record.recent_success_rates || [])
+              .map((v) => `${v}%`)
+              .join(' → ')}
+            showArrow
+          >
+            <span className='inline-flex'>
+              <SuccessRateSparkline values={record.recent_success_rates} />
+            </span>
+          </Tooltip>
+        </div>
+      ),
     },
   ];
 
@@ -96,9 +137,12 @@ const PerformancePanel = ({ CARD_PROPS, t }) => {
       className='!rounded-2xl lg:col-span-3'
       title={
         <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between w-full gap-3'>
-          <div className='flex items-center gap-2'>
+          <div className='flex items-center gap-2 flex-wrap'>
             <Activity size={16} />
             {t('性能指标')}
+            <Text type='tertiary' className='text-xs font-normal'>
+              {t('点击行查看吞吐等完整指标')}
+            </Text>
           </div>
           <Select
             size='small'
@@ -126,11 +170,6 @@ const PerformancePanel = ({ CARD_PROPS, t }) => {
         })}
         empty={<Text type='secondary'>{t('暂无性能指标数据')}</Text>}
       />
-      <div className='mt-2'>
-        <Text type='tertiary' className='text-xs'>
-          {t('点击行查看吞吐等完整指标')}
-        </Text>
-      </div>
       <ModelPerformanceSheet
         visible={Boolean(perf.sheetModel)}
         modelName={perf.sheetModel}

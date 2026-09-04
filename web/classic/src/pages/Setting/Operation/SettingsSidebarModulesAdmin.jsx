@@ -217,7 +217,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         },
         {
           key: 'rankings',
-          title: t('清荫行榜'),
+          title: t('清荫排行榜'),
           description: t('模型用量与厂商份额排名'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },

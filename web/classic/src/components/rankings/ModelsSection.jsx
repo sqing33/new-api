@@ -64,7 +64,7 @@ const GrowthText = ({ value, t }) => {
   );
 };
 
-const ModelsSection = ({ data, period, t }) => {
+const ModelsSection = ({ data, period, t, periodSlot }) => {
   const navigate = useNavigate();
   const history = data?.models_history || { points: [], models: [] };
   const models = data?.models || [];
@@ -77,6 +77,15 @@ const ModelsSection = ({ data, period, t }) => {
   const chartSpec = useMemo(() => {
     const points = history.points || [];
     if (points.length === 0) return null;
+    // 时间点形如 "Aug 28",转成中文"8月28日";跨年时带上年份
+    const formatLabel = (label) => {
+      const parsed = new Date(`${label} ${new Date().getFullYear()}`);
+      if (Number.isNaN(parsed.getTime())) return label;
+      const now = new Date();
+      const sameYear = parsed.getFullYear() === now.getFullYear();
+      const text = `${parsed.getMonth() + 1}月${parsed.getDate()}日`;
+      return sameYear ? text : `${parsed.getFullYear()}年${text}`;
+    };
     return {
       type: 'bar',
       data: [{ id: 'modelsHistoryData', values: points }],
@@ -86,7 +95,12 @@ const ModelsSection = ({ data, period, t }) => {
       stack: true,
       padding: 'auto',
       categoryAxis: {
-        label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
+        label: {
+          autoHide: true,
+          autoRotate: false,
+          formatMethod: (value) => formatLabel(value),
+          style: { fontSize: 10 },
+        },
         line: false,
         tick: false,
       },
@@ -107,6 +121,19 @@ const ModelsSection = ({ data, period, t }) => {
               value: (datum) => formatTokens(datum['tokens']),
             },
           ],
+        },
+        dimension: {
+          title: (datum) => formatLabel(datum?.['label']),
+          content: [
+            {
+              key: (datum) => datum['model'],
+              value: (datum) => formatTokens(datum['tokens']),
+            },
+          ],
+          updateContent: (array) => {
+            array.sort((a, b) => b.value - a.value);
+            return array;
+          },
         },
       },
       bar: {
@@ -129,13 +156,16 @@ const ModelsSection = ({ data, period, t }) => {
             {t(PERIOD_DESCRIPTIONS[period] || PERIOD_DESCRIPTIONS.week)}
           </div>
         </div>
-        <div className='md:text-right'>
-          <span className='font-mono text-xl font-semibold tabular-nums'>
-            {formatTokens(totalTokens)}
-          </span>
-          <span className='text-xs uppercase tracking-widest semi-text-tertiary ml-2'>
-            tokens
-          </span>
+        <div className='flex items-center gap-4'>
+          {periodSlot}
+          <div className='md:text-right'>
+            <span className='font-mono text-xl font-semibold tabular-nums'>
+              {formatTokens(totalTokens)}
+            </span>
+            <span className='text-xs uppercase tracking-widest semi-text-tertiary ml-2'>
+              tokens
+            </span>
+          </div>
         </div>
       </div>
       {chartSpec ? (
@@ -170,14 +200,17 @@ const ModelsSection = ({ data, period, t }) => {
                   >
                     {row.model_name}
                   </button>
-                  <span className='text-xs italic semi-text-tertiary truncate shrink-0'>
-                    {t('供应商')} {row.vendor}
-                  </span>
                   <span className='ml-auto font-mono text-sm tabular-nums whitespace-nowrap'>
                     {formatTokens(row.total_tokens)}
                   </span>
                   <span className='w-16 text-right shrink-0'>
                     <GrowthText value={row.growth_pct} t={t} />
+                  </span>
+                  <span
+                    className='w-24 text-xs semi-text-tertiary truncate text-left shrink-0'
+                    title={row.vendor}
+                  >
+                    {row.vendor}
                   </span>
                 </li>
               ))}

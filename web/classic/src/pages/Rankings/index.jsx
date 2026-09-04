@@ -65,28 +65,6 @@ const Rankings = () => {
 
   return (
     <div className='px-2 space-y-4'>
-      <div className='flex flex-col md:flex-row md:items-end md:justify-between gap-3'>
-        <div>
-          <Title heading={4} className='!mb-1'>
-            {t('清荫行榜')}
-          </Title>
-          <div
-            className='text-sm'
-            style={{ color: 'var(--semi-color-text-1)' }}
-          >
-            {t(
-              '发现平台上使用最多的模型与上升中的厂商，数据来自实时用量统计。',
-            )}
-          </div>
-        </div>
-        <PeriodTabs
-          periods={RANKINGS_PERIODS}
-          labels={PERIOD_LABELS}
-          active={period}
-          onChange={setPeriod}
-          t={t}
-        />
-      </div>
       {loading ? (
         <div className='space-y-4'>
           <Skeleton className='!h-[420px] !rounded-xl' active />
@@ -101,7 +79,20 @@ const Rankings = () => {
         </Card>
       ) : (
         <>
-          <ModelsSection data={data} period={period} t={t} />
+          <ModelsSection
+            data={data}
+            period={period}
+            t={t}
+            periodSlot={
+              <PeriodTabs
+                periods={RANKINGS_PERIODS}
+                labels={PERIOD_LABELS}
+                active={period}
+                onChange={setPeriod}
+                t={t}
+              />
+            }
+          />
           <MarketShareSection data={data} period={period} t={t} />
           <PulseSection data={data} t={t} />
         </>

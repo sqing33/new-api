@@ -18,13 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button, Card, Typography } from '@douyinfe/semi-ui';
+import { Button, Card } from '@douyinfe/semi-ui';
 import { RefreshCw } from 'lucide-react';
 import SystemInstancesPanel from '../../components/table/system-info/SystemInstancesPanel';
 import SystemTasksPanel from '../../components/table/system-info/SystemTasksPanel';
 import { useSystemInfoData } from '../../hooks/system-info/useSystemInfoData';
-
-const { Title } = Typography;
 
 const SystemInfoPage = () => {
   const data = useSystemInfoData();
@@ -34,18 +32,7 @@ const SystemInfoPage = () => {
     // mt-[60px] 是控制台填充布局的样式钩子(CSS 已将其 margin 归零):
     // 两张卡片平分视口剩余高度,页面整体无外层滚动
     <div className='mt-[60px] px-2 flex flex-col gap-4 system-info-page'>
-      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
-        <div>
-          <Title heading={4} className='!mb-1'>
-            {t('系统信息')}
-          </Title>
-          <div
-            className='text-sm'
-            style={{ color: 'var(--semi-color-text-1)' }}
-          >
-            {t('上报心跳的本部署节点及其最新状态')}
-          </div>
-        </div>
+      <div className='flex justify-end'>
         <Button
           type='tertiary'
           icon={<RefreshCw size={16} />}
@@ -54,10 +41,10 @@ const SystemInfoPage = () => {
           className='bg-blue-500 hover:bg-blue-600'
         />
       </div>
-      <Card className='!rounded-xl table-scroll-card system-info-card'>
+      <Card className='!rounded-xl table-scroll-card system-info-card instances-card'>
         <SystemInstancesPanel data={data} t={t} />
       </Card>
-      <Card className='!rounded-xl table-scroll-card system-info-card'>
+      <Card className='!rounded-xl table-scroll-card system-info-card tasks-card'>
         <SystemTasksPanel data={data} t={t} />
       </Card>
     </div>

@@ -155,7 +155,7 @@ const SystemTasksPanel = ({ data, t }) => {
   const columns = buildColumns(t);
 
   return (
-    <div>
+    <div className='flex flex-col h-full min-h-0'>
       <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3'>
         <div>
           <Text strong className='text-base'>
@@ -181,8 +181,9 @@ const SystemTasksPanel = ({ data, t }) => {
           </Button>
         </Space>
       </div>
-      <div className='space-y-5'>
-        <div>
+      {/* 运行中/历史 左右各半;窄屏回落上下堆叠 */}
+      <div className='grid grid-cols-1 lg:grid-cols-2 gap-5 tasks-columns'>
+        <div className='flex flex-col min-h-0'>
           <div className='flex items-center justify-between mb-2'>
             <div>
               <Text strong>{t('运行中任务')}</Text>
@@ -195,17 +196,18 @@ const SystemTasksPanel = ({ data, t }) => {
             </Tag>
           </div>
           <Table
+            className='flex-1'
             columns={columns}
             dataSource={activeTasks}
             loading={tasksLoading && activeTasks.length === 0}
             pagination={false}
             size='small'
             rowKey='task_id'
-            scroll={{ x: '100%' }}
+            scroll={{ y: '100%', x: '100%' }}
             empty={<Text type='secondary'>{t('暂无运行中系统任务')}</Text>}
           />
         </div>
-        <div>
+        <div className='flex flex-col min-h-0'>
           <div className='flex items-center justify-between mb-2'>
             <div>
               <Text strong>{t('任务历史')}</Text>
@@ -218,13 +220,14 @@ const SystemTasksPanel = ({ data, t }) => {
             </Tag>
           </div>
           <Table
+            className='flex-1'
             columns={columns}
             dataSource={historyTasks}
             loading={tasksLoading && historyTasks.length === 0}
             pagination={false}
             size='small'
             rowKey='task_id'
-            scroll={{ x: '100%' }}
+            scroll={{ y: '100%', x: '100%' }}
             empty={<Text type='secondary'>{t('暂无历史系统任务')}</Text>}
           />
         </div>

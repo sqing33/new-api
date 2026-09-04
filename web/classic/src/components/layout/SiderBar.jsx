@@ -367,7 +367,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/pricing',
       },
       {
-        text: t('清荫行榜'),
+        text: t('清荫排行榜'),
         itemKey: 'rankings',
         to: '/rankings',
       },

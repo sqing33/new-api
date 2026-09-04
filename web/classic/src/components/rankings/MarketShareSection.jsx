@@ -47,6 +47,15 @@ const MarketShareSection = ({ data, period, t }) => {
   const chartSpec = useMemo(() => {
     const points = history.points || [];
     if (points.length === 0) return null;
+    // 时间点形如 "Aug 28",tooltip 标题转成中文"8月28日"
+    const formatLabel = (label) => {
+      const parsed = new Date(`${label} ${new Date().getFullYear()}`);
+      if (Number.isNaN(parsed.getTime())) return label;
+      const now = new Date();
+      const sameYear = parsed.getFullYear() === now.getFullYear();
+      const text = `${parsed.getMonth() + 1}月${parsed.getDate()}日`;
+      return sameYear ? text : `${parsed.getFullYear()}年${text}`;
+    };
     return {
       type: 'bar',
       data: [{ id: 'vendorShareHistoryData', values: points }],
@@ -57,7 +66,12 @@ const MarketShareSection = ({ data, period, t }) => {
       padding: 'auto',
       color: { specified: colorMap },
       categoryAxis: {
-        label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
+        label: {
+          autoHide: true,
+          autoRotate: false,
+          formatMethod: (value) => formatLabel(value),
+          style: { fontSize: 10 },
+        },
         line: false,
         tick: false,
       },
@@ -75,6 +89,19 @@ const MarketShareSection = ({ data, period, t }) => {
               value: (datum) => formatShare(datum['share']),
             },
           ],
+        },
+        dimension: {
+          title: (datum) => formatLabel(datum?.['label']),
+          content: [
+            {
+              key: (datum) => datum['vendor'],
+              value: (datum) => formatShare(datum['share']),
+            },
+          ],
+          updateContent: (array) => {
+            array.sort((a, b) => b.value - a.value);
+            return array;
+          },
         },
       },
       bar: {
