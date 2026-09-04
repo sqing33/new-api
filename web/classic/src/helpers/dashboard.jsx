@@ -106,6 +106,7 @@ export const getTrendSpec = (data, color) => ({
   yField: 'y',
   height: 40,
   width: 100,
+  animation: false, // 首屏 4 张卡同时挂载,关闭入场动画避免卡顿
   axes: [
     {
       orient: 'bottom',

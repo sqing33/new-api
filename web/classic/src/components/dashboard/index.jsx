@@ -28,7 +28,7 @@ import ChartsPanel from './ChartsPanel';
 import ApiInfoPanel from './ApiInfoPanel';
 import AnnouncementsPanel from './AnnouncementsPanel';
 import FaqPanel from './FaqPanel';
-import UptimePanel from './UptimePanel';
+import PerformancePanel from './PerformancePanel';
 import SearchModal from './modals/SearchModal';
 
 import { useDashboardData } from '../../hooks/dashboard/useDashboardData';
@@ -41,15 +41,11 @@ import {
   FLEX_CENTER_GAP2,
   ILLUSTRATION_SIZE,
   ANNOUNCEMENT_LEGEND_DATA,
-  UPTIME_STATUS_MAP,
 } from '../../constants/dashboard.constants';
 import {
   getTrendSpec,
   handleCopyUrl,
   handleSpeedTest,
-  getUptimeStatusColor,
-  getUptimeStatusText,
-  renderMonitorList,
 } from '../../helpers/dashboard';
 
 const Dashboard = () => {
@@ -102,7 +98,6 @@ const Dashboard = () => {
       }
     });
     await loadUserData();
-    await dashboardData.loadUptimeData();
   };
 
   const handleRefresh = async () => {
@@ -136,14 +131,6 @@ const Dashboard = () => {
     },
   );
   const faqData = statusState?.status?.faq || [];
-
-  const uptimeLegendData = Object.entries(UPTIME_STATUS_MAP).map(
-    ([status, info]) => ({
-      status: Number(status),
-      color: info.color,
-      label: dashboardData.t(info.label),
-    }),
-  );
 
   // ========== Effects ==========
   useEffect(() => {
@@ -182,11 +169,9 @@ const Dashboard = () => {
         CHART_CONFIG={CHART_CONFIG}
       />
 
-      {/* API信息和图表面板 */}
+      {/* API信息和图表面板:8列网格,图表占5列,性能指标占3列 */}
       <div className='mb-4'>
-        <div
-          className={`grid grid-cols-1 gap-4 ${dashboardData.hasApiInfoPanel ? 'lg:grid-cols-4' : ''}`}
-        >
+        <div className='grid grid-cols-1 lg:grid-cols-8 gap-4'>
           <ChartsPanel
             activeChartTab={dashboardData.activeChartTab}
             setActiveChartTab={dashboardData.setActiveChartTab}
@@ -200,21 +185,11 @@ const Dashboard = () => {
             CARD_PROPS={CARD_PROPS}
             CHART_CONFIG={CHART_CONFIG}
             FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
-            hasApiInfoPanel={dashboardData.hasApiInfoPanel}
+            hasApiInfoPanel={false}
             t={dashboardData.t}
           />
 
-          {dashboardData.hasApiInfoPanel && (
-            <ApiInfoPanel
-              apiInfoData={apiInfoData}
-              handleCopyUrl={(url) => handleCopyUrl(url, dashboardData.t)}
-              handleSpeedTest={handleSpeedTest}
-              CARD_PROPS={CARD_PROPS}
-              FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
-              ILLUSTRATION_SIZE={ILLUSTRATION_SIZE}
-              t={dashboardData.t}
-            />
-          )}
+          <PerformancePanel CARD_PROPS={CARD_PROPS} t={dashboardData.t} />
         </div>
       </div>
 
@@ -249,29 +224,14 @@ const Dashboard = () => {
               />
             )}
 
-            {/* 服务可用性卡片 */}
-            {dashboardData.uptimeEnabled && (
-              <UptimePanel
-                uptimeData={dashboardData.uptimeData}
-                uptimeLoading={dashboardData.uptimeLoading}
-                activeUptimeTab={dashboardData.activeUptimeTab}
-                setActiveUptimeTab={dashboardData.setActiveUptimeTab}
-                loadUptimeData={dashboardData.loadUptimeData}
-                uptimeLegendData={uptimeLegendData}
-                renderMonitorList={(monitors) =>
-                  renderMonitorList(
-                    monitors,
-                    (status) => getUptimeStatusColor(status, UPTIME_STATUS_MAP),
-                    (status) =>
-                      getUptimeStatusText(
-                        status,
-                        UPTIME_STATUS_MAP,
-                        dashboardData.t,
-                      ),
-                    dashboardData.t,
-                  )
-                }
+            {/* API信息卡片(原服务可用性位置) */}
+            {dashboardData.hasApiInfoPanel && (
+              <ApiInfoPanel
+                apiInfoData={apiInfoData}
+                handleCopyUrl={(url) => handleCopyUrl(url, dashboardData.t)}
+                handleSpeedTest={handleSpeedTest}
                 CARD_PROPS={CARD_PROPS}
+                FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
                 ILLUSTRATION_SIZE={ILLUSTRATION_SIZE}
                 t={dashboardData.t}
               />

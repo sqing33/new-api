@@ -50,7 +50,6 @@ import ImagePresets from './pages/ImagePresets';
 import VideoStudio from './pages/VideoStudio';
 import Pricing from './pages/Pricing';
 import Rankings from './pages/Rankings';
-import PerformancePage from './pages/Performance';
 import Task from './pages/Task';
 import ModelPage from './pages/Model';
 import ModelDeploymentPage from './pages/ModelDeployment';
@@ -398,16 +397,6 @@ function App() {
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <Pricing />
-              </Suspense>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path='/performance'
-          element={
-            <PrivateRoute>
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <PerformancePage />
               </Suspense>
             </PrivateRoute>
           }

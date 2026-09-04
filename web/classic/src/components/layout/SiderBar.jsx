@@ -65,7 +65,6 @@ const routerMap = {
   setting: '/setting',
   about: '/about',
   detail: '/dashboard',
-  performance: '/performance',
   pricing: '/pricing',
   rankings: '/rankings',
   task: '/task',
@@ -195,11 +194,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           localStorage.getItem('enable_data_export') === 'true'
             ? ''
             : 'tableHiddle',
-      },
-      {
-        text: t('性能指标'),
-        itemKey: 'performance',
-        to: '/performance',
       },
       {
         text: t('清荫日志'),

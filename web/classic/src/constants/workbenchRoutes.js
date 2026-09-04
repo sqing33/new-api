@@ -23,7 +23,6 @@ export const WORKBENCH_PATHS = new Set([
   '/subscription',
   '/tool-install-setting',
   '/system-info',
-  '/performance',
   '/rankings',
   '/chat',
 ]);
