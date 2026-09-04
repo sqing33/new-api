@@ -113,23 +113,25 @@ const ModelsSection = ({ data, period, t, periodSlot }) => {
       seriesField: 'model',
       stack: true,
       padding: 'auto',
-      categoryAxis: {
-        label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
-        line: false,
-        tick: false,
-      },
-      valueAxis: {
-        grid: { lineStyle: { lineDash: [3, 3] } },
-        label: {
-          // 数据已预缩放,刻度即 0.5/1.5 等展示值;单位在轴标题说明
-          style: { fontSize: 10 },
+      // 该 VChart 版本只认原生 axes 数组配置(categoryAxis/valueAxis 速记不生效)
+      axes: [
+        {
+          orient: 'bottom',
+          label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
+          line: { visible: false },
+          tick: { visible: false },
         },
-        title: {
-          visible: true,
-          text: 'tokens (K/M/B)',
-          style: { fontSize: 10, fontWeight: 'normal' },
+        {
+          orient: 'left',
+          grid: { visible: true, style: { lineDash: [3, 3] } },
+          label: { style: { fontSize: 10 } },
+          title: {
+            visible: true,
+            text: 'tokens (K/M/B)',
+            style: { fontSize: 10, fontWeight: 'normal' },
+          },
         },
-      },
+      ],
       legend: { visible: false },
       tooltip: {
         mark: {

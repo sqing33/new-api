@@ -72,21 +72,28 @@ const MarketShareSection = ({ data, period, t }) => {
       stack: true,
       padding: 'auto',
       color: { specified: colorMap },
-      categoryAxis: {
-        label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
-        line: false,
-        tick: false,
-      },
-      // 占比合计恒为 100%,固定 0-1 量程并按 25% 步进标注,避免出现 1.2
-      valueAxis: {
-        min: 0,
-        max: 1,
-        tickCount: 5,
-        label: {
-          formatMethod: (value) => `${Math.round(Number(value) * 1000) / 10}%`,
-          style: { fontSize: 10 },
+      // 该 VChart 版本只认原生 axes 数组配置;固定 0-1 量程,刻度
+      // 以百分比标注,避免堆叠柱状图自动 nice 到 1.2
+      axes: [
+        {
+          orient: 'bottom',
+          label: { autoHide: true, autoRotate: false, style: { fontSize: 10 } },
+          line: { visible: false },
+          tick: { visible: false },
         },
-      },
+        {
+          orient: 'left',
+          min: 0,
+          max: 1,
+          tickCount: 5,
+          nice: false,
+          grid: { visible: true, style: { lineDash: [3, 3] } },
+          label: {
+            formatMethod: (value) => `${Math.round(Number(value) * 100)}%`,
+            style: { fontSize: 10 },
+          },
+        },
+      ],
       legend: { visible: false },
       tooltip: {
         mark: {
