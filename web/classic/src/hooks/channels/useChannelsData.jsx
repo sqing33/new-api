@@ -40,7 +40,6 @@ import { useChannelUpstreamPricing } from './useChannelUpstreamPricing';
 import { parseUpstreamUpdateMeta } from './upstreamUpdateUtils';
 import { Modal, Button } from '@douyinfe/semi-ui';
 import { openCodexUsageModal } from '../../components/table/channels/modals/CodexUsageModal';
-import { openChannelQuotaUsageModal } from '../../components/table/channels/modals/ChannelQuotaUsageModal';
 
 export const useChannelsData = () => {
   const { t } = useTranslation();
@@ -140,6 +139,7 @@ export const useChannelsData = () => {
     STATUS: 'status',
     RESPONSE_TIME: 'response_time',
     BALANCE: 'balance',
+    PLAN_QUOTA: 'plan_quota',
     PRIORITY: 'priority',
     WEIGHT: 'weight',
     OPERATE: 'operate',
@@ -180,6 +180,7 @@ export const useChannelsData = () => {
       [COLUMN_KEYS.STATUS]: true,
       [COLUMN_KEYS.RESPONSE_TIME]: true,
       [COLUMN_KEYS.BALANCE]: true,
+      [COLUMN_KEYS.PLAN_QUOTA]: true,
       [COLUMN_KEYS.PRIORITY]: true,
       [COLUMN_KEYS.WEIGHT]: true,
       [COLUMN_KEYS.OPERATE]: true,
@@ -786,11 +787,6 @@ export const useChannelsData = () => {
     }
   };
 
-  // 上游套餐用量查询（独立于本地已用额度/余额）
-  const openQuotaUsageModal = (record) => {
-    openChannelQuotaUsageModal({ t, record });
-  };
-
   const fixChannelsAbilities = async () => {
     const res = await API.post(`/api/channel/fix`);
     const { success, message, data } = res.data;
@@ -1223,7 +1219,6 @@ export const useChannelsData = () => {
     // Helpers
     t,
     isMobile,
-    openQuotaUsageModal,
 
     // Functions
     loadChannels,

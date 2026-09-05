@@ -4463,6 +4463,7 @@
     "This channel has no queryable upstream plan bound, or the binding needs more configuration. Set it in \"Quota Query Settings\" when editing the channel.": "该渠道尚未绑定可查询的上游套餐，或绑定信息需要补充，请在渠道编辑的「额度查询设置」中配置",
     "Detected: ": "识别结果：",
     "Resets at: ": "重置时间：",
+    "Unit: ": "单位：",
     "Used: ": "已用：",
     "Remaining: ": "剩余：",
     "The upstream only exposes usage percentages for this window": "上游对该窗口仅提供百分比用量",

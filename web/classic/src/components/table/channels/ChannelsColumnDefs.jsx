@@ -44,6 +44,7 @@ import {
   MODEL_FETCHABLE_CHANNEL_TYPES,
 } from '../../../constants';
 import { parseUpstreamUpdateMeta } from '../../../hooks/channels/upstreamUpdateUtils';
+import { PlanQuotaCell } from './PlanQuotaCell';
 import {
   IconTreeTriangleDown,
   IconMore,
@@ -304,30 +305,11 @@ const getUpstreamUpdateMeta = (record) => {
   };
 };
 
-// 从渠道 settings 中解析额度查询预设绑定情况（仅用于展示上游套餐用量入口）
-const getQuotaBindingMeta = (record) => {
-  if (!record || record.children !== undefined) {
-    return { bound: false };
-  }
-  let parsed = null;
-  if (record.settings && typeof record.settings === 'object') {
-    parsed = record.settings;
-  } else if (typeof record.settings === 'string') {
-    try {
-      parsed = JSON.parse(record.settings);
-    } catch (error) {
-      parsed = null;
-    }
-  }
-  const presetId = String(parsed?.quota_query_preset_id || '').trim();
-  return { bound: presetId !== '', presetId };
-};
-
 export const getChannelsColumns = ({
   t,
   COLUMN_KEYS,
   updateChannelBalance,
-  openQuotaUsageModal,
+  planQuotaVisible,
   manageChannel,
   manageTag,
   submitTagEdit,
@@ -549,7 +531,6 @@ export const getChannelsColumns = ({
       dataIndex: 'expired_time',
       render: (text, record, index) => {
         if (record.children === undefined) {
-          const quotaBinding = getQuotaBindingMeta(record);
           return (
             <div>
               <Space spacing={1}>
@@ -580,27 +561,6 @@ export const getChannelsColumns = ({
                       : renderQuotaWithAmount(record.balance)}
                   </Tag>
                 </Tooltip>
-                <Tooltip
-                  content={
-                    quotaBinding.bound
-                      ? t(
-                          'View upstream plan usage (independent of local balance)',
-                        )
-                      : t(
-                          'View upstream plan usage; bind a preset in channel editing to query it',
-                        )
-                  }
-                >
-                  <Tag
-                    color={quotaBinding.bound ? 'cyan' : 'white'}
-                    type={quotaBinding.bound ? 'light' : 'ghost'}
-                    shape='circle'
-                    className='cursor-pointer'
-                    onClick={() => openQuotaUsageModal(record)}
-                  >
-                    {t('Plan Usage')}
-                  </Tag>
-                </Tooltip>
               </Space>
             </div>
           );
@@ -613,6 +573,22 @@ export const getChannelsColumns = ({
             </Tooltip>
           );
         }
+      },
+    },
+    {
+      key: COLUMN_KEYS.PLAN_QUOTA,
+      title: t('Plan Usage'),
+      dataIndex: 'plan_quota',
+      render: (text, record, index) => {
+        // Tag-parent aggregate rows never carry a single upstream plan; the
+        // per-child rows below them render their own cells. No query is
+        // issued for the parent.
+        if (record.children !== undefined) {
+          return <span className='text-semi-color-text-2'>-</span>;
+        }
+        return (
+          <PlanQuotaCell t={t} record={record} visible={planQuotaVisible} />
+        );
       },
     },
     {

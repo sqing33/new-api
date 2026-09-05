@@ -4492,6 +4492,7 @@
     "This channel has no queryable upstream plan bound, or the binding needs more configuration. Set it in \"Quota Query Settings\" when editing the channel.": "This channel has no queryable upstream plan bound, or the binding needs more configuration. Set it in \"Quota Query Settings\" when editing the channel.",
     "Detected: ": "Detected: ",
     "Resets at: ": "Resets at: ",
+    "Unit: ": "Unit: ",
     "Used: ": "Used: ",
     "Remaining: ": "Remaining: ",
     "The upstream only exposes usage percentages for this window": "The upstream only exposes usage percentages for this window",

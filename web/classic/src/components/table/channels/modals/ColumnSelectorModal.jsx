@@ -52,6 +52,9 @@ const ColumnSelectorModal = ({
     t,
     COLUMN_KEYS,
     updateChannelBalance,
+    // Titles-only render; mark the Plan quota column visible so the checkbox
+    // list includes it without issuing any query.
+    planQuotaVisible: true,
     manageChannel,
     manageTag,
     submitTagEdit,
