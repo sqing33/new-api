@@ -48,3 +48,13 @@ func assertChannelRoutePermission(t *testing.T, method string, path string, perm
 	}
 	t.Fatalf("route %s %s not found", method, path)
 }
+
+func TestChannelQuotaUsageRoutesPermissions(t *testing.T) {
+	// Reading upstream plan usage is read-only; the forced-refresh POST is
+	// an operation because it triggers an upstream query.
+	assertChannelRoutePermission(t, http.MethodGet, "/:id/usage", authz.ChannelRead, controller.GetChannelQuotaUsage)
+	assertChannelRoutePermission(t, http.MethodPost, "/:id/usage", authz.ChannelOperate, controller.GetChannelQuotaUsage)
+	assertChannelRoutePermission(t, http.MethodGet, "/usage/presets", authz.ChannelRead, controller.GetQuotaQueryPresets)
+	assertChannelRoutePermission(t, http.MethodGet, "/:id/usage/config", authz.ChannelRead, controller.GetChannelQuotaQueryConfig)
+	assertChannelRoutePermission(t, http.MethodGet, "/:id/usage/capabilities", authz.ChannelRead, controller.GetChannelQuotaQueryCapabilities)
+}

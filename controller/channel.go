@@ -705,6 +705,13 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
+	// Validate the quota query binding against the assembled channel before
+	// inserting (settings, preset, key index bounds, credential reference).
+	if err := service.ValidateQuotaQueryBinding(addChannelRequest.Channel); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
 	channels := make([]model.Channel, 0, len(keys))
 	for _, key := range keys {
 		if key == "" {
@@ -998,6 +1005,9 @@ func UpdateChannel(c *gin.Context) {
 		return
 	}
 
+	// Full quota query binding validation happens after the final channel
+	// state (keys/base_url) is assembled, right before channel.Update().
+
 	// 使用统一的校验函数
 	if err := validateChannel(&channel.Channel, false); err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -1030,6 +1040,22 @@ func UpdateChannel(c *gin.Context) {
 		!authz.Can(c.GetInt("id"), c.GetInt("role"), authz.ChannelSensitiveWrite) {
 		common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
 		return
+	}
+
+	// Changing the quota-query credential reference grants query access to
+	// another channel's dedicated secret, so it always requires
+	// ChannelSensitiveWrite even when the rest of the settings payload is
+	// unchanged (defense in depth on top of the settings diff above).
+	if settingsTouched, hasSettings := requestData["settings"]; hasSettings && settingsTouched != nil && !authz.Can(c.GetInt("id"), c.GetInt("role"), authz.ChannelSensitiveWrite) {
+		newSettings := channel.GetOtherSettings()
+		originSettings := originChannel.GetOtherSettings()
+		credChanged := newSettings.QuotaQueryCredentialChannelID != originSettings.QuotaQueryCredentialChannelID &&
+			(newSettings.QuotaQueryCredentialChannelID == nil || originSettings.QuotaQueryCredentialChannelID == nil ||
+				*newSettings.QuotaQueryCredentialChannelID != *originSettings.QuotaQueryCredentialChannelID)
+		if credChanged {
+			common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
+			return
+		}
 	}
 
 	// If the request explicitly specifies a new MultiKeyMode, apply it on top of the original info.
@@ -1116,6 +1142,17 @@ func UpdateChannel(c *gin.Context) {
 		case "replace":
 			// 覆盖模式：直接使用新密钥（默认行为，不需要特殊处理）
 		}
+	}
+	// Validate the quota query binding against the final channel state
+	// before persisting. When the patch does not carry "settings", validate
+	// against the stored settings so the effective binding stays consistent.
+	validateTarget := channel.Channel
+	if _, settingProvided := requestData["settings"]; !settingProvided {
+		validateTarget.OtherSettings = originChannel.OtherSettings
+	}
+	if err := service.ValidateQuotaQueryBinding(&validateTarget); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
 	}
 	err = channel.Update()
 	if err != nil {

@@ -24,6 +24,10 @@ const (
 )
 
 type ChannelOtherSettings struct {
+	QuotaQueryPresetID                    string                            `json:"quota_query_preset_id,omitempty"`
+	QuotaQueryCredentialMode              string                            `json:"quota_query_credential_mode,omitempty"`
+	QuotaQueryKeyIndex                    *int                              `json:"quota_query_key_index,omitempty"`
+	QuotaQueryExtra                       map[string]string                 `json:"quota_query_extra,omitempty"`
 	AzureResponsesVersion                 string                            `json:"azure_responses_version,omitempty"`
 	ResponsesCompatMode                   string                            `json:"responses_compat_mode,omitempty"`
 	ResponsesCompatToolMode               string                            `json:"responses_compat_tool_mode,omitempty"`
@@ -48,7 +52,6 @@ type ChannelOtherSettings struct {
 	UpstreamPricingLastCheckTime          int64                             `json:"upstream_pricing_last_check_time,omitempty"`           // 上次检测时间戳
 	UpstreamPricingLastSnapshot           map[string]map[string]interface{} `json:"upstream_pricing_last_snapshot,omitempty"`             // 上次上游定价快照
 }
-
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
 	if s == nil || s.OpenRouterEnterprise == nil {

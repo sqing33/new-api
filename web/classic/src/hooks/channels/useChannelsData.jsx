@@ -40,6 +40,7 @@ import { useChannelUpstreamPricing } from './useChannelUpstreamPricing';
 import { parseUpstreamUpdateMeta } from './upstreamUpdateUtils';
 import { Modal, Button } from '@douyinfe/semi-ui';
 import { openCodexUsageModal } from '../../components/table/channels/modals/CodexUsageModal';
+import { openChannelQuotaUsageModal } from '../../components/table/channels/modals/ChannelQuotaUsageModal';
 
 export const useChannelsData = () => {
   const { t } = useTranslation();
@@ -785,6 +786,11 @@ export const useChannelsData = () => {
     }
   };
 
+  // 上游套餐用量查询（独立于本地已用额度/余额）
+  const openQuotaUsageModal = (record) => {
+    openChannelQuotaUsageModal({ t, record });
+  };
+
   const fixChannelsAbilities = async () => {
     const res = await API.post(`/api/channel/fix`);
     const { success, message, data } = res.data;
@@ -1217,6 +1223,7 @@ export const useChannelsData = () => {
     // Helpers
     t,
     isMobile,
+    openQuotaUsageModal,
 
     // Functions
     loadChannels,

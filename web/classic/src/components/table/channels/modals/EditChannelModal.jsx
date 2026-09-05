@@ -196,6 +196,10 @@ const EditChannelModal = (props) => {
     system_prompt: '',
     system_prompt_override: false,
     settings: '',
+    quota_query_preset_id: '',
+    quota_query_credential_mode: '',
+    quota_query_credential_channel_id: '',
+    quota_query_extra: {},
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
     // 仅 AWS: 密钥格式和区域（存入 settings.aws_key_type 和 settings.aws_region）
@@ -391,6 +395,49 @@ const EditChannelModal = (props) => {
     useState(false);
   const [paramOverrideEditorVisible, setParamOverrideEditorVisible] =
     useState(false);
+  const [quotaQueryPresetOptions, setQuotaQueryPresetOptions] = useState([]);
+  const [quotaQueryPresetCatalog, setQuotaQueryPresetCatalog] = useState({});
+
+  const fetchQuotaQueryPresets = async () => {
+    try {
+      const res = await API.get('/api/channel/usage/presets', {
+        skipErrorHandler: true,
+      });
+      if (res?.data?.success && Array.isArray(res.data.data)) {
+        const catalog = {};
+        res.data.data.forEach((preset) => {
+          catalog[preset.id] = preset;
+        });
+        setQuotaQueryPresetCatalog(catalog);
+        setQuotaQueryPresetOptions(
+          res.data.data.map((preset) => ({
+            value: preset.id,
+            label: preset.name,
+          })),
+        );
+      }
+    } catch (error) {
+      // 保留空列表，下拉中仍保留不查询/自动识别两个固定项
+    }
+  };
+
+  // 当前选中的额度查询预设。auto 由后端按渠道地址解析，前端无法预知
+  // 结果，因此 auto 时不渲染预设专属动态字段（由用量弹窗的配置提示兜底）。
+  const selectedQuotaQueryPresetId = (() => {
+    const presetId = String(inputs.quota_query_preset_id || '').trim();
+    if (!presetId || presetId === 'auto') return '';
+    return presetId;
+  })();
+  const currentQuotaQueryPreset =
+    quotaQueryPresetCatalog[selectedQuotaQueryPresetId] || null;
+  const quotaQueryRequiredExtraFields = Array.isArray(
+    currentQuotaQueryPreset?.required_extra_fields,
+  )
+    ? currentQuotaQueryPreset.required_extra_fields
+    : [];
+  const quotaQueryCredentialModeValue = String(
+    inputs.quota_query_credential_mode || '',
+  ).trim();
 
   // 密钥显示状态
   const [keyDisplayState, setKeyDisplayState] = useState({
@@ -896,6 +943,12 @@ const EditChannelModal = (props) => {
       if (data.settings) {
         try {
           const parsedSettings = JSON.parse(data.settings);
+          data.quota_query_preset_id = parsedSettings.quota_query_preset_id || '';
+          data.quota_query_credential_mode =
+            parsedSettings.quota_query_credential_mode || '';
+          data.quota_query_credential_channel_id =
+            parsedSettings.quota_query_credential_channel_id || '';
+          data.quota_query_extra = parsedSettings.quota_query_extra || {};
           data.azure_responses_version =
             parsedSettings.azure_responses_version || '';
           // 读取 Vertex 密钥格式
@@ -952,6 +1005,9 @@ const EditChannelModal = (props) => {
           data.region = '';
           data.vertex_key_type = 'json';
           data.aws_key_type = 'ak_sk';
+          data.quota_query_credential_mode = '';
+          data.quota_query_credential_channel_id = '';
+          data.quota_query_extra = {};
           data.is_enterprise_account = false;
           data.allow_service_tier = false;
           data.disable_store = false;
@@ -1366,6 +1422,7 @@ const EditChannelModal = (props) => {
         } catch {}
       }
       fetchModelGroups();
+      fetchQuotaQueryPresets();
       // 重置手动输入模式状态
       setUseManualInput(false);
       // 编辑模式下恢复用户偏好，创建模式一律折叠
@@ -1837,6 +1894,47 @@ const EditChannelModal = (props) => {
       }
     }
 
+    const quotaQueryPreset = String(localInputs.quota_query_preset_id || '').trim();
+    if (quotaQueryPreset) {
+      settings.quota_query_preset_id = quotaQueryPreset;
+      const quotaQueryMode = String(
+        localInputs.quota_query_credential_mode || '',
+      ).trim();
+      if (quotaQueryMode) {
+        settings.quota_query_credential_mode = quotaQueryMode;
+      } else {
+        delete settings.quota_query_credential_mode;
+      }
+      const credentialChannelId = Number(
+        localInputs.quota_query_credential_channel_id,
+      );
+      if (Number.isInteger(credentialChannelId) && credentialChannelId > 0) {
+        settings.quota_query_credential_channel_id = credentialChannelId;
+      } else {
+        delete settings.quota_query_credential_channel_id;
+      }
+      const extra = localInputs.quota_query_extra;
+      const normalizedExtra = {};
+      if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
+        Object.keys(extra).forEach((key) => {
+          const value = String(extra[key] ?? '').trim();
+          if (value) {
+            normalizedExtra[key] = value;
+          }
+        });
+      }
+      if (Object.keys(normalizedExtra).length > 0) {
+        settings.quota_query_extra = normalizedExtra;
+      } else {
+        delete settings.quota_query_extra;
+      }
+    } else {
+      delete settings.quota_query_preset_id;
+      delete settings.quota_query_credential_mode;
+      delete settings.quota_query_credential_channel_id;
+      delete settings.quota_query_extra;
+    }
+
     settings.upstream_model_update_check_enabled =
       localInputs.upstream_model_update_check_enabled === true;
     settings.upstream_model_update_auto_sync_enabled =
@@ -1904,6 +2002,9 @@ const EditChannelModal = (props) => {
     delete localInputs.upstream_pricing_check_enabled;
     delete localInputs.upstream_pricing_endpoint;
     delete localInputs.upstream_pricing_last_check_time;
+    delete localInputs.quota_query_credential_mode;
+    delete localInputs.quota_query_credential_channel_id;
+    delete localInputs.quota_query_extra;
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
@@ -2262,6 +2363,109 @@ const EditChannelModal = (props) => {
           {() => {
             const advancedSettingsContent = (
               <div className='space-y-4'>
+                <div className='pb-3 border-b border-gray-100'>
+                  <Text className='text-sm font-medium text-gray-500 mb-3 block'>
+                    {t('额度查询设置')}
+                  </Text>
+                  <Form.Select
+                    field='quota_query_preset_id'
+                    label={t('额度查询预设')}
+                    placeholder={t('不绑定额度查询预设')}
+                    optionList={[
+                      { value: '', label: t('不查询') },
+                      { value: 'auto', label: t('自动识别') },
+                      ...quotaQueryPresetOptions,
+                    ]}
+                    value={inputs.quota_query_preset_id || ''}
+                    onChange={(value) => {
+                      // 切换预设后原有 extra 字段不再适用，整体清空重填。
+                      // settings JSON 一次性重写，避免多次变更互相覆盖
+                      let settings = {};
+                      try {
+                        settings =
+                          JSON.parse(inputs.settings || '{}') || {};
+                      } catch (error) {
+                        settings = {};
+                      }
+                      settings.quota_query_preset_id = value || '';
+                      delete settings.quota_query_extra;
+                      const settingsJson = JSON.stringify(settings);
+                      handleInputChange('quota_query_preset_id', value);
+                      handleInputChange('quota_query_extra', {});
+                      handleInputChange('settings', settingsJson);
+                    }}
+                    showClear
+                  />
+                  <Text type='tertiary' size='small'>
+                    {t('额度查询预设仅绑定查询协议，不改变渠道转发类型')}
+                  </Text>
+                  {inputs.quota_query_preset_id ? (
+                    <>
+                      <Form.Select
+                        field='quota_query_credential_mode'
+                        label={t('Query credential mode')}
+                        placeholder={t('Follow preset default')}
+                        optionList={[
+                          { value: '', label: t('Follow preset default') },
+                          { value: 'channel_key', label: t('Channel key') },
+                          { value: 'separate', label: t('Separate credential channel') },
+                        ]}
+                        value={quotaQueryCredentialModeValue}
+                        onChange={(value) =>
+                          handleChannelOtherSettingsChange('quota_query_credential_mode', value || '')
+                        }
+                        showClear
+                        style={{ width: '100%', marginTop: 12 }}
+                      />
+                      <Text type='tertiary' size='small' className='block'>
+                        {t(
+                          'Channel key uses this channel\'s own key for quota queries; separate reads the key of the credential channel below',
+                        )}
+                      </Text>
+                      {(quotaQueryCredentialModeValue === 'separate' ||
+                        currentQuotaQueryPreset?.credential_mode === 'separate') && (
+                        <>
+                          <Form.InputNumber
+                            field='quota_query_credential_channel_id'
+                            label={t('Credential channel ID')}
+                            placeholder={t('Positive ID of the credential channel')}
+                            min={1}
+                            precision={0}
+                            value={inputs.quota_query_credential_channel_id || undefined}
+                            onChange={(value) =>
+                              handleChannelOtherSettingsChange(
+                                'quota_query_credential_channel_id',
+                                value === undefined || value === null ? '' : value,
+                              )
+                            }
+                            style={{ width: '100%', marginTop: 12 }}
+                          />
+                          <Text type='tertiary' size='small' className='block'>
+                            {t(
+                              'The referenced channel\'s key holds the dedicated query credential (e.g. ZenMux management key or Volcengine AK/SK JSON). It is stored as a channel reference only; secrets never enter these settings',
+                            )}
+                          </Text>
+                        </>
+                      )}
+                      {quotaQueryRequiredExtraFields.map((field) => (
+                        <Form.Input
+                          key={field}
+                          field={`quota_query_extra_${field}`}
+                          label={t('Quota query field: {{field}}', { field })}
+                          placeholder={t('Enter value for {{field}}', { field })}
+                          value={String(inputs.quota_query_extra?.[field] ?? '')}
+                          onChange={(value) =>
+                            handleChannelOtherSettingsChange('quota_query_extra', {
+                              ...(inputs.quota_query_extra || {}),
+                              [field]: value,
+                            })
+                          }
+                          style={{ marginTop: 12 }}
+                        />
+                      ))}
+                    </>
+                  ) : null}
+                </div>
                 {/* Upstream Model Management Section */}
                 {MODEL_FETCHABLE_CHANNEL_TYPES.has(inputs.type) && (
                 <div className='pb-3 border-b border-gray-100'>
