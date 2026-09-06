@@ -4493,6 +4493,7 @@
     "Plan usage": "套餐用量",
     "Not provided": "未提供",
     "{{count}} more keys": "另外 {{count}} 个密钥",
+    "Sort by plan usage": "按套餐用量排序",
     "Missing credential channel reference for separate credentials": "独立凭据模式缺少凭据渠道引用"
   }
 }

@@ -17,15 +17,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Progress, Spin, Tag, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { useChannelPlanQuota } from '../../../hooks/channels/useChannelPlanQuota';
 import { useChannelKeysPlanQuota } from '../../../hooks/channels/useChannelKeysPlanQuota';
+import {
+  planQuotaSortValueFromWindows,
+  recordChannelSortValue,
+} from '../../../hooks/channels/planQuotaRegistry';
 import {
   aggregateKeyWindows,
   aggregateTooltipKeyLines,
   clampPercent,
   formatAmount,
+  formatResetShort,
   formatResetTime,
   pickStrokeColor,
   resolveWindowUsedPercent,
@@ -37,16 +42,25 @@ import {
 
 const { Text } = Typography;
 
-// One usage window per line: thin progress bar (only when the upstream
-// exposes a `percent`) with the localized reset date+time on its right, plus
-// the explicit used percentage above. `remaining` is an absolute
-// unit-qualified amount, never a percentage, so no bar and no percent text
-// are fabricated from it. The tooltip carries the amounts, remaining%,
-// the full reset time and unit. A missing or unparseable reset renders
-// nothing — no reset is ever guessed.
+// Fixed-width right-aligned percent: reserving room for three digits keeps
+// the bar length stable between 10% and 100% (tabular digits, no reflow).
+const percentSpanStyle = {
+  minWidth: '4ch',
+  fontVariantNumeric: 'tabular-nums',
+};
+
+// One usage window per line. Row 1: the window title (truncated) on the
+// left, the compact reset time (`MM-DD HH:mm`, localized Reset suffix) on
+// the right. Row 2: a full-width progress bar plus a fixed-width right
+// aligned bare percent (`NN%`, no "Used: " prefix) so the bar length never
+// changes between 10% and 100%. `remaining` is an absolute unit-qualified
+// amount, never a percentage, so no bar and no percent text are fabricated
+// from it. The tooltip carries the amounts, remaining%, the full reset time
+// and unit. A missing or unparseable reset renders nothing — no reset is
+// ever guessed.
 export const PlanQuotaWindowLine = ({ t, item, tooltipExtraLines }) => {
   const usedPercent = resolveWindowUsedPercent(item);
-  const resetText = formatResetTime(item?.reset);
+  const resetShort = formatResetShort(item?.reset);
   const title = windowTitle(item?.name, t);
   const tooltipLines = windowTooltipLines(item, t);
 
@@ -72,30 +86,29 @@ export const PlanQuotaWindowLine = ({ t, item, tooltipExtraLines }) => {
       <div className='w-full'>
         <div className='flex items-center justify-between gap-2 text-xs'>
           <span className='truncate text-semi-color-text-1'>{title}</span>
-          <span className='shrink-0 font-medium text-semi-color-text-1'>
-            {usedPercent != null
-              ? `${t('Used: ')}${usedPercent}%`
-              : t('Not provided')}
-          </span>
+          {resetShort ? (
+            <span className='shrink-0 text-xs text-semi-color-text-2'>
+              {resetShort} {t('Reset')}
+            </span>
+          ) : null}
         </div>
-        {usedPercent != null || resetText ? (
+        {usedPercent != null ? (
           <div className='mt-1 flex items-center gap-2'>
-            {usedPercent != null ? (
-              <div className='min-w-0 flex-1'>
-                <Progress
-                  percent={clampPercent(usedPercent)}
-                  stroke={pickStrokeColor(usedPercent)}
-                  showInfo={false}
-                  aria-label={title}
-                  strokeWidth={3}
-                />
-              </div>
-            ) : null}
-            {resetText ? (
-              <span className='shrink-0 text-xs text-semi-color-text-2'>
-                {resetText} {t('Reset')}
-              </span>
-            ) : null}
+            <div className='min-w-0 flex-1'>
+              <Progress
+                percent={clampPercent(usedPercent)}
+                stroke={pickStrokeColor(usedPercent)}
+                showInfo={false}
+                aria-label={title}
+                strokeWidth={3}
+              />
+            </div>
+            <span
+              className='inline-block shrink-0 text-right text-xs font-medium text-semi-color-text-1'
+              style={percentSpanStyle}
+            >
+              {usedPercent}%
+            </span>
           </div>
         ) : null}
       </div>
@@ -104,9 +117,10 @@ export const PlanQuotaWindowLine = ({ t, item, tooltipExtraLines }) => {
 };
 
 // Amounts-only line for an aggregated window with no derivable percent: the
-// summed used/remaining are shown as text — no bar, no fabricated 0%.
+// same two-row layout — title with the compact reset on row 1, the summed
+// used/remaining as text on row 2 — but no bar and no fabricated 0%.
 const AggregateAmountLine = ({ t, item }) => {
-  const resetText = formatResetTime(item?.reset);
+  const resetShort = formatResetShort(item?.reset);
   const title = windowTitle(item?.name, t);
   const unitText = getDisplayText(item?.unit);
   const parts = [];
@@ -120,39 +134,52 @@ const AggregateAmountLine = ({ t, item }) => {
     <div className='w-full text-xs'>
       <div className='flex items-center justify-between gap-2'>
         <span className='truncate text-semi-color-text-1'>{title}</span>
+        {resetShort ? (
+          <span className='shrink-0 text-xs text-semi-color-text-2'>
+            {resetShort} {t('Reset')}
+          </span>
+        ) : null}
+      </div>
+      <div className='mt-1 text-right font-medium text-semi-color-text-1'>
         {parts.length ? (
-          <span className='shrink-0 font-medium text-semi-color-text-1'>
+          <span>
             {parts.join(' / ')}
             {unitText ? ` ${unitText}` : ''}
           </span>
         ) : (
-          <span className='shrink-0 text-semi-color-text-2'>
-            {t('Not provided')}
-          </span>
+          <span className='text-semi-color-text-2'>{t('Not provided')}</span>
         )}
       </div>
-      {resetText ? (
-        <div className='mt-1 flex items-center justify-end gap-2'>
-          <span className='shrink-0 text-xs text-semi-color-text-2'>
-            {resetText} {t('Reset')}
-          </span>
-        </div>
-      ) : null}
     </div>
   );
 };
 
 // Multi-key body: one GET /usage/keys scan (all keys) whose per-key results
 // are aggregated per window name — summed used/remaining, sum-derived
-// percent (only when both sums exist), earliest reset. The tooltip lists the
-// per-key lines (capped). A channel whose preset is not queryable shows the
-// same unbound tag as the single-key cell and never retries.
+// percent (or the per-key percent average for percent-only upstreams),
+// earliest reset. The tooltip lists the per-key lines (capped). A channel
+// whose preset is not queryable shows the same unbound tag as the
+// single-key cell and never retries.
 const MultiKeyPlanQuotaCell = ({ t, record }) => {
   const { state } = useChannelKeysPlanQuota({
     channelId: record?.id,
     keyIndexes: null,
     enabled: true,
   });
+
+  const usage = state.data;
+  const perKeyResults = Array.isArray(usage?.keys) ? usage.keys : [];
+  const anyOk = perKeyResults.some((key) => key?.status === 'ok');
+
+  // Report the aggregated remaining metric so the table can sort by plan
+  // usage once the cells have their data.
+  useEffect(() => {
+    if (state.status !== 'ok' || !anyOk) return;
+    recordChannelSortValue(
+      record?.id,
+      planQuotaSortValueFromWindows(aggregateKeyWindows(perKeyResults)),
+    );
+  }, [state.status, record?.id, anyOk, usage]);
 
   if (state.loading && !state.data) {
     return <Spin size='small' />;
@@ -164,9 +191,6 @@ const MultiKeyPlanQuotaCell = ({ t, record }) => {
       </Tag>
     );
   }
-  const usage = state.data;
-  const perKeyResults = Array.isArray(usage?.keys) ? usage.keys : [];
-  const anyOk = perKeyResults.some((key) => key?.status === 'ok');
   if (!anyOk) {
     // Unbound / not queryable preset: same tag as the single-key cell.
     const status = getDisplayText(perKeyResults[0]?.status) || 'disabled';
@@ -226,6 +250,17 @@ export const PlanQuotaCell = ({ t, record, visible }) => {
     enabled: enabled && !isMultiKey,
   });
 
+  const usage = state.data;
+  const items = Array.isArray(usage?.items) ? usage.items : [];
+
+  // Report the five-hour remaining metric so the table can sort by plan
+  // usage once the cell has its data. Hooks stay above every early return.
+  useEffect(() => {
+    if (!enabled || isMultiKey || state.status !== 'ok') return;
+    recordChannelSortValue(record?.id, planQuotaSortValueFromWindows(items));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status, record?.id, usage, enabled, isMultiKey]);
+
   if (!enabled) {
     return <span className='text-semi-color-text-2'>-</span>;
   }
@@ -238,11 +273,10 @@ export const PlanQuotaCell = ({ t, record, visible }) => {
     );
   }
 
-  const usage = state.data;
-  const items = Array.isArray(usage?.items) ? usage.items : [];
   const usageStatus = getDisplayText(usage?.status);
   const isError = state.status === 'error';
   const isPending = state.loading === true;
+
   const isConfigIssue =
     !isError &&
     ['needs_configuration', 'unresolved', 'unsupported', 'disabled'].includes(

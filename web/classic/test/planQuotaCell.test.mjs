@@ -22,9 +22,10 @@ For commercial licensing, please contact support@quantumnous.com
 // component function is called directly and the returned element tree is
 // inspected. This pins the visible contract of the quota column: a successful
 // query shows usage without a status tag or any refresh button, error and
-// configuration problems keep their tag, and each window line shows its
-// progress bar with the localized reset date+time on its right — or nothing
-// when the reset is missing or invalid.
+// configuration problems keep their tag, and each window line shows the
+// compact `MM-DD HH:mm` reset on the title row with a full-width progress
+// bar and a bare fixed-width percent below — or nothing when the reset is
+// missing or invalid.
 // Run with: node --test test/planQuotaCell.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -43,6 +44,14 @@ const keysUsageStubSource = `
   export const useChannelKeysPlanQuota = () => ({
     state: globalThis.__keysPlanQuotaTestState,
   });
+`;
+
+const registryStubSource = `
+  export const recordChannelSortValue = (...args) => {
+    globalThis.__recordedSortValues = globalThis.__recordedSortValues || [];
+    globalThis.__recordedSortValues.push(args);
+  };
+  export const planQuotaSortValueFromWindows = (windows) => windows;
 `;
 
 const { outputFiles } = await build({
@@ -66,6 +75,9 @@ const { outputFiles } = await build({
           if (args.path.endsWith('useChannelKeysPlanQuota')) {
             return { path: 'useChannelKeysPlanQuota', namespace: 'fixture' };
           }
+          if (args.path.endsWith('planQuotaRegistry')) {
+            return { path: 'planQuotaRegistry', namespace: 'fixture' };
+          }
           if (path.isAbsolute(args.path) || args.path.startsWith('.')) {
             // Real source files (planQuotaFormat.js etc.) load from disk.
             return null;
@@ -79,10 +91,14 @@ const { outputFiles } = await build({
           if (path === 'useChannelKeysPlanQuota') {
             return { contents: keysUsageStubSource };
           }
+          if (path === 'planQuotaRegistry') {
+            return { contents: registryStubSource };
+          }
           if (path === 'react') {
             return {
               contents: `
             export const useState = (initial) => [initial, () => {}];
+            export const useEffect = () => {};
             const React = {
               createElement: (type, props, ...children) => ({
                 type,
@@ -126,35 +142,37 @@ const record = { id: 1, channel_info: {} };
 // Flatten the element tree into strings keyed by "type|text" for structural
 // assertions that ignore tooltip wrapper depth. Function elements (the local
 // window-line component) are invoked with their props, mirroring what a
-// renderer would do.
-const collect = (node, out = []) => {
+// renderer would do. Tooltip hover content arrives through the `content`
+// prop and is flattened too.
+const flatten = (node, out = []) => {
   if (node == null || typeof node === 'boolean') return out;
   if (typeof node === 'string' || typeof node === 'number') {
     out.push(String(node));
     return out;
   }
   if (Array.isArray(node)) {
-    node.forEach((child) => collect(child, out));
+    node.forEach((child) => flatten(child, out));
     return out;
   }
   if (typeof node.type === 'function') {
     // A renderer hands children to components through props.children.
-    collect(node.type({ ...node.props, children: node.children }), out);
+    flatten(node.type({ ...node.props, children: node.children }), out);
     return out;
   }
   out.push(`${node.type}`);
-  if (node.children) collect(node.children, out);
-  if (node.props?.children != null) collect(node.props.children, out);
+  if (node.children) flatten(node.children, out);
+  if (node.props?.content != null) flatten(node.props.content, out);
+  if (node.props?.children != null) flatten(node.props.children, out);
   return out;
 };
+
+const toTree = (element) => flatten(element).join('\n');
 
 // The stubbed hook reads this snapshot at call time, so each render is
 // seeded deterministically without any store or network.
 const renderCell = (state) => {
   globalThis.__planQuotaTestState = state;
-  return PlanQuotaCell({ t, record, visible: true })
-    .children.flatMap((child) => collect(child))
-    .join('\n');
+  return toTree(PlanQuotaCell({ t, record, visible: true }));
 };
 
 const okState = (items, extra = {}) => ({
@@ -192,7 +210,7 @@ test('error and configuration problems keep their status tag', () => {
   assert.ok(configTree.includes('No preset bound'));
 });
 
-test('window line shows progress bar with localized reset at its right', () => {
+test('window line shows full-width bar with bare percent and compact reset above', () => {
   const tree = renderCell(
     okState([
       {
@@ -204,15 +222,17 @@ test('window line shows progress bar with localized reset at its right', () => {
     ]),
   );
   assert.ok(tree.includes('Progress'), 'progress bar rendered');
-  assert.ok(tree.includes('2026'), 'formatted reset date rendered');
+  assert.ok(!tree.includes('Used: '), 'the "Used: " percent prefix is gone');
+  assert.ok(tree.replace(/\n/g, '').includes('42%'), 'bare percent rendered');
+  assert.ok(tree.includes('Reset'), 'Reset label rendered');
+  // The title row keeps the window title only (reset sits there too), the
+  // full year never leaks into the visible line (tooltip-only).
+  const beforeReset = tree.split('Reset')[0];
   assert.ok(
-    /\nReset$/.test(tree) || tree.includes('Reset'),
-    'Reset label rendered',
+    !/\d{4}/.test(beforeReset.split('\n').slice(0, -1).join('\n')) ||
+      !beforeReset.includes('2026'),
+    'no full date on the line itself',
   );
-  // Reset text follows the bar: bar element appears before the reset strings.
-  const progressIndex = tree.indexOf('Progress');
-  const resetIndex = tree.indexOf('Reset');
-  assert.ok(progressIndex < resetIndex, 'reset sits right of the bar');
 });
 
 test('missing or invalid reset renders neither label nor guessed time', () => {
@@ -230,6 +250,18 @@ test('missing or invalid reset renders neither label nor guessed time', () => {
   }
 });
 
+test('window line without percent shows neither bar nor percent', () => {
+  const tree = renderCell(
+    okState([{ name: 'five_hour', used: 3, remaining: 7, unit: 'usd' }]),
+  );
+  assert.ok(!tree.includes('Progress'), 'no bar fabricated without a percent');
+  assert.ok(!tree.includes('%'), 'no percent fabricated');
+  assert.ok(
+    !tree.includes('Not provided'),
+    'absolutes render, so no Not provided fallback',
+  );
+});
+
 test('multi window usage renders one line per window with per-window resets', () => {
   const items = [
     { name: 'five_hour', percent: 30, reset: '2026-09-10T00:00:00Z' },
@@ -237,7 +269,7 @@ test('multi window usage renders one line per window with per-window resets', ()
     { name: 'monthly', percent: 55 },
   ];
   const tree = renderCell(okState(items));
-  const resetLines = tree.split('\n').filter((entry) => /^\d{4}/.test(entry));
+  const resetLines = tree.split('\n').filter((entry) => entry === 'Reset');
   assert.equal(resetLines.length, 2, 'only windows with a reset show one');
   assert.ok(tree.includes('5-hour window'));
   assert.ok(tree.includes('Weekly window'));
@@ -287,15 +319,56 @@ test('multi-key channel renders the all-keys aggregate without any key selector'
     },
     error: null,
   };
-  const flat = collect(
+  const flat = toTree(
     PlanQuotaCell({ t, record: multiRecord, visible: true }),
-  ).join('\n');
+  ).replace(/\n/g, '');
   assert.ok(flat.includes('Select') === false, 'no key index select rendered');
   assert.ok(flat.includes('5-hour window'), 'aggregated window rendered');
   assert.ok(flat.includes('30%'), 'sum-derived percent rendered');
-  assert.ok(!flat.includes('60%'), 'per-key percents are not averaged/summed');
-  assert.ok(flat.includes('2026'), 'earliest reset rendered');
+  assert.ok(!flat.includes('80%'), 'per-key percents do not override the sum');
+  // The test t() is the identity, so the interpolation key renders raw.
+  assert.ok(flat.includes('Key {{index}}'), 'per-key tooltip lines rendered');
+  assert.ok(flat.includes('Used: 10'), 'per-key amounts in the tooltip');
   assert.ok(!flat.includes('Force refresh'));
+});
+
+test('multi-key percent-only channel renders the averaged percent', () => {
+  const multiRecord = {
+    id: 5,
+    channel_info: { is_multi_key: true, multi_key_size: 2 },
+  };
+  globalThis.__keysPlanQuotaTestState = {
+    status: 'ok',
+    loading: false,
+    data: {
+      channel_id: 5,
+      is_multi_key: true,
+      keys: [
+        {
+          key_index: 0,
+          status: 'ok',
+          items: [{ name: 'five_hour', percent: 14 }],
+        },
+        {
+          key_index: 1,
+          status: 'ok',
+          items: [{ name: 'five_hour', percent: 46 }],
+        },
+      ],
+    },
+    error: null,
+  };
+  const flat = toTree(
+    PlanQuotaCell({ t, record: multiRecord, visible: true }),
+  ).replace(/\n/g, '');
+  assert.ok(flat.includes('5-hour window'));
+  assert.ok(flat.includes('30%'), 'averaged percent (14+46)/2 rendered');
+  assert.ok(flat.includes('14%'), 'per-key percent line in tooltip');
+  assert.ok(flat.includes('46%'));
+  assert.ok(
+    flat.includes('Progress'),
+    'bar rendered from the averaged percent',
+  );
 });
 
 test('multi-key channel without queryable keys shows unbound tag', () => {
@@ -313,9 +386,7 @@ test('multi-key channel without queryable keys shows unbound tag', () => {
     },
     error: null,
   };
-  const flat = collect(
-    PlanQuotaCell({ t, record: multiRecord, visible: true }),
-  ).join('\n');
+  const flat = toTree(PlanQuotaCell({ t, record: multiRecord, visible: true }));
   assert.ok(flat.includes('Tag'));
   assert.ok(
     flat.includes('Needs configuration'),
@@ -344,9 +415,7 @@ test('multi-key aggregate with no derivable percent renders amounts without a ba
     },
     error: null,
   };
-  const flat = collect(
-    PlanQuotaCell({ t, record: multiRecord, visible: true }),
-  ).join('\n');
+  const flat = toTree(PlanQuotaCell({ t, record: multiRecord, visible: true }));
   assert.ok(flat.includes('5-hour window'));
   assert.ok(flat.includes('10'), 'summed used amount rendered as text');
   assert.ok(

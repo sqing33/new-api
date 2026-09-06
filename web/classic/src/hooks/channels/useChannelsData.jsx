@@ -38,6 +38,11 @@ import { useTableCompactMode } from '../common/useTableCompactMode';
 import { useChannelUpstreamUpdates } from './useChannelUpstreamUpdates';
 import { useChannelUpstreamPricing } from './useChannelUpstreamPricing';
 import { parseUpstreamUpdateMeta } from './upstreamUpdateUtils';
+import {
+  getChannelSortValue,
+  getPlanQuotaRegistryVersion,
+  subscribePlanQuotaRegistry,
+} from './planQuotaRegistry';
 import { Modal, Button } from '@douyinfe/semi-ui';
 import { openCodexUsageModal } from '../../components/table/channels/modals/CodexUsageModal';
 
@@ -79,6 +84,16 @@ export const useChannelsData = () => {
   // Type tabs states
   const [activeTypeKey, setActiveTypeKey] = useState('all');
   const [typeCounts, setTypeCounts] = useState({});
+
+  // Client-side "sort by plan usage" toggle. Session state only: it resets
+  // when the channel list is refetched and is not persisted to localStorage.
+  const [planUsageSort, setPlanUsageSort] = useState(false);
+  const [planQuotaRegistryVersion, setPlanQuotaRegistryVersion] = useState(
+    getPlanQuotaRegistryVersion(),
+  );
+  useEffect(() => {
+    return subscribePlanQuotaRegistry(setPlanQuotaRegistryVersion);
+  }, []);
 
   // Model test states
   const [showModelTestModal, setShowModelTestModal] = useState(false);
@@ -1138,9 +1153,33 @@ export const useChannelsData = () => {
     return keys;
   }, [channelTypeCounts]);
 
+  // Client-side reorder of the displayed channels by plan usage remaining
+  // (five-hour window, most remaining first). The channels list is the
+  // server-paginated current page, so this sort never reorders beyond it —
+  // rows without a reported value keep their relative order at the end.
+  // Values arrive asynchronously from the plan quota cells; the registry
+  // version bumps on every report and re-triggers the sort.
+  const sortedChannels = useMemo(() => {
+    if (!planUsageSort) {
+      return channels;
+    }
+    const withValue = [];
+    const withoutValue = [];
+    channels.forEach((channel) => {
+      const value = getChannelSortValue(channel?.id);
+      if (value == null) {
+        withoutValue.push(channel);
+      } else {
+        withValue.push([value, channel]);
+      }
+    });
+    withValue.sort((a, b) => b[0] - a[0]);
+    return [...withValue.map(([, channel]) => channel), ...withoutValue];
+  }, [channels, planUsageSort, planQuotaRegistryVersion]);
+
   return {
     // Basic states
-    channels,
+    channels: sortedChannels,
     loading,
     searching,
     activePage,
@@ -1148,6 +1187,8 @@ export const useChannelsData = () => {
     channelCount,
     groupOptions,
     idSort,
+    planUsageSort,
+    setPlanUsageSort,
     enableTagMode,
     enableBatchDelete,
     statusFilter,

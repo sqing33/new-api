@@ -4522,6 +4522,7 @@
     "Plan usage": "Plan usage",
     "Not provided": "Not provided",
     "{{count}} more keys": "{{count}} more keys",
+    "Sort by plan usage": "Sort by plan usage",
     "Missing credential channel reference for separate credentials": "Missing credential channel reference for separate credentials"
   }
 }

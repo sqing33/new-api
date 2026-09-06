@@ -46,6 +46,8 @@ const ChannelsActions = ({
   setCompactMode,
   idSort,
   setIdSort,
+  planUsageSort,
+  setPlanUsageSort,
   setEnableBatchDelete,
   enableTagMode,
   setEnableTagMode,
@@ -284,6 +286,19 @@ const ChannelsActions = ({
                     v,
                   );
                 }
+              }}
+            />
+          </div>
+
+          <div className='flex items-center justify-between w-full md:w-auto'>
+            <Typography.Text strong className='mr-2'>
+              {t('Sort by plan usage')}
+            </Typography.Text>
+            <Switch
+              size='small'
+              checked={planUsageSort}
+              onChange={(v) => {
+                setPlanUsageSort(v);
               }}
             />
           </div>

@@ -29,6 +29,7 @@ import {
   aggregateTooltipKeyLines,
   clampPercent,
   formatAmount,
+  formatResetShort,
   formatResetTime,
   resolveWindowUsedPercent,
   windowTooltipLines,
@@ -75,6 +76,25 @@ test('formatResetTime returns null for null/invalid dates', () => {
   assert.equal(formatResetTime('not-a-date'), null);
   const parsed = formatResetTime('2026-01-01T00:00:00Z');
   assert.ok(typeof parsed === 'string' && parsed.length > 0);
+});
+
+test('formatResetShort returns null for missing or invalid resets', () => {
+  assert.equal(formatResetShort(null), null);
+  assert.equal(formatResetShort(undefined), null);
+  assert.equal(formatResetShort(''), null);
+  assert.equal(formatResetShort('not-a-date'), null);
+});
+
+test('formatResetShort renders MM-DD HH:mm with 2-digit fields and 24h clock', () => {
+  // Constructed from local-time components so the test is timezone-neutral.
+  const date = new Date(2026, 8, 6, 14, 30); // 2026-09-06 14:30 local
+  const rendered = formatResetShort(date);
+  assert.match(rendered, /^\d{2}-\d{2} \d{2}:\d{2}$/);
+  assert.equal(rendered, '09-06 14:30');
+  const early = formatResetShort(new Date(2026, 0, 1, 3, 5));
+  assert.equal(early, '01-01 03:05', 'month/day/hour/minute are 2-digit');
+  // The full reset time stays available for tooltips.
+  assert.ok(formatResetTime(date).length > 0);
 });
 
 test('clampPercent bounds non-finite and out-of-range values', () => {
@@ -232,22 +252,66 @@ test('aggregateKeyWindows keeps percentless windows separate from derivable ones
   assert.equal(weekly.percent, undefined);
 });
 
-test('aggregateKeyWindows handles percent-only upstreams without inventing amounts', () => {
+test('aggregateKeyWindows averages per-key percents for percent-only upstreams', () => {
   const windows = aggregateKeyWindows([
     okKey(0, [
-      { name: 'five_hour', percent: 30, reset: '2026-09-10T00:00:00Z' },
+      { name: 'five_hour', percent: 14, reset: '2026-09-10T00:00:00Z' },
     ]),
-    okKey(1, [{ name: 'five_hour', percent: 50 }]),
+    okKey(1, [{ name: 'five_hour', percent: 46 }]),
   ]);
   const fiveHour = windows.find((w) => w.name === 'five_hour');
-  assert.equal(fiveHour.used, undefined);
+  assert.equal(fiveHour.used, undefined, 'absolutes are never fabricated');
   assert.equal(fiveHour.remaining, undefined);
-  assert.equal(
-    fiveHour.percent,
-    undefined,
-    'percent values are never averaged',
-  );
-  assert.equal(fiveHour.reset, '2026-09-10T00:00:00Z');
+  assert.equal(fiveHour.percent, 30, 'average of 14 and 46');
+  assert.equal(fiveHour.reset, '2026-09-10T00:00:00Z', 'earliest reset kept');
+});
+
+test('aggregateKeyWindows rounds the averaged percent to 1 decimal and clamps', () => {
+  const windows = aggregateKeyWindows([
+    okKey(0, [{ name: 'five_hour', percent: 10 }]),
+    okKey(1, [{ name: 'five_hour', percent: 15 }]),
+    okKey(2, [{ name: 'five_hour', percent: 16 }]),
+  ]);
+  // (10+15+16)/3 = 13.666... -> 13.7
+  assert.equal(windows[0].percent, 13.7);
+
+  const clamped = aggregateKeyWindows([
+    okKey(0, [{ name: 'five_hour', percent: 150 }]),
+    okKey(1, [{ name: 'five_hour', percent: 120 }]),
+  ]);
+  assert.equal(clamped[0].percent, 100);
+});
+
+test('aggregateKeyWindows single percent-only key passes its percent through', () => {
+  const windows = aggregateKeyWindows([
+    okKey(0, [{ name: 'weekly_limit', percent: 62 }]),
+  ]);
+  assert.equal(windows[0].percent, 62);
+  assert.equal(windows[0].used, undefined);
+  assert.equal(windows[0].remaining, undefined);
+});
+
+test('aggregateKeyWindows averaging ignores errored keys and non-finite percents', () => {
+  const windows = aggregateKeyWindows([
+    okKey(0, [{ name: 'five_hour', percent: 20 }]),
+    failingKey(1, 'authentication_error'),
+    okKey(2, [{ name: 'five_hour', percent: 40 }]),
+    okKey(3, [{ name: 'five_hour', percent: 'abc' }]),
+  ]);
+  assert.equal(windows[0].percent, 30, 'only finite percents of ok keys count');
+});
+
+test('aggregateKeyWindows sum-derived percent takes priority over averaging', () => {
+  const windows = aggregateKeyWindows([
+    okKey(0, [{ name: 'five_hour', used: 10, remaining: 10, percent: 5 }]),
+    okKey(1, [{ name: 'five_hour', used: 0, remaining: 0, percent: 95 }]),
+  ]);
+  const fiveHour = windows.find((w) => w.name === 'five_hour');
+  // Sum-derived: 10/(10+10+0) = 50; per-key percents (5, 95) are ignored.
+  // The second key's zero remaining is a finite sum, so sums exist.
+  assert.equal(fiveHour.percent, 50);
+  assert.equal(fiveHour.used, 10);
+  assert.equal(fiveHour.remaining, 10);
 });
 
 test('aggregateKeyWindows returns empty list for no ok keys', () => {
@@ -284,4 +348,21 @@ test('aggregateTooltipKeyLines returns empty when no ok key has the window', () 
     failingKey(1, 'timeout'),
   ];
   assert.deepEqual(aggregateTooltipKeyLines(perKey, 'five_hour', t), []);
+});
+
+test('aggregateTooltipKeyLines prints per-key percents for percent-only windows', () => {
+  const ti = (key, opts) =>
+    key.replace(/\{\{(\w+)\}\}/g, (_, name) => String(opts?.[name] ?? ''));
+  const perKey = [
+    okKey(0, [{ name: 'five_hour', percent: 62 }]),
+    failingKey(1, 'network_error'),
+    okKey(2, [
+      { name: 'five_hour', percent: 20, reset: '2026-09-10T00:00:00Z' },
+    ]),
+  ];
+  const lines = aggregateTooltipKeyLines(perKey, 'five_hour', ti);
+  assert.equal(lines.length, 2);
+  assert.equal(lines[0], 'Key 1: 62%');
+  assert.ok(lines[1].startsWith('Key 3: 20%'), 'percent before reset text');
+  assert.ok(lines[1].includes('Resets at: '));
 });

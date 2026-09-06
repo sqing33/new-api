@@ -57,6 +57,18 @@ export const formatResetTime = (reset) => {
   return date.toLocaleString();
 };
 
+// Compact reset time for the window line: `MM-DD HH:mm` (24h, locale
+// agnostic, no year, no seconds). Returns null for missing or unparseable
+// resets — no reset is ever guessed. The full date stays available via
+// formatResetTime for tooltips.
+export const formatResetShort = (reset) => {
+  if (!reset) return null;
+  const date = new Date(reset);
+  if (Number.isNaN(date.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 export const getDisplayText = (value) => {
   if (value == null) return '';
   return String(value).trim();
@@ -176,11 +188,17 @@ const earliestReset = (resets) => {
 //   - windows are grouped by window name; a window is summed only across
 //     keys that report it;
 //   - used/remaining are summed only from finite numbers;
-//   - percent is the sum-derived value sumUsed/(sumUsed+sumRemaining)*100,
-//     rounded to 1 decimal and clamped to 0-100, ONLY when both sums exist
-//     and the denominator is positive. Per-key `percent` values are never
-//     averaged. Without a derivable percent, `percent` stays undefined and
-//     the caller renders amounts without a bar;
+//   - percent, in priority order:
+//       1. the sum-derived value sumUsed/(sumUsed+sumRemaining)*100,
+//          rounded to 1 decimal and clamped to 0-100, when both sums exist
+//          and the denominator is positive;
+//       2. otherwise, when at least one contributing key exposes a finite
+//          `percent` (percent-only upstreams), the average of those
+//          per-key percents, rounded to 1 decimal and clamped to 0-100.
+//     With neither source, `percent` stays undefined and the caller renders
+//     amounts without a bar. used/remaining stay undefined whenever the
+//     corresponding absolutes are absent — they are never derived from a
+//     percent;
 //   - reset is the earliest reset among contributing keys.
 export const aggregateKeyWindows = (perKeyResults) => {
   const keys = Array.isArray(perKeyResults) ? perKeyResults : [];
@@ -197,6 +215,7 @@ export const aggregateKeyWindows = (perKeyResults) => {
           unit: getDisplayText(item?.unit),
           used: null,
           remaining: null,
+          percents: [],
           resets: [],
         });
       }
@@ -210,6 +229,9 @@ export const aggregateKeyWindows = (perKeyResults) => {
       ) {
         agg.remaining = (agg.remaining ?? 0) + item.remaining;
       }
+      if (item.percent != null && Number.isFinite(Number(item.percent))) {
+        agg.percents.push(Number(item.percent));
+      }
       if (item.reset) {
         agg.resets.push(item.reset);
       }
@@ -217,12 +239,21 @@ export const aggregateKeyWindows = (perKeyResults) => {
   }
   const windows = [];
   for (const agg of byName.values()) {
-    const usedPercent =
-      agg.used != null && agg.remaining != null && agg.used + agg.remaining > 0
-        ? clampPercent(
-            Math.round((agg.used / (agg.used + agg.remaining)) * 1000) / 10,
-          )
-        : undefined;
+    let usedPercent;
+    if (
+      agg.used != null &&
+      agg.remaining != null &&
+      agg.used + agg.remaining > 0
+    ) {
+      usedPercent = clampPercent(
+        Math.round((agg.used / (agg.used + agg.remaining)) * 1000) / 10,
+      );
+    } else if (agg.percents.length > 0) {
+      // Percent-only upstreams: average the per-key percents.
+      const avg =
+        agg.percents.reduce((sum, p) => sum + p, 0) / agg.percents.length;
+      usedPercent = clampPercent(Math.round(avg * 10) / 10);
+    }
     windows.push({
       name: agg.name,
       used: agg.used ?? undefined,
@@ -268,6 +299,10 @@ export const aggregateTooltipKeyLines = (
     }
     if (item.remaining != null) {
       parts.push(`${t('Remaining: ')}${formatAmount(item.remaining)}`);
+    }
+    const usedPercent = resolveWindowUsedPercent(item);
+    if (usedPercent != null) {
+      parts.push(`${usedPercent}%`);
     }
     const resetText = formatResetTime(item?.reset);
     if (resetText) {
