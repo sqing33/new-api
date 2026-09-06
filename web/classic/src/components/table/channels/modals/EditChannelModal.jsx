@@ -2028,6 +2028,10 @@ const EditChannelModal = (props) => {
         ...localInputs,
         id: parseInt(channelId),
         key_mode: isMultiKeyChannel ? keyMode : undefined, // 只在多key模式下传递
+        // 单密钥渠道编辑时勾选批量密钥：请求单向升级为多密钥（后端仅在
+        // 密钥多于一行时生效，并初始化多密钥元数据；不支持降级）。
+        is_multi_key_request: !isMultiKeyChannel && batch ? true : undefined,
+        multi_key_mode: !isMultiKeyChannel && batch ? multiKeyMode : undefined,
       });
     } else {
       res = await API.post(`/api/channel/`, {
@@ -2137,70 +2141,73 @@ const EditChannelModal = (props) => {
     }
   };
 
-  const batchAllowed = (!isEdit || isMultiKeyChannel) && inputs.type !== 57;
+  // 编辑已有多密钥渠道时保持多密钥；编辑单密钥渠道时也允许勾选批量输入，
+  // 把多行密钥单向升级为多密钥（提交时带 is_multi_key_request，后端仅在
+  // 密钥多于一行时生效，且永不支持降级）。新建渠道维持原有行为。
+  const batchAllowed =
+    inputs.type !== 57 && (!isEdit || isMultiKeyChannel || batch);
   const batchExtra = batchAllowed ? (
     <Space>
-      {!isEdit && (
-        <Checkbox
-          disabled={isEdit}
-          checked={batch}
-          onChange={(e) => {
-            const checked = e.target.checked;
+      <Checkbox
+        disabled={isEdit && isMultiKeyChannel}
+        checked={batch}
+        onChange={(e) => {
+          const checked = e.target.checked;
 
-            if (!checked && vertexFileList.length > 1) {
-              Modal.confirm({
-                title: t('切换为单密钥模式'),
-                content: t(
-                  '将仅保留第一个密钥文件，其余文件将被移除，是否继续？',
-                ),
-                onOk: () => {
-                  const firstFile = vertexFileList[0];
-                  const firstKey = vertexKeys[0] ? [vertexKeys[0]] : [];
+          if (!checked && vertexFileList.length > 1) {
+            Modal.confirm({
+              title: t('切换为单密钥模式'),
+              content: t(
+                '将仅保留第一个密钥文件，其余文件将被移除，是否继续？',
+              ),
+              onOk: () => {
+                const firstFile = vertexFileList[0];
+                const firstKey = vertexKeys[0] ? [vertexKeys[0]] : [];
 
-                  setVertexFileList([firstFile]);
-                  setVertexKeys(firstKey);
+                setVertexFileList([firstFile]);
+                setVertexKeys(firstKey);
 
-                  formApiRef.current?.setValue('vertex_files', [firstFile]);
-                  setInputs((prev) => ({ ...prev, vertex_files: [firstFile] }));
+                formApiRef.current?.setValue('vertex_files', [firstFile]);
+                setInputs((prev) => ({ ...prev, vertex_files: [firstFile] }));
 
-                  setBatch(false);
-                  setMultiToSingle(false);
-                  setMultiKeyMode('random');
-                },
-                onCancel: () => {
-                  setBatch(true);
-                },
-                centered: true,
-              });
-              return;
-            }
+                setBatch(false);
+                setMultiToSingle(false);
+                setMultiKeyMode('random');
+              },
+              onCancel: () => {
+                setBatch(true);
+              },
+              centered: true,
+            });
+            return;
+          }
 
-            setBatch(checked);
-            if (!checked) {
-              setMultiToSingle(false);
-              setMultiKeyMode('random');
-            } else {
-              // 批量模式下禁用手动输入，并清空手动输入的内容
-              setUseManualInput(false);
-              if (inputs.type === 41) {
-                // 清空手动输入的密钥内容
-                if (formApiRef.current) {
-                  formApiRef.current.setValue('key', '');
-                }
-                handleInputChange('key', '');
+          setBatch(checked);
+          if (!checked) {
+            setMultiToSingle(false);
+            setMultiKeyMode('random');
+          } else {
+            // 批量模式下禁用手动输入，并清空手动输入的内容
+            setUseManualInput(false);
+            if (inputs.type === 41) {
+              // 清空手动输入的密钥内容
+              if (formApiRef.current) {
+                formApiRef.current.setValue('key', '');
               }
+              handleInputChange('key', '');
             }
-          }}
-        >
-          {t('批量创建')}
-        </Checkbox>
-      )}
+          }
+        }}
+      >
+        {t(isEdit ? '批量密钥' : '批量创建')}
+      </Checkbox>
       {batch && (
         <>
           <Checkbox
-            disabled={isEdit}
-            checked={multiToSingle}
+            disabled={isEdit && isMultiKeyChannel}
+            checked={multiToSingle || (isEdit && batch)}
             onChange={() => {
+              if (isEdit) return; // 编辑态固定聚合模式（多密钥渠道的形态）
               setMultiToSingle((prev) => {
                 const nextValue = !prev;
                 setInputs((prevInputs) => {

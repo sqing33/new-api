@@ -963,6 +963,9 @@ type PatchChannel struct {
 	model.Channel
 	MultiKeyMode *string `json:"multi_key_mode"`
 	KeyMode      *string `json:"key_mode"` // 多key模式下密钥覆盖或者追加
+	// Edit-time one-way upgrade request (single→multi key); the controller
+	// only honors it when the submitted key holds more than one line.
+	IsMultiKeyRequest *bool `json:"is_multi_key_request"`
 }
 
 type ChannelStatusRequest struct {
@@ -1035,6 +1038,21 @@ func UpdateChannel(c *gin.Context) {
 
 	// Always copy the original ChannelInfo so that fields like IsMultiKey and MultiKeySize are retained.
 	channel.ChannelInfo = originChannel.ChannelInfo
+
+	// One-way upgrade: an explicit is_multi_key_request=true on a
+	// single-key channel with a multi-line key converts it to multi-key
+	// (initializes empty per-key metadata). Downgrading multi-key back to
+	// single is never allowed here — per-key state maps (disabled status,
+	// reasons, times) are index-keyed and would silently misalign.
+	if !channel.ChannelInfo.IsMultiKey && channel.IsMultiKeyRequest != nil && *channel.IsMultiKeyRequest {
+		if keys := channel.GetKeys(); len(keys) > 1 {
+			channel.ChannelInfo.IsMultiKey = true
+			channel.ChannelInfo.MultiKeySize = len(keys)
+			channel.ChannelInfo.MultiKeyStatusList = map[int]int{}
+			channel.ChannelInfo.MultiKeyDisabledReason = map[int]string{}
+			channel.ChannelInfo.MultiKeyDisabledTime = map[int]int64{}
+		}
+	}
 
 	if channelHasSensitiveChanges(&channel, originChannel, requestData) &&
 		!authz.Can(c.GetInt("id"), c.GetInt("role"), authz.ChannelSensitiveWrite) {
