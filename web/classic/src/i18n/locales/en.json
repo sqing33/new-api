@@ -4529,6 +4529,9 @@
     "User ID": "User ID",
     "Upstream personal access token": "Upstream personal access token",
     "Upstream user id, e.g. 1": "Upstream user id, e.g. 1",
-    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query"
+    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query",
+    "密钥优先级已更新": "Key priority updated",
+    "更新优先级失败": "Failed to update priority",
+    "数字越大越优先；同优先级随机/轮询；0 为默认": "Higher numbers win; equal tiers load-balance randomly or by polling; 0 is the default"
   }
 }

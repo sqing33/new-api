@@ -141,3 +141,92 @@ func TestUpdateChannelNeverDowngradesMultiKey(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, updated.ChannelInfo.IsMultiKey, "multi-key is never downgraded")
 }
+
+func multiKeyManageViaAPI(t *testing.T, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/channel/multi_key/manage", strings.NewReader(body))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Set("id", 1)
+	ctx.Set("role", common.RoleRootUser)
+	ManageMultiKeys(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	return recorder
+}
+
+func TestSetKeyPriorityAction(t *testing.T) {
+	setupMultiKeyUpgradeTest(t)
+	multi := model.Channel{
+		Id: 1, Type: 1, Name: "multi", Key: "sk-a\nsk-b\nsk-c", Models: "gpt-4o",
+		Group: "default", Status: common.ChannelStatusEnabled,
+		OtherSettings: "{}",
+	}
+	multi.ChannelInfo.IsMultiKey = true
+	multi.ChannelInfo.MultiKeySize = 3
+	require.NoError(t, model.DB.Create(&multi).Error)
+
+	// Set key 1 to top priority.
+	rec := multiKeyManageViaAPI(t, `{"channel_id":1,"action":"set_key_priority","key_index":1,"priority":9}`)
+	var resp struct {
+		Success bool `json:"success"`
+	}
+	require.NoError(t, common.Unmarshal(rec.Body.Bytes(), &resp))
+	require.True(t, resp.Success, rec.Body.String())
+
+	ch, err := model.GetChannelById(1, true)
+	require.NoError(t, err)
+	require.NotNil(t, ch.ChannelInfo.MultiKeyPriority)
+	assert.Equal(t, 9, ch.ChannelInfo.MultiKeyPriority[1])
+
+	// Selection: key 1 (top tier) always wins in random mode.
+	for i := 0; i < 20; i++ {
+		key, idx, apiErr := ch.GetNextEnabledKey()
+		require.Nil(t, apiErr)
+		assert.Equal(t, "sk-b", key)
+		assert.Equal(t, 1, idx)
+	}
+
+	// Reset to 0 removes the entry and restores the single default tier.
+	rec = multiKeyManageViaAPI(t, `{"channel_id":1,"action":"set_key_priority","key_index":1,"priority":0}`)
+	require.NoError(t, common.Unmarshal(rec.Body.Bytes(), &resp))
+	require.True(t, resp.Success, rec.Body.String())
+	ch, err = model.GetChannelById(1, true)
+	require.NoError(t, err)
+	assert.True(t, ch.ChannelInfo.MultiKeyPriority == nil || len(ch.ChannelInfo.MultiKeyPriority) == 0,
+		"priority 0 drops the sparse entry")
+}
+
+func TestSetKeyPriorityActionValidation(t *testing.T) {
+	setupMultiKeyUpgradeTest(t)
+	multi := model.Channel{
+		Id: 1, Type: 1, Name: "multi", Key: "sk-a\nsk-b", Models: "gpt-4o",
+		Group: "default", Status: common.ChannelStatusEnabled,
+		OtherSettings: "{}",
+	}
+	multi.ChannelInfo.IsMultiKey = true
+	multi.ChannelInfo.MultiKeySize = 2
+	require.NoError(t, model.DB.Create(&multi).Error)
+
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"missing priority", `{"channel_id":1,"action":"set_key_priority","key_index":0}`},
+		{"missing index", `{"channel_id":1,"action":"set_key_priority","priority":5}`},
+		{"index out of range", `{"channel_id":1,"action":"set_key_priority","key_index":9,"priority":5}`},
+		{"priority above 100", `{"channel_id":1,"action":"set_key_priority","key_index":0,"priority":101}`},
+		{"negative priority", `{"channel_id":1,"action":"set_key_priority","key_index":0,"priority":-1}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := multiKeyManageViaAPI(t, tc.body)
+			var resp struct {
+				Success bool `json:"success"`
+			}
+			require.NoError(t, common.Unmarshal(rec.Body.Bytes(), &resp))
+			assert.False(t, resp.Success, rec.Body.String())
+		})
+	}
+}

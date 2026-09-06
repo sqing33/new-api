@@ -4424,6 +4424,9 @@
     "User ID": "ID пользователя",
     "Upstream personal access token": "Персональный токен доступа апстрима",
     "Upstream user id, e.g. 1": "ID пользователя апстрима, напр. 13",
-    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Запрашивает подписку апстрим-new-api через его консольный API: укажите PAT и ID пользователя апстрима; ключ пересылки для запроса не используется"
+    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Запрашивает подписку апстрим-new-api через его консольный API: укажите PAT и ID пользователя апстрима; ключ пересылки для запроса не используется",
+    "密钥优先级已更新": "Приоритет ключа обновлён",
+    "更新优先级失败": "Не удалось обновить приоритет",
+    "数字越大越优先；同优先级随机/轮询；0 为默认": "Чем больше число, тем выше приоритет; равные приоритеты распределяются случайно или по кругу; 0 — значение по умолчанию"
   }
 }

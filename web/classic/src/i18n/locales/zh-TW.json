@@ -4385,6 +4385,9 @@
     "User ID": "使用者 ID",
     "Upstream personal access token": "上游個人存取權杖",
     "Upstream user id, e.g. 1": "上游使用者 ID，如 13",
-    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "透過上游 new-api 的控制台介面查詢訂閱額度：填寫上游使用者 PAT 和使用者 ID，查詢不使用轉發金鑰"
+    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "透過上游 new-api 的控制台介面查詢訂閱額度：填寫上游使用者 PAT 和使用者 ID，查詢不使用轉發金鑰",
+    "密钥优先级已更新": "金鑰優先級已更新",
+    "更新优先级失败": "更新優先級失敗",
+    "数字越大越优先；同优先级随机/轮询；0 为默认": "數字越大越優先；同優先級隨機/輪詢；0 為預設"
   }
 }

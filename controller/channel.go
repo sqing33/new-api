@@ -1051,6 +1051,7 @@ func UpdateChannel(c *gin.Context) {
 			channel.ChannelInfo.MultiKeyStatusList = map[int]int{}
 			channel.ChannelInfo.MultiKeyDisabledReason = map[int]string{}
 			channel.ChannelInfo.MultiKeyDisabledTime = map[int]int64{}
+			channel.ChannelInfo.MultiKeyPriority = nil // 全部从默认优先级 0 开始
 		}
 	}
 
@@ -1556,11 +1557,12 @@ func CopyChannel(c *gin.Context) {
 // MultiKeyManageRequest represents the request for multi-key management operations
 type MultiKeyManageRequest struct {
 	ChannelId int    `json:"channel_id"`
-	Action    string `json:"action"`              // "disable_key", "enable_key", "delete_key", "delete_disabled_keys", "get_key_status"
-	KeyIndex  *int   `json:"key_index,omitempty"` // for disable_key, enable_key, and delete_key actions
+	Action    string `json:"action"`              // "disable_key", "enable_key", "delete_key", "delete_disabled_keys", "get_key_status", "set_key_priority"
+	KeyIndex  *int   `json:"key_index,omitempty"` // for disable_key, enable_key, delete_key and set_key_priority actions
 	Page      int    `json:"page,omitempty"`      // for get_key_status pagination
 	PageSize  int    `json:"page_size,omitempty"` // for get_key_status pagination
 	Status    *int   `json:"status,omitempty"`    // for get_key_status filtering: 1=enabled, 2=manual_disabled, 3=auto_disabled, nil=all
+	Priority  *int   `json:"priority,omitempty"`  // for set_key_priority; 0 removes the entry (default tier)
 }
 
 // MultiKeyStatusResponse represents the response for key status query
@@ -1582,6 +1584,7 @@ type KeyStatus struct {
 	DisabledTime int64  `json:"disabled_time,omitempty"`
 	Reason       string `json:"reason,omitempty"`
 	KeyPreview   string `json:"key_preview"` // first 10 chars of key for identification
+	Priority     int    `json:"priority"`    // strict key priority; 0 = default tier
 }
 
 // ManageMultiKeys handles multi-key management operations
@@ -1690,6 +1693,7 @@ func ManageMultiKeys(c *gin.Context) {
 				DisabledTime: disabledTime,
 				Reason:       reason,
 				KeyPreview:   keyPreview,
+				Priority:     channel.ChannelInfo.MultiKeyPriority[i],
 			})
 		}
 
@@ -1923,6 +1927,7 @@ func ManageMultiKeys(c *gin.Context) {
 		var newStatusList = make(map[int]int)
 		var newDisabledTime = make(map[int]int64)
 		var newDisabledReason = make(map[int]string)
+		var newPriority = make(map[int]int)
 
 		newIndex := 0
 		for i, key := range keys {
@@ -1949,6 +1954,12 @@ func ManageMultiKeys(c *gin.Context) {
 					newDisabledReason[newIndex] = r
 				}
 			}
+			// 优先级同样重索引；仅非零值保留，保持 map 稀疏
+			if channel.ChannelInfo.MultiKeyPriority != nil {
+				if p, exists := channel.ChannelInfo.MultiKeyPriority[i]; exists && p != 0 {
+					newPriority[newIndex] = p
+				}
+			}
 			newIndex++
 		}
 
@@ -1966,6 +1977,11 @@ func ManageMultiKeys(c *gin.Context) {
 		channel.ChannelInfo.MultiKeyStatusList = newStatusList
 		channel.ChannelInfo.MultiKeyDisabledTime = newDisabledTime
 		channel.ChannelInfo.MultiKeyDisabledReason = newDisabledReason
+		if len(newPriority) > 0 {
+			channel.ChannelInfo.MultiKeyPriority = newPriority
+		} else {
+			channel.ChannelInfo.MultiKeyPriority = nil
+		}
 
 		err = channel.Update()
 		if err != nil {
@@ -1987,6 +2003,7 @@ func ManageMultiKeys(c *gin.Context) {
 		var newStatusList = make(map[int]int)
 		var newDisabledTime = make(map[int]int64)
 		var newDisabledReason = make(map[int]string)
+		var newPriority = make(map[int]int)
 
 		newIndex := 0
 		for i, key := range keys {
@@ -2016,6 +2033,12 @@ func ManageMultiKeys(c *gin.Context) {
 						}
 					}
 				}
+				// 优先级同样重索引；仅非零值保留，保持 map 稀疏
+				if channel.ChannelInfo.MultiKeyPriority != nil {
+					if p, exists := channel.ChannelInfo.MultiKeyPriority[i]; exists && p != 0 {
+						newPriority[newIndex] = p
+					}
+				}
 				newIndex++
 			}
 		}
@@ -2034,6 +2057,11 @@ func ManageMultiKeys(c *gin.Context) {
 		channel.ChannelInfo.MultiKeyStatusList = newStatusList
 		channel.ChannelInfo.MultiKeyDisabledTime = newDisabledTime
 		channel.ChannelInfo.MultiKeyDisabledReason = newDisabledReason
+		if len(newPriority) > 0 {
+			channel.ChannelInfo.MultiKeyPriority = newPriority
+		} else {
+			channel.ChannelInfo.MultiKeyPriority = nil
+		}
 
 		err = channel.Update()
 		if err != nil {
@@ -2046,6 +2074,64 @@ func ManageMultiKeys(c *gin.Context) {
 			"success": true,
 			"message": fmt.Sprintf("已删除 %d 个自动禁用的密钥", deletedCount),
 			"data":    deletedCount,
+		})
+		return
+
+	case "set_key_priority":
+		if request.KeyIndex == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "缺少密钥索引",
+			})
+			return
+		}
+		if request.Priority == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "缺少优先级参数",
+			})
+			return
+		}
+		keyIndex := *request.KeyIndex
+		keys := channel.GetKeys()
+		if keyIndex < 0 || keyIndex >= len(keys) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "密钥索引超出范围",
+			})
+			return
+		}
+		priority := *request.Priority
+		if priority < 0 || priority > 100 {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "优先级必须在 0-100 之间",
+			})
+			return
+		}
+		if priority == 0 {
+			// 0 = default tier: drop the entry so the map stays sparse
+			if channel.ChannelInfo.MultiKeyPriority != nil {
+				delete(channel.ChannelInfo.MultiKeyPriority, keyIndex)
+				if len(channel.ChannelInfo.MultiKeyPriority) == 0 {
+					channel.ChannelInfo.MultiKeyPriority = nil
+				}
+			}
+		} else {
+			if channel.ChannelInfo.MultiKeyPriority == nil {
+				channel.ChannelInfo.MultiKeyPriority = make(map[int]int)
+			}
+			channel.ChannelInfo.MultiKeyPriority[keyIndex] = priority
+		}
+		err = channel.Update()
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		model.InitChannelCache()
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "密钥优先级已更新",
 		})
 		return
 

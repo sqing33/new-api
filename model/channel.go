@@ -65,6 +65,7 @@ type ChannelInfo struct {
 	MultiKeyStatusList     map[int]int           `json:"multi_key_status_list"`               // key状态列表，key index -> status
 	MultiKeyDisabledReason map[int]string        `json:"multi_key_disabled_reason,omitempty"` // key禁用原因列表，key index -> reason
 	MultiKeyDisabledTime   map[int]int64         `json:"multi_key_disabled_time,omitempty"`   // key禁用时间列表，key index -> time
+	MultiKeyPriority       map[int]int           `json:"multi_key_priority,omitempty"`        // key优先级，key index -> priority；缺失=0；严格优先，同层内随机/轮询
 	MultiKeyPollingIndex   int                   `json:"multi_key_polling_index"`             // 多Key模式下轮询的key索引
 	MultiKeyMode           constant.MultiKeyMode `json:"multi_key_mode"`
 }
@@ -244,6 +245,40 @@ func (channel *Channel) GetNextEnabledKey() (string, int, *types.NewAPIError) {
 		return "", 0, types.NewError(errors.New("no enabled keys"), types.ErrorCodeChannelNoAvailableKey)
 	}
 
+	// Strict key priority: keys live in tiers by MultiKeyPriority (missing
+	// entry = 0; negative entries are treated as 0 — the manage API never
+	// accepts them, this only guards hand-edited JSON). Only the highest
+	// tier present among ENABLED keys serves traffic; lower tiers take over
+	// once every higher-tier key is disabled. All-zero (the default)
+	// collapses to a single tier, preserving the existing random/polling
+	// behavior exactly.
+	if len(channel.ChannelInfo.MultiKeyPriority) > 0 {
+		priorityOf := func(idx int) int {
+			if p := channel.ChannelInfo.MultiKeyPriority[idx]; p > 0 {
+				return p
+			}
+			return 0
+		}
+		maxPriority := 0
+		tiered := false
+		for _, idx := range enabledIdx {
+			p := priorityOf(idx)
+			if p > maxPriority {
+				maxPriority = p
+				tiered = true
+			}
+		}
+		if tiered {
+			tier := make([]int, 0, len(enabledIdx))
+			for _, idx := range enabledIdx {
+				if priorityOf(idx) == maxPriority {
+					tier = append(tier, idx)
+				}
+			}
+			enabledIdx = tier
+		}
+	}
+
 	switch channel.ChannelInfo.MultiKeyMode {
 	case constant.MultiKeyModeRandom:
 		// Randomly pick one enabled key
@@ -266,20 +301,29 @@ func (channel *Channel) GetNextEnabledKey() (string, int, *types.NewAPIError) {
 				// CacheUpdateChannel(channel)
 			}
 		}()
-		// Start from the saved polling index and look for the next enabled key
+		// Start from the saved polling index and look for the next enabled
+		// key within the current highest-priority tier.
+		inTier := func(idx int) bool {
+			for _, t := range enabledIdx {
+				if t == idx {
+					return true
+				}
+			}
+			return false
+		}
 		start := channelInfo.MultiKeyPollingIndex
 		if start < 0 || start >= len(keys) {
 			start = 0
 		}
 		for i := 0; i < len(keys); i++ {
 			idx := (start + i) % len(keys)
-			if getStatus(idx) == common.ChannelStatusEnabled {
+			if getStatus(idx) == common.ChannelStatusEnabled && inTier(idx) {
 				// update polling index for next call (point to the next position)
 				channel.ChannelInfo.MultiKeyPollingIndex = (idx + 1) % len(keys)
 				return keys[idx], idx, nil
 			}
 		}
-		// Fallback – should not happen, but return first enabled key
+		// Fallback – should not happen, but return first enabled tier key
 		return keys[enabledIdx[0]], enabledIdx[0], nil
 	default:
 		// Unknown mode, default to first enabled key (or original key string)
@@ -589,6 +633,17 @@ func (channel *Channel) Update() error {
 				if idx >= channel.ChannelInfo.MultiKeySize {
 					delete(channel.ChannelInfo.MultiKeyStatusList, idx)
 				}
+			}
+		}
+		// Same trim for key priorities (missing entries simply mean priority 0)
+		if channel.ChannelInfo.MultiKeyPriority != nil {
+			for idx := range channel.ChannelInfo.MultiKeyPriority {
+				if idx >= channel.ChannelInfo.MultiKeySize {
+					delete(channel.ChannelInfo.MultiKeyPriority, idx)
+				}
+			}
+			if len(channel.ChannelInfo.MultiKeyPriority) == 0 {
+				channel.ChannelInfo.MultiKeyPriority = nil
 			}
 		}
 	}

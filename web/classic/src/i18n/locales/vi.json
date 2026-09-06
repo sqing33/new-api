@@ -4914,6 +4914,9 @@
     "User ID": "ID người dùng",
     "Upstream personal access token": "Mã truy cập cá nhân của thượng nguồn",
     "Upstream user id, e.g. 1": "ID người dùng thượng nguồn, vd. 13",
-    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Truy vấn gói đăng ký new-api thượng nguồn qua API bảng điều khiển của nó: điền PAT và ID người dùng thượng nguồn; khóa chuyển tiếp không dùng cho truy vấn"
+    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Truy vấn gói đăng ký new-api thượng nguồn qua API bảng điều khiển của nó: điền PAT và ID người dùng thượng nguồn; khóa chuyển tiếp không dùng cho truy vấn",
+    "密钥优先级已更新": "Đã cập nhật mức ưu tiên của khóa",
+    "更新优先级失败": "Cập nhật mức ưu tiên thất bại",
+    "数字越大越优先；同优先级随机/轮询；0 为默认": "Số càng lớn càng được ưu tiên; cùng mức ưu tiên phân bổ ngẫu nhiên hoặc theo vòng; 0 là mặc định"
   }
 }

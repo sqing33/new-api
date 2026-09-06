@@ -4361,6 +4361,9 @@
     "User ID": "ユーザー ID",
     "Upstream personal access token": "上流の個人アクセストークン",
     "Upstream user id, e.g. 1": "上流のユーザー ID（例: 13）",
-    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "上流 new-api のコンソール API でサブスクリプション枠を照会します：上流の PAT とユーザー ID を入力してください。転送キーは照会に使いません"
+    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "上流 new-api のコンソール API でサブスクリプション枠を照会します：上流の PAT とユーザー ID を入力してください。転送キーは照会に使いません",
+    "密钥优先级已更新": "キーの優先度を更新しました",
+    "更新优先级失败": "優先度の更新に失敗しました",
+    "数字越大越优先；同优先级随机/轮询；0 为默认": "数値が大きいほど優先されます；同じ優先度はランダム/ポーリングで分散；0 がデフォルトです"
   }
 }

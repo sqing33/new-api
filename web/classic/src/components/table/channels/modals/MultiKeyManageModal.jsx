@@ -36,6 +36,7 @@ import {
   Badge,
   Progress,
   Card,
+  InputNumber,
 } from '@douyinfe/semi-ui';
 import {
   IllustrationNoResult,
@@ -76,6 +77,8 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
   const [loading, setLoading] = useState(false);
   const [keyStatusList, setKeyStatusList] = useState([]);
   const [operationLoading, setOperationLoading] = useState({});
+  // key index -> 未提交的优先级草稿；失焦时与服务端值比对后才提交
+  const [keyPriorityDrafts, setKeyPriorityDrafts] = useState({});
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -185,6 +188,39 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
       }
     } catch (error) {
       showError(t('启用密钥失败'));
+    } finally {
+      setOperationLoading((prev) => ({ ...prev, [operationId]: false }));
+    }
+  };
+
+  // Set strict priority of a key (0 = default tier). Larger numbers win;
+  // keys of the highest tier serve traffic, lower tiers take over when the
+  // whole tier above is disabled.
+  const handleSetPriority = async (keyIndex, priority) => {
+    const normalized = Math.max(
+      0,
+      Math.min(100, Math.round(Number(priority) || 0)),
+    );
+    const operationId = `priority_${keyIndex}`;
+    setOperationLoading((prev) => ({ ...prev, [operationId]: true }));
+
+    try {
+      const res = await API.post('/api/channel/multi_key/manage', {
+        channel_id: channel.id,
+        action: 'set_key_priority',
+        key_index: keyIndex,
+        priority: normalized,
+      });
+
+      if (res.data.success) {
+        showSuccess(t('密钥优先级已更新'));
+        await loadKeyStatus(currentPage, pageSize);
+        onRefresh && onRefresh();
+      } else {
+        showError(res.data.message);
+      }
+    } catch (error) {
+      showError(t('更新优先级失败'));
     } finally {
       setOperationLoading((prev) => ({ ...prev, [operationId]: false }));
     }
@@ -500,6 +536,37 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
           </Tooltip>
         );
       },
+    },
+    {
+      title: t('优先级'),
+      dataIndex: 'priority',
+      width: 120,
+      render: (priority, record) => (
+        <Tooltip content={t('数字越大越优先；同优先级随机/轮询；0 为默认')}>
+          <InputNumber
+            size='small'
+            min={0}
+            max={100}
+            precision={0}
+            style={{ width: 90 }}
+            value={Number(record.priority) || 0}
+            disabled={operationLoading[`priority_${record.index}`]}
+            onNumberChange={(value) => {
+              // 本地即时暂存，失焦提交见 onBlur
+              setKeyPriorityDrafts((prev) => ({
+                ...prev,
+                [record.index]: value,
+              }));
+            }}
+            onBlur={() => {
+              const draft = keyPriorityDrafts[record.index];
+              if (draft === undefined) return;
+              if ((Number(record.priority) || 0) === draft) return;
+              handleSetPriority(record.index, draft);
+            }}
+          />
+        </Tooltip>
+      ),
     },
     {
       title: t('操作'),
