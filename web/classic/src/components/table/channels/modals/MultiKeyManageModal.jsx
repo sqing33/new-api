@@ -31,11 +31,8 @@ import {
   Empty,
   Spin,
   Select,
-  Row,
-  Col,
   Badge,
   Progress,
-  Card,
   InputNumber,
 } from '@douyinfe/semi-ui';
 import {
@@ -372,6 +369,33 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
     }
   }, [visible]);
 
+  // Measured height of the table scroll region. The Table component renders a
+  // sticky header (~38px) and a bottom pagination (min-height 60px) inside its
+  // own wrapper, so the rows area = measured height - 100 (with a 2px safety
+  // buffer to guarantee no overflow into the modal max-height). A callback ref
+  // wires the ResizeObserver to the actual mount/unmount of the table area,
+  // since the Semi Modal only mounts its body while `visible` is true.
+  const TABLE_OFFSET = 100;
+  const TABLE_BODY_MIN = 120;
+  const [tableBodyHeight, setTableBodyHeight] = useState(TABLE_BODY_MIN);
+  const measureTableAreaRef = (el) => {
+    if (el && typeof ResizeObserver !== 'undefined') {
+      const measure = () => {
+        const h = el.getBoundingClientRect().height;
+        setTableBodyHeight(
+          Math.max(TABLE_BODY_MIN, Math.floor(h - TABLE_OFFSET)),
+        );
+      };
+      measure();
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      el.__resizeObserver = ro;
+    } else if (el && el.__resizeObserver) {
+      el.__resizeObserver.disconnect();
+      el.__resizeObserver = null;
+    }
+  };
+
   // Percentages for progress display
   const enabledPercent =
     total > 0 ? Math.round((enabledCount / total) * 100) : 0;
@@ -486,6 +510,7 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
     {
       title: t('索引'),
       dataIndex: 'index',
+      width: 64,
       render: (text) => `#${Number(text) + 1}`,
     },
     // {
@@ -500,16 +525,19 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
     {
       title: t('状态'),
       dataIndex: 'status',
+      width: 90,
       render: (status) => renderStatusTag(status),
     },
     {
       title: t('Plan usage'),
       dataIndex: 'plan_usage',
+      width: 180,
       render: (_, record) => renderPlanUsage(record),
     },
     {
       title: t('禁用原因'),
       dataIndex: 'reason',
+      width: 200,
       render: (reason, record) => {
         if (record.status === 1 || !reason) {
           return <Text type='quaternary'>-</Text>;
@@ -526,13 +554,22 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
     {
       title: t('禁用时间'),
       dataIndex: 'disabled_time',
+      width: 110,
       render: (time, record) => {
         if (record.status === 1 || !time) {
           return <Text type='quaternary'>-</Text>;
         }
+        const str = timestamp2string(time);
+        const datePart = str.slice(0, 10);
+        const timePart = str.slice(11);
         return (
-          <Tooltip content={timestamp2string(time)}>
-            <Text style={{ fontSize: '12px' }}>{timestamp2string(time)}</Text>
+          <Tooltip content={str}>
+            <div style={{ fontSize: 12, lineHeight: '18px' }}>
+              <div>{datePart}</div>
+              <div style={{ color: 'var(--semi-color-text-2)' }}>
+                {timePart}
+              </div>
+            </div>
           </Tooltip>
         );
       },
@@ -638,263 +675,260 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
       }
       visible={visible}
       onCancel={onCancel}
-      width={900}
+      width={1100}
+      style={{ maxHeight: 'calc(100vh - 160px)' }}
+      bodyStyle={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
       footer={null}
     >
-      <div className='flex flex-col mb-5'>
-        {/* Stats & Mode */}
+      <div className='flex flex-col h-full min-h-0'>
+        {/* Compact stats bar: label + progress + fraction on one line, three items in a single bordered bar */}
         <div
-          className='rounded-xl p-4 mb-3'
+          className='rounded-lg mb-2 px-3'
           style={{
+            flexShrink: 0,
+            height: 44,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
             background: 'var(--semi-color-bg-1)',
             border: '1px solid var(--semi-color-border)',
           }}
         >
-          <Row gutter={16} align='middle'>
-            <Col span={8}>
-              <div
-                style={{
-                  background: 'var(--semi-color-bg-0)',
-                  border: '1px solid var(--semi-color-border)',
-                  borderRadius: 12,
-                  padding: 12,
-                }}
-              >
-                <div className='flex items-center gap-2 mb-2'>
-                  <Badge dot type='success' />
-                  <Text type='tertiary'>{t('已启用')}</Text>
-                </div>
-                <div className='flex items-end gap-2 mb-2'>
-                  <Text
-                    style={{ fontSize: 18, fontWeight: 700, color: '#22c55e' }}
-                  >
-                    {enabledCount}
-                  </Text>
-                  <Text
-                    style={{ fontSize: 18, color: 'var(--semi-color-text-2)' }}
-                  >
-                    / {total}
-                  </Text>
-                </div>
-                <Progress
-                  percent={enabledPercent}
-                  showInfo={false}
-                  size='small'
-                  stroke='#22c55e'
-                  style={{ height: 6, borderRadius: 999 }}
-                />
-              </div>
-            </Col>
-            <Col span={8}>
-              <div
-                style={{
-                  background: 'var(--semi-color-bg-0)',
-                  border: '1px solid var(--semi-color-border)',
-                  borderRadius: 12,
-                  padding: 12,
-                }}
-              >
-                <div className='flex items-center gap-2 mb-2'>
-                  <Badge dot type='danger' />
-                  <Text type='tertiary'>{t('手动禁用')}</Text>
-                </div>
-                <div className='flex items-end gap-2 mb-2'>
-                  <Text
-                    style={{ fontSize: 18, fontWeight: 700, color: '#ef4444' }}
-                  >
-                    {manualDisabledCount}
-                  </Text>
-                  <Text
-                    style={{ fontSize: 18, color: 'var(--semi-color-text-2)' }}
-                  >
-                    / {total}
-                  </Text>
-                </div>
-                <Progress
-                  percent={manualDisabledPercent}
-                  showInfo={false}
-                  size='small'
-                  stroke='#ef4444'
-                  style={{ height: 6, borderRadius: 999 }}
-                />
-              </div>
-            </Col>
-            <Col span={8}>
-              <div
-                style={{
-                  background: 'var(--semi-color-bg-0)',
-                  border: '1px solid var(--semi-color-border)',
-                  borderRadius: 12,
-                  padding: 12,
-                }}
-              >
-                <div className='flex items-center gap-2 mb-2'>
-                  <Badge dot type='warning' />
-                  <Text type='tertiary'>{t('自动禁用')}</Text>
-                </div>
-                <div className='flex items-end gap-2 mb-2'>
-                  <Text
-                    style={{ fontSize: 18, fontWeight: 700, color: '#f59e0b' }}
-                  >
-                    {autoDisabledCount}
-                  </Text>
-                  <Text
-                    style={{ fontSize: 18, color: 'var(--semi-color-text-2)' }}
-                  >
-                    / {total}
-                  </Text>
-                </div>
-                <Progress
-                  percent={autoDisabledPercent}
-                  showInfo={false}
-                  size='small'
-                  stroke='#f59e0b'
-                  style={{ height: 6, borderRadius: 999 }}
-                />
-              </div>
-            </Col>
-          </Row>
+          <div className='flex items-center gap-2 flex-1 min-w-0'>
+            <Badge dot type='success' />
+            <Text
+              type='tertiary'
+              style={{ fontSize: 13, whiteSpace: 'nowrap' }}
+            >
+              {t('已启用')}
+            </Text>
+            <Progress
+              percent={enabledPercent}
+              showInfo={false}
+              size='small'
+              stroke='#22c55e'
+              style={{ flex: 1, height: 6, minWidth: 40, marginBottom: 0 }}
+            />
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: '#22c55e',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {enabledCount}
+            </Text>
+            <Text
+              type='tertiary'
+              style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+            >
+              / {total}
+            </Text>
+          </div>
+          <div
+            className='flex items-center gap-2 flex-1 min-w-0'
+            style={{
+              borderLeft: '1px solid var(--semi-color-border)',
+              paddingLeft: 12,
+            }}
+          >
+            <Badge dot type='danger' />
+            <Text
+              type='tertiary'
+              style={{ fontSize: 13, whiteSpace: 'nowrap' }}
+            >
+              {t('手动禁用')}
+            </Text>
+            <Progress
+              percent={manualDisabledPercent}
+              showInfo={false}
+              size='small'
+              stroke='#ef4444'
+              style={{ flex: 1, height: 6, minWidth: 40, marginBottom: 0 }}
+            />
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: '#ef4444',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {manualDisabledCount}
+            </Text>
+            <Text
+              type='tertiary'
+              style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+            >
+              / {total}
+            </Text>
+          </div>
+          <div
+            className='flex items-center gap-2 flex-1 min-w-0'
+            style={{
+              borderLeft: '1px solid var(--semi-color-border)',
+              paddingLeft: 12,
+            }}
+          >
+            <Badge dot type='warning' />
+            <Text
+              type='tertiary'
+              style={{ fontSize: 13, whiteSpace: 'nowrap' }}
+            >
+              {t('自动禁用')}
+            </Text>
+            <Progress
+              percent={autoDisabledPercent}
+              showInfo={false}
+              size='small'
+              stroke='#f59e0b'
+              style={{ flex: 1, height: 6, minWidth: 40, marginBottom: 0 }}
+            />
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: '#f59e0b',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {autoDisabledCount}
+            </Text>
+            <Text
+              type='tertiary'
+              style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+            >
+              / {total}
+            </Text>
+          </div>
         </div>
 
-        {/* Table */}
-        <div className='flex-1 flex flex-col min-h-0'>
-          <Spin spinning={loading}>
-            <Card className='!rounded-xl'>
-              <Table
-                title={() => (
-                  <Row gutter={12} style={{ width: '100%' }}>
-                    <Col span={14}>
-                      <Row gutter={12} style={{ alignItems: 'center' }}>
-                        <Col>
-                          <Select
-                            value={statusFilter}
-                            onChange={handleStatusFilterChange}
-                            size='small'
-                            placeholder={t('全部状态')}
-                          >
-                            <Select.Option value={null}>
-                              {t('全部状态')}
-                            </Select.Option>
-                            <Select.Option value={1}>
-                              {t('已启用')}
-                            </Select.Option>
-                            <Select.Option value={2}>
-                              {t('手动禁用')}
-                            </Select.Option>
-                            <Select.Option value={3}>
-                              {t('自动禁用')}
-                            </Select.Option>
-                          </Select>
-                        </Col>
-                      </Row>
-                    </Col>
-                    <Col
-                      span={10}
-                      style={{ display: 'flex', justifyContent: 'flex-end' }}
-                    >
-                      <Space>
-                        <Button
-                          size='small'
-                          type='tertiary'
-                          onClick={() => loadKeyStatus(currentPage, pageSize)}
-                          loading={loading}
-                        >
-                          {t('刷新')}
-                        </Button>
-                        {manualDisabledCount + autoDisabledCount > 0 && (
-                          <Popconfirm
-                            title={t('确定要启用所有密钥吗？')}
-                            onConfirm={handleEnableAll}
-                            position={'topRight'}
-                          >
-                            <Button
-                              size='small'
-                              type='primary'
-                              loading={operationLoading.enable_all}
-                            >
-                              {t('启用全部')}
-                            </Button>
-                          </Popconfirm>
-                        )}
-                        {enabledCount > 0 && (
-                          <Popconfirm
-                            title={t('确定要禁用所有的密钥吗？')}
-                            onConfirm={handleDisableAll}
-                            okType={'danger'}
-                            position={'topRight'}
-                          >
-                            <Button
-                              size='small'
-                              type='danger'
-                              loading={operationLoading.disable_all}
-                            >
-                              {t('禁用全部')}
-                            </Button>
-                          </Popconfirm>
-                        )}
-                        <Popconfirm
-                          title={t('确定要删除所有已自动禁用的密钥吗？')}
-                          content={t(
-                            '此操作不可撤销，将永久删除已自动禁用的密钥',
-                          )}
-                          onConfirm={handleDeleteDisabledKeys}
-                          okType={'danger'}
-                          position={'topRight'}
-                        >
-                          <Button
-                            size='small'
-                            type='warning'
-                            loading={operationLoading.delete_disabled}
-                          >
-                            {t('删除自动禁用密钥')}
-                          </Button>
-                        </Popconfirm>
-                      </Space>
-                    </Col>
-                  </Row>
-                )}
-                columns={columns}
-                dataSource={keyStatusList}
-                pagination={{
-                  currentPage: currentPage,
-                  pageSize: pageSize,
-                  total: total,
-                  showSizeChanger: true,
-                  showQuickJumper: true,
-                  pageSizeOpts: [10, 20, 50, 100],
-                  onChange: (page, size) => {
-                    setCurrentPage(page);
-                    loadKeyStatus(page, size);
-                  },
-                  onShowSizeChange: (current, size) => {
-                    setCurrentPage(1);
-                    handlePageSizeChange(size);
-                  },
-                }}
+        {/* Bordered container: filter/action bar on top, table scroll area below */}
+        <div
+          className='flex-1 min-h-0 flex flex-col rounded-lg overflow-hidden'
+          style={{ border: '1px solid var(--semi-color-border)' }}
+        >
+          <div
+            className='flex items-center justify-between gap-3 px-3'
+            style={{
+              flexShrink: 0,
+              height: 40,
+              borderBottom: '1px solid var(--semi-color-border)',
+            }}
+          >
+            <Select
+              value={statusFilter}
+              onChange={handleStatusFilterChange}
+              size='small'
+              placeholder={t('全部状态')}
+            >
+              <Select.Option value={null}>{t('全部状态')}</Select.Option>
+              <Select.Option value={1}>{t('已启用')}</Select.Option>
+              <Select.Option value={2}>{t('手动禁用')}</Select.Option>
+              <Select.Option value={3}>{t('自动禁用')}</Select.Option>
+            </Select>
+            <Space>
+              <Button
                 size='small'
-                bordered={false}
-                rowKey='index'
-                scroll={{ x: 'max-content' }}
-                empty={
-                  <Empty
-                    image={
-                      <IllustrationNoResult
-                        style={{ width: 140, height: 140 }}
-                      />
-                    }
-                    darkModeImage={
-                      <IllustrationNoResultDark
-                        style={{ width: 140, height: 140 }}
-                      />
-                    }
-                    title={t('暂无密钥数据')}
-                    description={t('请检查渠道配置或刷新重试')}
-                    style={{ padding: 30 }}
-                  />
-                }
-              />
-            </Card>
-          </Spin>
+                type='tertiary'
+                onClick={() => loadKeyStatus(currentPage, pageSize)}
+                loading={loading}
+              >
+                {t('刷新')}
+              </Button>
+              {manualDisabledCount + autoDisabledCount > 0 && (
+                <Popconfirm
+                  title={t('确定要启用所有密钥吗？')}
+                  onConfirm={handleEnableAll}
+                  position={'topRight'}
+                >
+                  <Button
+                    size='small'
+                    type='primary'
+                    loading={operationLoading.enable_all}
+                  >
+                    {t('启用全部')}
+                  </Button>
+                </Popconfirm>
+              )}
+              {enabledCount > 0 && (
+                <Popconfirm
+                  title={t('确定要禁用所有的密钥吗？')}
+                  onConfirm={handleDisableAll}
+                  okType={'danger'}
+                  position={'topRight'}
+                >
+                  <Button
+                    size='small'
+                    type='danger'
+                    loading={operationLoading.disable_all}
+                  >
+                    {t('禁用全部')}
+                  </Button>
+                </Popconfirm>
+              )}
+              <Popconfirm
+                title={t('确定要删除所有已自动禁用的密钥吗？')}
+                content={t('此操作不可撤销，将永久删除已自动禁用的密钥')}
+                onConfirm={handleDeleteDisabledKeys}
+                okType={'danger'}
+                position={'topRight'}
+              >
+                <Button
+                  size='small'
+                  type='warning'
+                  loading={operationLoading.delete_disabled}
+                >
+                  {t('删除自动禁用密钥')}
+                </Button>
+              </Popconfirm>
+            </Space>
+          </div>
+
+          <div ref={measureTableAreaRef} className='flex-1 min-h-0'>
+            <Table
+              columns={columns}
+              dataSource={keyStatusList}
+              pagination={{
+                currentPage: currentPage,
+                pageSize: pageSize,
+                total: total,
+                showSizeChanger: true,
+                showQuickJumper: true,
+                pageSizeOpts: [10, 20, 50, 100],
+                onChange: (page, size) => {
+                  setCurrentPage(page);
+                  loadKeyStatus(page, size);
+                },
+                onShowSizeChange: (current, size) => {
+                  setCurrentPage(1);
+                  handlePageSizeChange(size);
+                },
+              }}
+              size='small'
+              bordered={false}
+              rowKey='index'
+              className='flex-1'
+              loading={loading}
+              scroll={{ x: 'max-content', y: tableBodyHeight }}
+              empty={
+                <Empty
+                  image={
+                    <IllustrationNoResult style={{ width: 140, height: 140 }} />
+                  }
+                  darkModeImage={
+                    <IllustrationNoResultDark
+                      style={{ width: 140, height: 140 }}
+                    />
+                  }
+                  title={t('暂无密钥数据')}
+                  description={t('请检查渠道配置或刷新重试')}
+                  style={{ padding: 30 }}
+                />
+              }
+            />
+          </div>
         </div>
       </div>
     </Modal>
