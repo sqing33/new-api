@@ -1,9 +1,13 @@
 package minimax
 
 import (
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -16,14 +20,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type SubjectReference struct {
+	Type      string `json:"type"`
+	ImageFile string `json:"image_file,omitempty"`
+	ImageURL  string `json:"image_url,omitempty"`
+}
+
 type MiniMaxImageRequest struct {
-	Model           string `json:"model"`
-	Prompt          string `json:"prompt"`
-	AspectRatio     string `json:"aspect_ratio,omitempty"`
-	ResponseFormat  string `json:"response_format,omitempty"`
-	N               int    `json:"n,omitempty"`
-	PromptOptimizer *bool  `json:"prompt_optimizer,omitempty"`
-	AigcWatermark   *bool  `json:"aigc_watermark,omitempty"`
+	Model            string             `json:"model"`
+	Prompt           string             `json:"prompt"`
+	AspectRatio      string             `json:"aspect_ratio,omitempty"`
+	ResponseFormat   string             `json:"response_format,omitempty"`
+	N                int                `json:"n,omitempty"`
+	PromptOptimizer  *bool              `json:"prompt_optimizer,omitempty"`
+	AigcWatermark    *bool              `json:"aigc_watermark,omitempty"`
+	SubjectReference []SubjectReference `json:"subject_reference,omitempty"`
 }
 
 type MiniMaxImageResponse struct {
@@ -66,6 +77,82 @@ func oaiImage2MiniMaxImageRequest(request dto.ImageRequest) MiniMaxImageRequest 
 	}
 
 	return minimaxRequest
+}
+
+// oaiImageEdit2MiniMaxImageRequest converts an OpenAI image edit request into a
+// MiniMax image generation request. MiniMax exposes a single image endpoint, so
+// reference images uploaded via the multipart "image" field are carried as
+// subject_reference entries instead of a separate edit endpoint.
+func oaiImageEdit2MiniMaxImageRequest(c *gin.Context, request dto.ImageRequest) (MiniMaxImageRequest, error) {
+	// The multipart parser in relay/helper does not lift response_format from
+	// the form, so recover it here to honor the b64_json requested by clients.
+	if request.ResponseFormat == "" && c.Request.PostForm != nil {
+		request.ResponseFormat = c.Request.PostForm.Get("response_format")
+	}
+
+	minimaxRequest := oaiImage2MiniMaxImageRequest(request)
+
+	references, err := subjectReferencesFromMultipartForm(c)
+	if err != nil {
+		return minimaxRequest, err
+	}
+	minimaxRequest.SubjectReference = references
+
+	return minimaxRequest, nil
+}
+
+func subjectReferencesFromMultipartForm(c *gin.Context) ([]SubjectReference, error) {
+	if c.Request.MultipartForm == nil {
+		return nil, errors.New("image edit request is missing the multipart form")
+	}
+
+	files := c.Request.MultipartForm.File["image"]
+	if len(files) == 0 {
+		return nil, errors.New("image edit request is missing reference images")
+	}
+
+	references := make([]SubjectReference, 0, len(files))
+	for _, fileHeader := range files {
+		dataURI, err := imageFileToDataURI(fileHeader)
+		if err != nil {
+			return nil, err
+		}
+		references = append(references, SubjectReference{
+			Type:      "character",
+			ImageFile: dataURI,
+		})
+	}
+
+	return references, nil
+}
+
+func imageFileToDataURI(fileHeader *multipart.FileHeader) (string, error) {
+	file, err := fileHeader.Open()
+	if err != nil {
+		return "", fmt.Errorf("open reference image %s: %w", fileHeader.Filename, err)
+	}
+	defer file.Close()
+
+	imageBytes, err := io.ReadAll(file)
+	if err != nil {
+		return "", fmt.Errorf("read reference image %s: %w", fileHeader.Filename, err)
+	}
+
+	mimeType := mimeTypeFromFileName(fileHeader.Filename)
+	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(imageBytes), nil
+}
+
+func mimeTypeFromFileName(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	default:
+		return "image/png"
+	}
 }
 
 func aspectRatioFromImageRequest(request dto.ImageRequest) string {
