@@ -98,6 +98,11 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
 	channel.SetupApiRequestHeader(info, c, req)
 	req.Set("Authorization", "Bearer "+info.ApiKey)
+	if info.RelayMode == constant.RelayModeImagesGenerations || info.RelayMode == constant.RelayModeImagesEdits {
+		// Image requests are always re-marshalled to JSON by this adapter,
+		// including edits where the inbound request is multipart/form-data.
+		req.Set("Content-Type", "application/json")
+	}
 	return nil
 }
 

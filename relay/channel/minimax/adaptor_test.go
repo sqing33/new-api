@@ -140,7 +140,12 @@ func TestGetRequestURLForImageEdit(t *testing.T) {
 	assert.Equal(t, "https://api.minimax.chat/v1/image_generation", got)
 }
 
-func newImageEditContext(t *testing.T, files map[string][]byte, formValues map[string]string) *gin.Context {
+type editFormFile struct {
+	name string
+	data []byte
+}
+
+func newImageEditContext(t *testing.T, files []editFormFile, formValues map[string]string) *gin.Context {
 	t.Helper()
 
 	var body bytes.Buffer
@@ -149,10 +154,10 @@ func newImageEditContext(t *testing.T, files map[string][]byte, formValues map[s
 	for key, value := range formValues {
 		require.NoError(t, writer.WriteField(key, value))
 	}
-	for name, data := range files {
-		part, err := writer.CreateFormFile("image", name)
+	for _, f := range files {
+		part, err := writer.CreateFormFile("image", f.name)
 		require.NoError(t, err)
-		_, err = part.Write(data)
+		_, err = part.Write(f.data)
 		require.NoError(t, err)
 	}
 	require.NoError(t, writer.Close())
@@ -173,9 +178,9 @@ func TestConvertImageRequestForImageEdit(t *testing.T) {
 	webp := []byte{0x52, 0x49, 0x46, 0x46, 0x57, 0x45, 0x42, 0x50}
 
 	c := newImageEditContext(t,
-		map[string][]byte{
-			"subject.jpg":                    jpeg,
-			"style-reference-preset.webp":    webp,
+		[]editFormFile{
+			{name: "subject.jpg", data: jpeg},
+			{name: "style-reference-preset.webp", data: webp},
 		},
 		map[string]string{
 			"prompt":          "a cute mascot poster",
@@ -204,25 +209,38 @@ func TestConvertImageRequestForImageEdit(t *testing.T) {
 	assert.Equal(t, "image-01", payload.Model)
 	assert.Equal(t, "3:2", payload.AspectRatio)
 	assert.Equal(t, "base64", payload.ResponseFormat)
-	require.Len(t, payload.SubjectReference, 2)
 
-	wantJPEG := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(jpeg)
-	wantWebP := "data:image/webp;base64," + base64.StdEncoding.EncodeToString(webp)
+	// image-01 accepts exactly one subject_reference, so only the first
+	// (primary) reference is kept.
+	require.Len(t, payload.SubjectReference, 1)
+	assert.Equal(t, "character", payload.SubjectReference[0].Type)
+	assert.Equal(t, "data:image/jpeg;base64,"+base64.StdEncoding.EncodeToString(jpeg), payload.SubjectReference[0].ImageFile)
+}
 
-	var gotJPEG, gotWebP string
-	for _, ref := range payload.SubjectReference {
-		assert.Equal(t, "character", ref.Type)
-		switch ref.ImageFile {
-		case wantJPEG:
-			gotJPEG = ref.ImageFile
-		case wantWebP:
-			gotWebP = ref.ImageFile
-		default:
-			t.Fatalf("unexpected reference image_file: %q", ref.ImageFile)
-		}
+func TestSetupRequestHeaderForImageEditUsesJSONContentType(t *testing.T) {
+	t.Parallel()
+
+	// The inbound edits request is multipart/form-data, but the adapter
+	// re-marshals the body to JSON; the outbound Content-Type must be
+	// application/json or MiniMax rejects the request.
+	c := newImageEditContext(t,
+		[]editFormFile{{name: "subject.jpg", data: []byte{0xff, 0xd8, 0xff}}},
+		map[string]string{"prompt": "a cute cat"},
+	)
+	require.Contains(t, c.Request.Header.Get("Content-Type"), "multipart/form-data")
+
+	adaptor := &Adaptor{}
+	info := &relaycommon.RelayInfo{
+		RelayMode: relayconstant.RelayModeImagesEdits,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ApiKey: "test-key",
+		},
 	}
-	assert.Equal(t, wantJPEG, gotJPEG, "jpeg reference missing or wrong")
-	assert.Equal(t, wantWebP, gotWebP, "webp reference missing or wrong")
+
+	req := http.Header{}
+	require.NoError(t, adaptor.SetupRequestHeader(c, &req, info))
+	assert.Equal(t, "application/json", req.Get("Content-Type"))
+	assert.Equal(t, "Bearer test-key", req.Get("Authorization"))
 }
 
 func TestConvertImageRequestForImageEditWithoutFiles(t *testing.T) {

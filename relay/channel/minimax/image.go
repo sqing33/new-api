@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -95,6 +96,12 @@ func oaiImageEdit2MiniMaxImageRequest(c *gin.Context, request dto.ImageRequest) 
 	references, err := subjectReferencesFromMultipartForm(c)
 	if err != nil {
 		return minimaxRequest, err
+	}
+	// image-01 accepts exactly one subject_reference; keep the primary
+	// (first) reference and drop the rest.
+	if len(references) > 1 {
+		logger.LogDebug(c, "minimax image edit: %d references provided, using the first one only", len(references))
+		references = references[:1]
 	}
 	minimaxRequest.SubjectReference = references
 
