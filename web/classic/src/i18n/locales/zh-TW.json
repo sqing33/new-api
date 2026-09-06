@@ -4379,6 +4379,12 @@
     "默认用户消息": "你好",
     "默认视频尺寸": "預設影片尺寸",
     "默认视频时长": "預設影片時長",
-    "默认补全倍率": "預設補全倍率"
+    "默认补全倍率": "預設補全倍率",
+    "Subscription quota": "訂閱額度",
+    "Access token (PAT)": "存取權杖（PAT）",
+    "User ID": "使用者 ID",
+    "Upstream personal access token": "上游個人存取權杖",
+    "Upstream user id, e.g. 13": "上游使用者 ID，如 13",
+    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "透過上游 new-api 的控制台介面查詢訂閱額度：填寫上游使用者 PAT 和使用者 ID，查詢不使用轉發金鑰"
   }
 }

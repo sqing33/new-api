@@ -171,6 +171,8 @@ func QueryChannelQuotaWithOption(ctx context.Context, ch *model.Channel, refresh
 			} else {
 				r = queryVolcengineUsage(requestCtx, &client, ch.GetBaseURL(), *cred)
 			}
+		} else if cfg.ResolvedPresetID == "new_api_subscription" {
+			r = queryNewApiSubscriptionUsage(requestCtx, &client, ch.GetBaseURL(), cfg.Extra)
 		} else {
 			r = fetchQuotaUsage(requestCtx, &client, cfg, QuotaQueryCredential{Key: key})
 		}

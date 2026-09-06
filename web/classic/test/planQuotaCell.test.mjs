@@ -195,7 +195,7 @@ test('successful query renders usage only: no status tag, no refresh button', ()
   assert.ok(!tree.includes('IconRefresh'), 'no refresh icon');
 });
 
-test('error and configuration problems keep their status tag', () => {
+test('error keeps its tag; unbound preset renders a plain dash', () => {
   const errorTree = renderCell({
     status: 'error',
     loading: false,
@@ -206,8 +206,13 @@ test('error and configuration problems keep their status tag', () => {
   assert.ok(errorTree.includes('Rate limited'));
 
   const configTree = renderCell(okState([], { status: 'disabled' }));
-  assert.ok(configTree.includes('Tag'), 'unbound preset tag kept');
-  assert.ok(configTree.includes('No preset bound'));
+  assert.ok(!configTree.includes('Tag'), 'no tag for unbound preset');
+  // The dash placeholder span carries '-' as its child text node.
+  const dashLines = configTree
+    .split('\n')
+    .filter((line) => line.trim() === '-');
+  assert.ok(dashLines.length > 0, 'unbound preset renders a dash placeholder');
+  assert.ok(!configTree.includes('No preset bound'));
 });
 
 test('window line shows full-width bar with bare percent and compact reset above', () => {
@@ -387,10 +392,11 @@ test('multi-key channel without queryable keys shows unbound tag', () => {
     error: null,
   };
   const flat = toTree(PlanQuotaCell({ t, record: multiRecord, visible: true }));
-  assert.ok(flat.includes('Tag'));
+  assert.ok(!flat.includes('Tag'), 'no tag for unbound multi-key channel');
+  const dashLines = flat.split('\n').filter((line) => line.trim() === '-');
   assert.ok(
-    flat.includes('Needs configuration'),
-    'needs_configuration keys show their configuration tag',
+    dashLines.length > 0,
+    'unbound multi-key channel renders a dash placeholder',
   );
 });
 

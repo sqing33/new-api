@@ -192,20 +192,8 @@ const MultiKeyPlanQuotaCell = ({ t, record }) => {
     );
   }
   if (!anyOk) {
-    // Unbound / not queryable preset: same tag as the single-key cell.
-    const status = getDisplayText(perKeyResults[0]?.status) || 'disabled';
-    return (
-      <Tag color='amber' shape='circle'>
-        {t(
-          {
-            disabled: 'No preset bound',
-            needs_configuration: 'Needs configuration',
-            unresolved: 'Plan not recognized',
-            unsupported: 'Preset does not support query',
-          }[status] || status,
-        )}
-      </Tag>
-    );
+    // Unbound / not queryable preset: plain dash, same as the single-key cell.
+    return <span className='text-semi-color-text-2'>-</span>;
   }
   const windows = aggregateKeyWindows(perKeyResults);
   return (
@@ -283,14 +271,16 @@ export const PlanQuotaCell = ({ t, record, visible }) => {
       usageStatus,
     );
   // A successful query with no problem to report shows usage only: the tag
-  // is suppressed for `ok` (and while loading). Errors and configuration
-  // problems keep their tag.
+  // is suppressed for `ok` (and while loading). Errors keep their red tag;
+  // unbound / not-queryable presets render a plain dash, not a tag.
   const statusNode = isError ? (
     <Tag color='red' shape='circle'>
       {t(state.error || 'Failed to fetch plan usage')}
     </Tag>
+  ) : isConfigIssue ? (
+    <span className='text-semi-color-text-2'>-</span>
   ) : usageStatus === '' || usageStatus === 'ok' ? null : (
-    <Tag color={isConfigIssue ? 'amber' : 'grey'} shape='circle'>
+    <Tag color='grey' shape='circle'>
       {statusTagText(usage, t)}
     </Tag>
   );

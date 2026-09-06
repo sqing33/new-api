@@ -4418,6 +4418,12 @@
     "默认用户消息": "Здравствуйте",
     "默认视频尺寸": "Размер видео по умолчанию",
     "默认视频时长": "Длительность видео по умолчанию",
-    "默认补全倍率": "Коэффициент завершения по умолчанию"
+    "默认补全倍率": "Коэффициент завершения по умолчанию",
+    "Subscription quota": "Квота подписки",
+    "Access token (PAT)": "Токен доступа (PAT)",
+    "User ID": "ID пользователя",
+    "Upstream personal access token": "Персональный токен доступа апстрима",
+    "Upstream user id, e.g. 13": "ID пользователя апстрима, напр. 13",
+    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Запрашивает подписку апстрим-new-api через его консольный API: укажите PAT и ID пользователя апстрима; ключ пересылки для запроса не используется"
   }
 }

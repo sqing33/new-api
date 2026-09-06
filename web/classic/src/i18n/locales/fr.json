@@ -4394,6 +4394,12 @@
     "默认用户消息": "Bonjour",
     "默认视频尺寸": "Taille vidéo par défaut",
     "默认视频时长": "Durée vidéo par défaut",
-    "默认补全倍率": "Taux de complétion par défaut"
+    "默认补全倍率": "Taux de complétion par défaut",
+    "Subscription quota": "Quota d'abonnement",
+    "Access token (PAT)": "Jeton d'accès (PAT)",
+    "User ID": "ID utilisateur",
+    "Upstream personal access token": "Jeton d'accès personnel amont",
+    "Upstream user id, e.g. 13": "ID utilisateur amont, ex. 13",
+    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Interroge l'abonnement new-api amont via son API de console : renseignez le PAT et l'ID utilisateur amont ; la clé de transfert n'est pas utilisée pour la requête"
   }
 }

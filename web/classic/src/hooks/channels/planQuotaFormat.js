@@ -80,6 +80,7 @@ export const WINDOW_NAME_KEYS = {
   monthly: 'Monthly window',
   daily: 'Daily window',
   quota_window: 'Quota window',
+  subscription: 'Subscription quota',
 };
 
 export const windowTitle = (name, t) => {

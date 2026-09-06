@@ -298,6 +298,7 @@ const ChannelsActions = ({
               size='small'
               checked={planUsageSort}
               onChange={(v) => {
+                localStorage.setItem('plan-usage-sort', v + '');
                 setPlanUsageSort(v);
               }}
             />

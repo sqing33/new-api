@@ -169,11 +169,14 @@ export const useChannelsData = () => {
       localStorage.getItem('enable-tag-mode') === 'true';
     const localEnableBatchDelete =
       localStorage.getItem('enable-batch-delete') === 'true';
+    const localPlanUsageSort =
+      localStorage.getItem('plan-usage-sort') === 'true';
 
     setIdSort(localIdSort);
     setPageSize(localPageSize);
     setEnableTagMode(localEnableTagMode);
     setEnableBatchDelete(localEnableBatchDelete);
+    setPlanUsageSort(localPlanUsageSort);
 
     loadChannels(1, localPageSize, localIdSort, localEnableTagMode)
       .then()

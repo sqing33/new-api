@@ -40,6 +40,13 @@ func GetQuotaQueryPresets() []QuotaQueryPreset {
 		// quota_query_credential_channel_id, so it never flows through
 		// inference traffic and is never returned by listing APIs.
 		{ID: "volcengine_coding_plan", Name: "火山引擎 Coding Plan", CredentialMode: "separate", QueryImplemented: true, SupportedKinds: []string{"quota_window"}, RequiredExtraFields: []string{"region"}, RequiredCredentials: []string{"access_key_id", "secret_access_key"}},
+		// new_api_subscription queries an upstream new-api instance's own
+		// subscription quota via its dashboard API (GET {base_url}/api/
+		// subscription/self). The forwarding sk- key cannot read it: the
+		// endpoint authenticates a user PAT plus the New-Api-User id header.
+		// The PAT and user id are stored in quota_query_extra (admin-only
+		// settings JSON, same exposure class as the channel key field).
+		{ID: "new_api_subscription", Name: "New API 订阅（上游实例）", CredentialMode: "separate", QueryImplemented: true, SupportedKinds: []string{"quota_window"}, RequiredExtraFields: []string{"access_token", "user_id"}},
 	}
 }
 
@@ -277,10 +284,16 @@ func GetQuotaQueryConfigWithOption(ch *model.Channel, opt QuotaQueryOption) (Quo
 			usesChannelKey = false
 		}
 		if p.CredentialMode == "separate" {
-			// Dedicated AK/SK credentials must come from the referenced
-			// credential channel; without it the required credentials are
-			// reported missing.
-			if s.QuotaQueryCredentialChannelID == nil {
+			if len(p.RequiredExtraFields) > 0 && len(p.RequiredCredentials) == 0 {
+				// new_api_subscription carries its query credential (PAT +
+				// user id) in quota_query_extra; the RequiredExtraFields loop
+				// above already reports each missing field, and the channel
+				// key is irrelevant for this preset.
+				usesChannelKey = false
+			} else if s.QuotaQueryCredentialChannelID == nil {
+				// Dedicated AK/SK credentials must come from the referenced
+				// credential channel; without it the required credentials are
+				// reported missing.
 				cfg.MissingFields = append(cfg.MissingFields, p.RequiredCredentials...)
 				cfg.MissingFields = append(cfg.MissingFields, "credential_channel_id")
 			}

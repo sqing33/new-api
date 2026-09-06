@@ -4908,6 +4908,12 @@
     "默认用户消息": "Xin chào",
     "默认视频尺寸": "Kích thước video mặc định",
     "默认视频时长": "Thời lượng video mặc định",
-    "默认补全倍率": "Tỷ lệ hoàn thành mặc định"
+    "默认补全倍率": "Tỷ lệ hoàn thành mặc định",
+    "Subscription quota": "Hạn mức gói đăng ký",
+    "Access token (PAT)": "Mã truy cập (PAT)",
+    "User ID": "ID người dùng",
+    "Upstream personal access token": "Mã truy cập cá nhân của thượng nguồn",
+    "Upstream user id, e.g. 13": "ID người dùng thượng nguồn, vd. 13",
+    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Truy vấn gói đăng ký new-api thượng nguồn qua API bảng điều khiển của nó: điền PAT và ID người dùng thượng nguồn; khóa chuyển tiếp không dùng cho truy vấn"
   }
 }
