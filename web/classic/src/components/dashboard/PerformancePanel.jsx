@@ -23,6 +23,7 @@ import { Card, Select, Table, Tooltip, Typography } from '@douyinfe/semi-ui';
 import ModelPerformanceSheet from '../performance/ModelPerformanceSheet';
 import {
   formatLatency,
+  formatThroughput,
   formatUptimePct,
   getSuccessRateColor,
 } from '../performance/format';
@@ -141,6 +142,15 @@ const PerformancePanel = ({ CARD_PROPS, t }) => {
       render: (value) => (
         <Text className='font-mono text-xs tabular-nums'>
           {formatLatency(value)}
+        </Text>
+      ),
+    },
+    {
+      title: t('吞吐'),
+      dataIndex: 'avg_tps',
+      render: (value) => (
+        <Text className='font-mono text-xs tabular-nums'>
+          {formatThroughput(value)}
         </Text>
       ),
     },
