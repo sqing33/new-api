@@ -4466,7 +4466,6 @@
     "Monthly window": "Monthly window",
     "Daily window": "Daily window",
     "Quota window": "Quota window",
-    "Healthy": "Healthy",
     "Ready to query": "Ready to query",
     "Needs configuration": "Needs configuration",
     "Plan not recognized": "Plan not recognized",
@@ -4492,6 +4491,7 @@
     "This channel has no queryable upstream plan bound, or the binding needs more configuration. Set it in \"Quota Query Settings\" when editing the channel.": "This channel has no queryable upstream plan bound, or the binding needs more configuration. Set it in \"Quota Query Settings\" when editing the channel.",
     "Detected: ": "Detected: ",
     "Resets at: ": "Resets at: ",
+    "Reset": "Reset",
     "Unit: ": "Unit: ",
     "Used: ": "Used: ",
     "Remaining: ": "Remaining: ",
@@ -4500,7 +4500,6 @@
     "Channel: ": "Channel: ",
     "ID: ": "ID: ",
     "Queried at: ": "Queried at: ",
-    "Force refresh": "Force refresh",
     "Failed to fetch plan usage": "Failed to fetch plan usage",
     "This is a multi-key channel. Select the key to query before viewing its plan usage.": "This is a multi-key channel. Select the key to query before viewing its plan usage.",
     "Select key index": "Select key index",
@@ -4520,6 +4519,9 @@
     "Quota query field: {{field}}": "Quota query field: {{field}}",
     "Enter value for {{field}}": "Enter value for {{field}}",
     "Cached": "Cached",
+    "Plan usage": "Plan usage",
+    "Not provided": "Not provided",
+    "{{count}} more keys": "{{count}} more keys",
     "Missing credential channel reference for separate credentials": "Missing credential channel reference for separate credentials"
   }
 }

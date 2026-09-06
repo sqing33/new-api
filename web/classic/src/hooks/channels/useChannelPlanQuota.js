@@ -32,13 +32,13 @@ let sharedStore = null;
 const getSharedStore = () => {
   if (!sharedStore) {
     sharedStore = createPlanQuotaStore({
-      fetcher: async ({ channelId, keyIndex, method, signal }) => {
+      fetcher: async ({ channelId, keyIndex, signal }) => {
         const params = keyIndex == null ? {} : { key_index: keyIndex };
-        const config = { params, skipErrorHandler: true, signal };
-        const res =
-          method === 'POST'
-            ? await API.post(`/api/channel/${channelId}/usage`, {}, config)
-            : await API.get(`/api/channel/${channelId}/usage`, config);
+        const res = await API.get(`/api/channel/${channelId}/usage`, {
+          params,
+          skipErrorHandler: true,
+          signal,
+        });
         // The store consumes the API payload, not the axios wrapper.
         return res?.data ?? { success: false };
       },
@@ -91,16 +91,5 @@ export const useChannelPlanQuota = ({ record, keyIndex, enabled }) => {
     return () => store.release(cacheKey);
   }, [store, enabled, cacheKey, args.channelId, args.keyIndex]);
 
-  const forceRefresh = () => {
-    if (!enabled || !args.channelId) {
-      return;
-    }
-    store.requestForce({
-      cacheKey,
-      channelId: args.channelId,
-      keyIndex: args.keyIndex,
-    });
-  };
-
-  return { state: snapshot, refresh: forceRefresh };
+  return { state: snapshot };
 };

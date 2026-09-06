@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Modal,
@@ -47,8 +47,29 @@ import {
   showSuccess,
   timestamp2string,
 } from '../../../../helpers';
+import { useChannelKeysPlanQuota } from '../../../../hooks/channels/useChannelKeysPlanQuota';
+import { PlanQuotaWindowLine } from '../PlanQuotaCell';
+import {
+  STATUS_TAG_KEYS,
+  getDisplayText,
+} from '../../../../hooks/channels/planQuotaFormat';
 
 const { Text } = Typography;
+
+// The channel's settings JSON carries the quota-query binding; an absent,
+// empty or "disabled" preset means per-key plan usage can never resolve, so
+// the modal shows the same unbound tag as the outer cell and does not query.
+const channelPresetBound = (channel) => {
+  let presetId = '';
+  try {
+    presetId = String(
+      JSON.parse(channel?.settings || '{}')?.quota_query_preset_id || '',
+    ).trim();
+  } catch (error) {
+    presetId = '';
+  }
+  return presetId !== '' && presetId !== 'disabled';
+};
 
 const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
   const { t } = useTranslation();
@@ -355,6 +376,75 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
     }
   };
 
+  // Per-key plan usage: requested once for the current page's key indexes
+  // via the shared hook (no polling). The request is skipped entirely when
+  // no queryable preset is bound — the same unbound tag as the outer cell
+  // shows instead, and pagination never retries.
+  const presetBound = useMemo(
+    () => channelPresetBound(channel),
+    [channel?.id, channel?.settings],
+  );
+  const visibleKeyIndexes = useMemo(
+    () =>
+      keyStatusList
+        .map((key) => Number(key.index))
+        .filter((idx) => Number.isInteger(idx) && idx >= 0),
+    [keyStatusList],
+  );
+  const { state: keysUsageState } = useChannelKeysPlanQuota({
+    channelId: channel?.id,
+    keyIndexes: visibleKeyIndexes,
+    enabled: visible && presetBound && visibleKeyIndexes.length > 0,
+  });
+  const keysUsageByKeyIndex = useMemo(() => {
+    const map = new Map();
+    const keys = keysUsageState?.data?.keys;
+    if (Array.isArray(keys)) {
+      keys.forEach((key) => map.set(Number(key.key_index), key));
+    }
+    return map;
+  }, [keysUsageState]);
+
+  const renderPlanUsage = (record) => {
+    if (!presetBound) {
+      return (
+        <Tag color='amber' shape='circle' size='small'>
+          {t('No preset bound')}
+        </Tag>
+      );
+    }
+    const usage = keysUsageByKeyIndex.get(Number(record.index));
+    if (!usage) {
+      return keysUsageState.loading ? (
+        <Spin size='small' />
+      ) : (
+        <Text type='quaternary'>-</Text>
+      );
+    }
+    if (usage.status !== 'ok') {
+      return (
+        <Tag color='red' shape='circle' size='small'>
+          {t(STATUS_TAG_KEYS[usage.status] || usage.status || 'Unknown status')}
+        </Tag>
+      );
+    }
+    const items = Array.isArray(usage.items) ? usage.items : [];
+    if (items.length === 0) {
+      return <Text type='quaternary'>-</Text>;
+    }
+    return (
+      <div className='flex flex-col gap-1'>
+        {items.map((item, idx) => (
+          <PlanQuotaWindowLine
+            key={`${getDisplayText(item?.name)}-${idx}`}
+            t={t}
+            item={item}
+          />
+        ))}
+      </div>
+    );
+  };
+
   // Table columns definition
   const columns = [
     {
@@ -375,6 +465,11 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
       title: t('状态'),
       dataIndex: 'status',
       render: (status) => renderStatusTag(status),
+    },
+    {
+      title: t('Plan usage'),
+      dataIndex: 'plan_usage',
+      render: (_, record) => renderPlanUsage(record),
     },
     {
       title: t('禁用原因'),

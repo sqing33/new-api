@@ -17,8 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-// Shared scheduler for upstream plan-quota queries (GET /api/channel/:id/usage
-// and the forced-refresh POST). One store instance is shared by every visible
+// Shared scheduler for upstream plan-quota queries (GET
+// /api/channel/:id/usage). One store instance is shared by every visible
 // channel row. It owns:
 //   - a result cache keyed by channel identity (id + key index + settings)
 //   - a 30s dedup TTL so remounts/page flips do not refetch
@@ -181,7 +181,6 @@ export const createPlanQuotaStore = ({
         fetcher({
           channelId: task.channelId,
           keyIndex: task.keyIndex,
-          method: task.method,
           signal: task.controller.signal,
         });
       runTask(task).finally(() => {
@@ -196,11 +195,10 @@ export const createPlanQuotaStore = ({
     }
   };
 
-  const makeTask = ({ cacheKey, channelId, keyIndex, method }) => ({
+  const makeTask = ({ cacheKey, channelId, keyIndex }) => ({
     cacheKey,
     channelId,
     keyIndex,
-    method,
     controller: new AbortController(),
     cancelled: false,
     execute: null,
@@ -231,18 +229,7 @@ export const createPlanQuotaStore = ({
     if (existing && !existing.cancelled) {
       return;
     }
-    enqueue(makeTask({ cacheKey, channelId, keyIndex, method: 'GET' }));
-  };
-
-  // Forced refresh from the row button: POST bypasses the server TTL cache,
-  // so it also bypasses the client dedup/cooldown, but never overlaps with an
-  // in-flight task for the same key.
-  const requestForce = ({ cacheKey, channelId, keyIndex }) => {
-    const entry = getSnapshot(cacheKey);
-    if (entry.loading) {
-      return;
-    }
-    enqueue(makeTask({ cacheKey, channelId, keyIndex, method: 'POST' }));
+    enqueue(makeTask({ cacheKey, channelId, keyIndex }));
   };
 
   // A row unmounted (or changed key): drop it from the queue when it has not
@@ -275,7 +262,6 @@ export const createPlanQuotaStore = ({
     subscribe,
     getSnapshot,
     requestAuto,
-    requestForce,
     release,
     seedSnapshot,
   };

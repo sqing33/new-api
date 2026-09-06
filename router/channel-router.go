@@ -50,6 +50,7 @@ var channelPermissionRoutes = []permissionRoute{
 	{method: http.MethodGet, path: "/usage/presets", permission: authz.ChannelRead, handler: controller.GetQuotaQueryPresets},
 	{method: http.MethodGet, path: "/:id/usage", permission: authz.ChannelRead, handler: controller.GetChannelQuotaUsage},
 	{method: http.MethodPost, path: "/:id/usage", permission: authz.ChannelOperate, handler: controller.GetChannelQuotaUsage},
+	{method: http.MethodGet, path: "/:id/usage/keys", permission: authz.ChannelRead, handler: controller.GetChannelQuotaUsageAllKeys},
 	{method: http.MethodGet, path: "/:id/usage/config", permission: authz.ChannelRead, handler: controller.GetChannelQuotaQueryConfig},
 	{method: http.MethodGet, path: "/:id/usage/capabilities", permission: authz.ChannelRead, handler: controller.GetChannelQuotaQueryCapabilities},
 	{method: http.MethodPost, path: "/", permission: authz.ChannelSensitiveWrite, handler: controller.AddChannel},

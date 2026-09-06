@@ -130,45 +130,6 @@ test('failed requests enter a cooldown that blocks auto retries', async () => {
   assert.equal(fetcher.pending.length, 2);
 });
 
-test('force refresh bypasses TTL and cooldown but not in-flight guard', async () => {
-  const clock = makeClock();
-  const fetcher = makeControlledFetcher();
-  const store = createPlanQuotaStore({ fetcher, now: clock.now });
-
-  const id = identity(5);
-  store.requestAuto(id);
-  fetcher.pending[0].resolve(ok());
-  await drain();
-
-  // TTL fresh: force still issues a POST.
-  store.requestForce(id);
-  assert.equal(fetcher.pending.length, 2);
-
-  // While the forced request is in flight, further forces are ignored.
-  store.requestForce(id);
-  store.requestForce(id);
-  assert.equal(fetcher.pending.length, 2);
-
-  fetcher.pending[1].resolve(ok());
-  await drain();
-  assert.equal(store.getSnapshot(id.cacheKey).status, PLAN_QUOTA_STATUS.OK);
-});
-
-test('force refresh still works during failed cooldown', async () => {
-  const clock = makeClock();
-  const fetcher = makeControlledFetcher();
-  const store = createPlanQuotaStore({ fetcher, now: clock.now });
-
-  const id = identity(21);
-  store.requestAuto(id);
-  fetcher.pending[0].resolve(fail('Upstream returned an error'));
-  await drain();
-
-  clock.advance(1000);
-  store.requestForce(id);
-  assert.equal(fetcher.pending.length, 2, 'force ignores cooldown');
-});
-
 test('concurrency is capped at 3 and queued tasks start on completion', async () => {
   const clock = makeClock();
   const fetcher = makeControlledFetcher();

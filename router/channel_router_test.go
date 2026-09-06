@@ -54,6 +54,7 @@ func TestChannelQuotaUsageRoutesPermissions(t *testing.T) {
 	// an operation because it triggers an upstream query.
 	assertChannelRoutePermission(t, http.MethodGet, "/:id/usage", authz.ChannelRead, controller.GetChannelQuotaUsage)
 	assertChannelRoutePermission(t, http.MethodPost, "/:id/usage", authz.ChannelOperate, controller.GetChannelQuotaUsage)
+	assertChannelRoutePermission(t, http.MethodGet, "/:id/usage/keys", authz.ChannelRead, controller.GetChannelQuotaUsageAllKeys)
 	assertChannelRoutePermission(t, http.MethodGet, "/usage/presets", authz.ChannelRead, controller.GetQuotaQueryPresets)
 	assertChannelRoutePermission(t, http.MethodGet, "/:id/usage/config", authz.ChannelRead, controller.GetChannelQuotaQueryConfig)
 	assertChannelRoutePermission(t, http.MethodGet, "/:id/usage/capabilities", authz.ChannelRead, controller.GetChannelQuotaQueryCapabilities)

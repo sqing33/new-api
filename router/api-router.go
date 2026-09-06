@@ -252,6 +252,7 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.GET("/usage/presets", controller.GetQuotaQueryPresets)
 			channelRoute.GET("/:id/usage", controller.GetChannelQuotaUsage)
 			channelRoute.POST("/:id/usage", middleware.CriticalRateLimit(), controller.GetChannelQuotaUsage)
+			channelRoute.GET("/:id/usage/keys", controller.GetChannelQuotaUsageAllKeys)
 			channelRoute.GET("/:id/usage/config", controller.GetChannelQuotaQueryConfig)
 			channelRoute.GET("/:id/usage/capabilities", controller.GetChannelQuotaQueryCapabilities)
 			channelRoute.POST("/", controller.AddChannel)

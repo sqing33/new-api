@@ -226,6 +226,64 @@ func TestGetChannelQuotaUsageSingleKeyValid(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), `"success":true`)
 }
 
+func TestGetChannelQuotaUsageAllKeysParamValidation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := quotaQuerySetupDB(t)
+
+	// Three-key channel; valid indexes are 0..2.
+	channel := &model.Channel{
+		Key:           "k1\nk2\nk3",
+		ChannelInfo:   model.ChannelInfo{IsMultiKey: true, MultiKeySize: 3},
+		OtherSettings: `{"quota_query_preset_id":"kimi_coding_plan"}`,
+	}
+	require.NoError(t, db.Create(channel).Error)
+
+	cases := []struct {
+		name    string
+		query   string
+		status  int
+		message string
+	}{
+		{"no param falls through to scan", "", http.StatusOK, ""},
+		{"comma list accepted", "?key_indexes=0,2", http.StatusOK, ""},
+		{"repeatable params accepted", "?key_indexes=0&key_indexes=2", http.StatusOK, ""},
+		{"invalid alpha", "?key_indexes=abc", http.StatusBadRequest, "invalid key_indexes"},
+		{"negative", "?key_indexes=-1", http.StatusBadRequest, "invalid key_indexes"},
+		{"decimal", "?key_indexes=1.5", http.StatusBadRequest, "invalid key_indexes"},
+		{"trailing garbage", "?key_indexes=1x", http.StatusBadRequest, "invalid key_indexes"},
+		{"out of range", "?key_indexes=0,3", http.StatusBadRequest, "key index out of bounds"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := quotaQueryRequest(t, http.MethodGet, "/api/channel/"+itoaInt(channel.Id)+"/usage/keys"+tc.query, GetChannelQuotaUsageAllKeys, channel.Id)
+			assert.Equal(t, tc.status, rec.Code, "body=%s", rec.Body.String())
+			if tc.message != "" {
+				assert.Contains(t, rec.Body.String(), tc.message)
+			}
+		})
+	}
+}
+
+func TestGetChannelQuotaUsageAllKeysNonMultiKeyNeedsConfiguration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := quotaQuerySetupDB(t)
+
+	// Per-key scanning is undefined for single-key channels: the endpoint
+	// answers 200 with a needs_configuration per-key entry and no upstream
+	// call (the single-key path has no kimi server behind it here, so any
+	// network attempt would fail the test with a network_error status).
+	channel := &model.Channel{
+		Key:           "single-key",
+		OtherSettings: `{"quota_query_preset_id":"kimi_coding_plan"}`,
+	}
+	require.NoError(t, db.Create(channel).Error)
+
+	rec := quotaQueryRequest(t, http.MethodGet, "/api/channel/"+itoaInt(channel.Id)+"/usage/keys", GetChannelQuotaUsageAllKeys, channel.Id)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"is_multi_key":false`)
+	assert.Contains(t, rec.Body.String(), `"status":"needs_configuration"`)
+}
+
 func itoaInt(n int) string {
 	if n == 0 {
 		return "0"

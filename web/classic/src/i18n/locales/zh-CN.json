@@ -4437,7 +4437,6 @@
     "Monthly window": "月度窗口",
     "Daily window": "每日窗口",
     "Quota window": "额度窗口",
-    "Healthy": "正常",
     "Ready to query": "可查询",
     "Needs configuration": "待配置",
     "Plan not recognized": "无法识别套餐",
@@ -4463,6 +4462,7 @@
     "This channel has no queryable upstream plan bound, or the binding needs more configuration. Set it in \"Quota Query Settings\" when editing the channel.": "该渠道尚未绑定可查询的上游套餐，或绑定信息需要补充，请在渠道编辑的「额度查询设置」中配置",
     "Detected: ": "识别结果：",
     "Resets at: ": "重置时间：",
+    "Reset": "重置",
     "Unit: ": "单位：",
     "Used: ": "已用：",
     "Remaining: ": "剩余：",
@@ -4471,7 +4471,6 @@
     "Channel: ": "渠道：",
     "ID: ": "编号：",
     "Queried at: ": "查询时间：",
-    "Force refresh": "强制刷新",
     "Failed to fetch plan usage": "获取套餐用量失败",
     "This is a multi-key channel. Select the key to query before viewing its plan usage.": "这是多密钥渠道，请先选择要查询的密钥，再查看其套餐用量",
     "Select key index": "选择密钥序号",
@@ -4491,6 +4490,9 @@
     "Quota query field: {{field}}": "额度查询字段：{{field}}",
     "Enter value for {{field}}": "请输入 {{field}} 的值",
     "Cached": "缓存",
+    "Plan usage": "套餐用量",
+    "Not provided": "未提供",
+    "{{count}} more keys": "另外 {{count}} 个密钥",
     "Missing credential channel reference for separate credentials": "独立凭据模式缺少凭据渠道引用"
   }
 }
