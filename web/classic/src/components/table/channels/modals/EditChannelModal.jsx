@@ -2461,7 +2461,10 @@ const EditChannelModal = (props) => {
                       {quotaQueryRequiredExtraFields.map((field) => (
                         <Form.Input
                           key={field}
-                          field={`quota_query_extra_${field}`}
+                          // Semi form 字段用点路径，setValues(inputs) 时
+                          // ObjectUtil.get(inputs, 'quota_query_extra.x')
+                          // 能正确取到值，不会被整包同步重置成空。
+                          field={`quota_query_extra.${field}`}
                           label={
                             field === 'access_token'
                               ? t('Access token (PAT)')
@@ -2473,12 +2476,9 @@ const EditChannelModal = (props) => {
                             field === 'access_token'
                               ? t('Upstream personal access token')
                               : field === 'user_id'
-                                ? t('Upstream user id, e.g. 13')
+                                ? t('Upstream user id, e.g. 1')
                                 : t('Enter value for {{field}}', { field })
                           }
-                          value={String(
-                            inputs.quota_query_extra?.[field] ?? '',
-                          )}
                           onChange={(value) =>
                             handleChannelOtherSettingsChange(
                               'quota_query_extra',

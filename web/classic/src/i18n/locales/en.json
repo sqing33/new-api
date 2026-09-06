@@ -4528,7 +4528,7 @@
     "Access token (PAT)": "Access token (PAT)",
     "User ID": "User ID",
     "Upstream personal access token": "Upstream personal access token",
-    "Upstream user id, e.g. 13": "Upstream user id, e.g. 13",
+    "Upstream user id, e.g. 1": "Upstream user id, e.g. 1",
     "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query"
   }
 }

@@ -4360,7 +4360,7 @@
     "Access token (PAT)": "アクセストークン（PAT）",
     "User ID": "ユーザー ID",
     "Upstream personal access token": "上流の個人アクセストークン",
-    "Upstream user id, e.g. 13": "上流のユーザー ID（例: 13）",
+    "Upstream user id, e.g. 1": "上流のユーザー ID（例: 13）",
     "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "上流 new-api のコンソール API でサブスクリプション枠を照会します：上流の PAT とユーザー ID を入力してください。転送キーは照会に使いません"
   }
 }

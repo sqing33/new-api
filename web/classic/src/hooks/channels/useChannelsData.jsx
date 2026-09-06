@@ -85,14 +85,18 @@ export const useChannelsData = () => {
   const [activeTypeKey, setActiveTypeKey] = useState('all');
   const [typeCounts, setTypeCounts] = useState({});
 
-  // Client-side "sort by plan usage" toggle. Session state only: it resets
-  // when the channel list is refetched and is not persisted to localStorage.
+  // Client-side "sort by plan usage" toggle; persisted alongside the other
+  // toolbar switches (id-sort, batch ops) in localStorage.
   const [planUsageSort, setPlanUsageSort] = useState(false);
   const [planQuotaRegistryVersion, setPlanQuotaRegistryVersion] = useState(
     getPlanQuotaRegistryVersion(),
   );
   useEffect(() => {
-    return subscribePlanQuotaRegistry(setPlanQuotaRegistryVersion);
+    // The registry notifies without arguments; passing setState directly
+    // would set the version state to undefined, so re-read it explicitly.
+    return subscribePlanQuotaRegistry(() =>
+      setPlanQuotaRegistryVersion(getPlanQuotaRegistryVersion()),
+    );
   }, []);
 
   // Model test states

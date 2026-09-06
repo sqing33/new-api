@@ -4423,7 +4423,7 @@
     "Access token (PAT)": "Токен доступа (PAT)",
     "User ID": "ID пользователя",
     "Upstream personal access token": "Персональный токен доступа апстрима",
-    "Upstream user id, e.g. 13": "ID пользователя апстрима, напр. 13",
+    "Upstream user id, e.g. 1": "ID пользователя апстрима, напр. 13",
     "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Запрашивает подписку апстрим-new-api через его консольный API: укажите PAT и ID пользователя апстрима; ключ пересылки для запроса не используется"
   }
 }
