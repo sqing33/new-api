@@ -2144,8 +2144,9 @@ const EditChannelModal = (props) => {
   // 编辑已有多密钥渠道时保持多密钥；编辑单密钥渠道时也允许勾选批量输入，
   // 把多行密钥单向升级为多密钥（提交时带 is_multi_key_request，后端仅在
   // 密钥多于一行时生效，且永不支持降级）。新建渠道维持原有行为。
-  const batchAllowed =
-    inputs.type !== 57 && (!isEdit || isMultiKeyChannel || batch);
+  // 注意 batch 不能进这个条件——编辑单密钥渠道时 batch 初始为 false，
+  // 若依赖它渲染开关会形成“不渲染就无法勾选”的死锁。
+  const batchAllowed = inputs.type !== 57;
   const batchExtra = batchAllowed ? (
     <Space>
       <Checkbox
