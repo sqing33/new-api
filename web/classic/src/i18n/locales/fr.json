@@ -4403,6 +4403,10 @@
     "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Interroge l'abonnement new-api amont via son API de console : renseignez le PAT et l'ID utilisateur amont ; la clé de transfert n'est pas utilisée pour la requête",
     "密钥优先级已更新": "Priorité de la clé mise à jour",
     "更新优先级失败": "Échec de la mise à jour de la priorité",
-    "数字越大越优先；同优先级随机/轮询；0 为默认": "Les nombres les plus élevés priment ; priorités égales = répartition aléatoire ou tournante ; 0 est la valeur par défaut"
+    "数字越大越优先；同优先级随机/轮询；0 为默认": "Les nombres les plus élevés priment ; priorités égales = répartition aléatoire ou tournante ; 0 est la valeur par défaut",
+    "接口模式": "Mode de point de terminaison",
+    "单接口": "Point unique",
+    "双接口": "Points doubles",
+    "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点": "Unique : les requêtes d'image à image sont fusionnées vers le point de terminaison de texte à image ; Double : points de terminaison séparés pour texte à image et image à image"
   }
 }

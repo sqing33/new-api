@@ -4500,6 +4500,10 @@
     "User ID": "用户 ID",
     "Upstream personal access token": "上游个人访问令牌",
     "Upstream user id, e.g. 1": "上游用户 ID，如 13",
-    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "通过上游 new-api 的控制台接口查询订阅额度：填写上游用户 PAT 和用户 ID，查询不使用转发密钥"
+    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "通过上游 new-api 的控制台接口查询订阅额度：填写上游用户 PAT 和用户 ID，查询不使用转发密钥",
+    "接口模式": "接口模式",
+    "单接口": "单接口",
+    "双接口": "双接口",
+    "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点": "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点"
   }
 }
