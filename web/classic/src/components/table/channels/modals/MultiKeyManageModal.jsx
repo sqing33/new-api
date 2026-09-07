@@ -676,11 +676,13 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
       visible={visible}
       onCancel={onCancel}
       width={1100}
-      style={{ maxHeight: 'calc(100vh - 160px)' }}
+      // Semi 的 .semi-modal-content 是 height:100%，dialog 必须有确定高度，
+      // 否则内部 flex 链条全部退化为 auto，表格测高会收敛到最小值
+      style={{ height: 'calc(100vh - 160px)' }}
       bodyStyle={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
       footer={null}
     >
-      <div className='flex flex-col h-full min-h-0'>
+      <div className='flex flex-col flex-1 min-h-0'>
         {/* Compact stats bar: label + progress + fraction on one line, three items in a single bordered bar */}
         <div
           className='rounded-lg mb-2 px-3'
