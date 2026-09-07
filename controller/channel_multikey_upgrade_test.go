@@ -91,9 +91,36 @@ func TestUpdateChannelUpgradesSingleKeyToMultiKey(t *testing.T) {
 	updated, err := model.GetChannelById(1, true)
 	require.NoError(t, err)
 	assert.True(t, updated.ChannelInfo.IsMultiKey, "channel upgraded to multi-key")
-	assert.Equal(t, 3, updated.ChannelInfo.MultiKeySize)
+	assert.Equal(t, 4, updated.ChannelInfo.MultiKeySize)
+	// 原单密钥必须保留在聚合列表中，且排在最前（索引 0 与旧通道一致）。
+	assert.Equal(t, []string{"sk-old", "sk-a", "sk-b", "sk-c"}, updated.GetKeys())
 	require.NotNil(t, updated.ChannelInfo.MultiKeyStatusList)
 	assert.Empty(t, updated.ChannelInfo.MultiKeyStatusList, "fresh per-key state starts empty")
+}
+
+func TestUpdateChannelUpgradeMergesAndDeduplicatesOriginalKey(t *testing.T) {
+	setupMultiKeyUpgradeTest(t)
+	single := model.Channel{
+		Id: 1, Type: 1, Name: "single", Key: " sk-old ", Models: "gpt-4o",
+		Group: "default", Status: common.ChannelStatusEnabled,
+		OtherSettings: "{}",
+	}
+	require.NoError(t, model.DB.Create(&single).Error)
+
+	// 提交的密钥里已经包含了原密钥，不得重复计入。
+	recorder := updateChannelViaAPI(t, `{"id":1,"name":"single","type":1,"key":"sk-old\nsk-a\nsk-b","models":"gpt-4o","group":"default","is_multi_key_request":true,"settings":"{}"}`)
+
+	var response struct {
+		Success bool `json:"success"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success, recorder.Body.String())
+
+	updated, err := model.GetChannelById(1, true)
+	require.NoError(t, err)
+	assert.True(t, updated.ChannelInfo.IsMultiKey, "channel upgraded to multi-key")
+	assert.Equal(t, 3, updated.ChannelInfo.MultiKeySize)
+	assert.Equal(t, []string{"sk-old", "sk-a", "sk-b"}, updated.GetKeys())
 }
 
 func TestUpdateChannelUpgradeRequiresMultipleKeys(t *testing.T) {
