@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"sync"
@@ -46,7 +47,7 @@ import (
 
 const (
 	sensenovaAuthBaseURL    = "https://signin.sensecore.cn"
-	sensenovaIAMLoginURL    = "https://iam.sensecoreapi.cn/iam/authn/v1/auth/login"
+	sensenovaIAMLoginURL    = "https://iam.sensecoreapi.cn/iam/authn/v1/auth/nova/login"
 	sensenovaOAuthClientID  = "nova"
 	sensenovaRedirectURI    = "https://platform.sensenova.cn"
 	sensenovaScope          = "openid offline offline_access"
@@ -188,11 +189,16 @@ func sensenovaExtractCodeAndState(redirect, state string) (string, bool) {
 	return code, true
 }
 
-// sensenovaLogin performs the full password login: PKCE authorization
-// request (captures the Hydra login_challenge from the redirect) -> IAM
-// password POST (returns the platform redirect carrying code+state) ->
-// token exchange. Every URL is a fixed HTTPS identity; only the TCP targets
-// are overridable for tests.
+// sensenovaLogin performs the full password login against the NOVA platform
+// endpoint (verified against the live console 2026-09):
+//   1. PKCE authorization request -> 302 Location carries login_challenge
+//   2. POST /iam/authn/v1/auth/nova/login -> 200 {redirect} where redirect
+//      points at platform.sensenova.cn/oauth2/auth?...login_verifier=...
+//   3. Follow the redirect loop on signin.sensecore.cn (the Hydra session
+//      cookie lives there, so every platform.sensenova.cn hop must be
+//      re-pointed at signin) until a Location carries code=<auth code>.
+// Every URL is a fixed HTTPS identity; only the TCP targets are overridable
+// for tests.
 func sensenovaLogin(ctx context.Context, client *http.Client, cred sensenovaCredential) (sensenovaSession, error) {
 	authBase := sensenovaAuthBaseURL
 	if sensenovaAuthEndpointOverride != "" {
@@ -206,6 +212,14 @@ func sensenovaLogin(ctx context.Context, client *http.Client, cred sensenovaCred
 	if err != nil {
 		return sensenovaSession{}, err
 	}
+	// The Hydra authorization flow issues a CSRF session cookie on the first
+	// request and requires it on every following hop (live-verified: without
+	// the jar the loop ends in request_forbidden / No CSRF value available).
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return sensenovaSession{}, err
+	}
+	client.Jar = jar
 	authURL := fmt.Sprintf("%s/oauth2/auth?response_type=code&client_id=%s&scope=%s&code_challenge=%s&code_challenge_method=S256&state=%s&prompt=login&redirect_uri=%s",
 		authBase,
 		url.QueryEscape(sensenovaOAuthClientID),
@@ -278,11 +292,80 @@ func sensenovaLogin(ctx context.Context, client *http.Client, cred sensenovaCred
 	if redirect == "" {
 		redirect = loginResult.RedirectTo
 	}
-	code, ok := sensenovaExtractCodeAndState(redirect, pkce.state)
-	if !ok {
+	// Follow the login_verifier / consent_verifier redirect loop. The Hydra
+	// session cookie is issued on the auth domain, but the platform echo
+	// points each hop at the public console origin; re-pointing every hop at
+	// the auth domain keeps the session (verified live: 3 hops then code).
+	var code string
+	for hop := 0; hop < 5 && redirect != ""; hop++ {
+		redirect = sensenovaSwapToAuthHost(redirect)
+		code = sensenovaFollowRedirectForCode(ctx, client, redirect, pkce.state)
+		if code != "" {
+			break
+		}
+		next, err := sensenovaPeekLocation(ctx, client, redirect)
+		if err != nil {
+			return sensenovaSession{}, err
+		}
+		redirect = next
+	}
+	if code == "" {
 		return sensenovaSession{}, fmt.Errorf("invalid_response")
 	}
 	return sensenovaExchangeCode(ctx, client, authBase, code, pkce.verifier)
+}
+
+// sensenovaSwapToAuthHost re-points a platform console redirect at the auth
+// domain so the Hydra session cookie (scoped to the auth host) is sent.
+func sensenovaSwapToAuthHost(redirect string) string {
+	authHost := sensenovaAuthBaseURL
+	if sensenovaAuthEndpointOverride != "" {
+		authHost = sensenovaAuthEndpointOverride
+	}
+	return strings.Replace(redirect, sensenovaUsageOrigin+"/", authHost+"/", 1)
+}
+
+// sensenovaFollowRedirectForCode issues GET and extracts code+state from the
+// Location header when the loop reaches the terminal redirect.
+func sensenovaFollowRedirectForCode(ctx context.Context, client *http.Client, redirect, state string) string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, redirect, nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	location := resp.Header.Get("Location")
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+	resp.Body.Close()
+	code, ok := sensenovaExtractCodeAndState(location, state)
+	if !ok {
+		return ""
+	}
+	return code
+}
+
+// sensenovaPeekLocation GETs a redirect hop and returns its Location header.
+func sensenovaPeekLocation(ctx context.Context, client *http.Client, redirect string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, redirect, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("timeout")
+		}
+		return "", fmt.Errorf("network_error")
+	}
+	location := resp.Header.Get("Location")
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+	resp.Body.Close()
+	if location == "" {
+		return "", fmt.Errorf("invalid_response")
+	}
+	return location, nil
 }
 
 // sensenovaExchangeCode swaps the authorization code for tokens.

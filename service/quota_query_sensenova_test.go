@@ -266,7 +266,7 @@ func sensenovaRedirectToChallenge(w http.ResponseWriter, r *http.Request) {
 }
 
 // sensenovaEchoStateFromChallenge answers the password POST with the
-// platform redirect carrying code+state, recovering the state from the
+// platform redirect (login_verifier hop), recovering the state from the
 // challenge string. The challenge body must be pre-decoded by the caller
 // (the request body can be read only once).
 func sensenovaEchoStateFromChallenge(w http.ResponseWriter, body map[string]string) {
@@ -274,8 +274,10 @@ func sensenovaEchoStateFromChallenge(w http.ResponseWriter, body map[string]stri
 	sensenovaWriteRedirect(w, state)
 }
 
+// sensenovaWriteRedirect emits the platform echo for one verifier hop; the
+// client re-points the host at the auth domain and follows until code.
 func sensenovaWriteRedirect(w http.ResponseWriter, state string) {
-	redirect := "https://platform.sensenova.cn/?code=the-code&state=" + url.QueryEscape(state)
+	redirect := "https://platform.sensenova.cn/oauth2/auth?login_verifier=lv-" + url.QueryEscape(state) + "&state=" + url.QueryEscape(state)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"redirect":"` + redirect + `"}`))
 }
@@ -291,6 +293,12 @@ func TestSensenovaFullLoginAndUsageFlow(t *testing.T) {
 		func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/oauth2/auth":
+				if r.URL.Query().Get("login_verifier") != "" {
+					// Terminal hop of the redirect loop: hand out the code.
+					state := r.URL.Query().Get("state")
+					http.Redirect(w, r, sensenovaRedirectURI+"/?code=the-code&state="+url.QueryEscape(state), http.StatusFound)
+					return
+				}
 				atomic.AddInt32(&authCalls, 1)
 				require.Equal(t, "S256", r.URL.Query().Get("code_challenge_method"))
 				require.NotEmpty(t, r.URL.Query().Get("code_challenge"))
@@ -350,6 +358,11 @@ func TestSensenovaSecondQueryReusesSession(t *testing.T) {
 		func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/oauth2/auth":
+				if r.URL.Query().Get("login_verifier") != "" {
+					state := r.URL.Query().Get("state")
+					http.Redirect(w, r, sensenovaRedirectURI+"/?code=tok&state="+url.QueryEscape(state), http.StatusFound)
+					return
+				}
 				sensenovaRedirectToChallenge(w, r)
 			case "/oauth2/token":
 				require.NoError(t, r.ParseForm())
