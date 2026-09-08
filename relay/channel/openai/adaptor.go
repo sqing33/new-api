@@ -459,15 +459,6 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 		}
 	}
 
-	// gpt-6系列在 /v1/chat/completions 上禁止 function tools 与非 none 的 reasoning_effort
-	// 同时出现。服务端默认开启推理，客户端未传 effort（空串）同样会命中 400，
-	// 因此除显式 none 外一律强制降级；仅影响当次请求，不改变其他请求的推理等级。
-	if dto.IsOpenAIGPT6Model(info.UpstreamModelName) && len(request.Tools) > 0 && request.ReasoningEffort != string(kitreasoning.EffortNone) {
-		request.ReasoningEffort = string(kitreasoning.EffortNone)
-		request.Reasoning = nil
-		info.SetReasoningEffort(string(kitreasoning.EffortNone))
-	}
-
 	return request, nil
 }
 
