@@ -4408,6 +4408,10 @@
     "Weekly window (Flash-Lite)": "Fenêtre hebdomadaire (Flash-Lite)",
     "Each key row maps to one SenseNova account. Rows left empty are skipped when scanning; each account is queried with its own credentials for all four windows (default and Flash-Lite pools, 5-hour + weekly)": "Chaque ligne de clé correspond à un compte SenseNova. Les lignes vides sont ignorées lors du scan ; chaque compte est interrogé avec ses propres identifiants pour les quatre fenêtres (pools par défaut et Flash-Lite, 5 heures + hebdomadaire)",
     "Account username": "Nom d utilisateur du compte",
-    "Account password": "Mot de passe du compte"
+    "Account password": "Mot de passe du compte",
+    "接口模式": "Mode de point de terminaison",
+    "单接口": "Point unique",
+    "双接口": "Points doubles",
+    "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点": "Unique : les requêtes d'image à image sont fusionnées vers le point de terminaison de texte à image ; Double : points de terminaison séparés pour texte à image et image à image"
   }
 }

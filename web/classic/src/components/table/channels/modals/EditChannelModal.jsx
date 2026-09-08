@@ -2072,7 +2072,10 @@ const EditChannelModal = (props) => {
         // 单密钥渠道编辑时勾选批量密钥：请求单向升级为多密钥（后端仅在
         // 密钥多于一行时生效，并初始化多密钥元数据；不支持降级）。
         is_multi_key_request: !isMultiKeyChannel && batch ? true : undefined,
-        multi_key_mode: !isMultiKeyChannel && batch ? multiKeyMode : undefined,
+        // 已有多密钥渠道与单→多升级都要传模式：若不传，这里的三元会把
+        // 展开 localInputs 后用户刚选的模式覆盖成 undefined，后端收不到
+        // 变更，保存后仍停留原模式（例如随机切不到轮询）。
+        multi_key_mode: isMultiKeyChannel || batch ? multiKeyMode : undefined,
       });
     } else {
       res = await API.post(`/api/channel/`, {

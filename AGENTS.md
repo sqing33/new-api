@@ -121,6 +121,7 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
 
 **Backend test quality:** Backend tests must protect real behavior, API contracts, billing/accounting invariants, data compatibility, or regression paths.
 
+- **Claude 通道禁止测试与运行：** 禁止执行任何与 Claude 相关的测试或运行操作，包括但不限于：运行 `relay/channel/claude/`、`relay/claude_handler.go` 及 Claude 转换/适配相关包的 `go test`；以 claude/anthropic 模型名或 Claude 协议为对象启动服务、发送请求、做冒烟/联调验证。涉及 Claude 的改动只做编译验证（`go build ./...` 与 `cd relaykit && GOWORK=off go build ./...`）。
 - Do not add tests that only improve coverage numbers, prove that code happens to run, or lock in implementation details without a user-visible or cross-module contract.
 - Avoid fake fuzz/stress/smoke/performance tests built from random inputs, large loop counts, sleeps, timing comparisons, or log-only assertions.
 - Avoid duplicate tests that exercise the same branch with different names but no new invariant.

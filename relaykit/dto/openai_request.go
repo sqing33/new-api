@@ -233,7 +233,11 @@ func IsOpenAIReasoningOModel(modelName string) bool {
 }
 
 func IsOpenAIGPT5Model(modelName string) bool {
-	return strings.HasPrefix(modelName, "gpt-5")
+	return modelName == "gpt-5" || strings.HasPrefix(modelName, "gpt-5-") || strings.HasPrefix(modelName, "gpt-5.")
+}
+
+func IsOpenAIGPT6Model(modelName string) bool {
+	return modelName == "gpt-6" || strings.HasPrefix(modelName, "gpt-6-") || strings.HasPrefix(modelName, "gpt-6.")
 }
 
 func IsQwenThinkingBudgetModel(modelName string) bool {
@@ -249,7 +253,7 @@ func (r *GeneralOpenAIRequest) GetSystemRoleName() string {
 		if !strings.HasPrefix(r.Model, "o1-mini") && !strings.HasPrefix(r.Model, "o1-preview") {
 			return "developer"
 		}
-	} else if IsOpenAIGPT5Model(r.Model) {
+	} else if IsOpenAIGPT5Model(r.Model) || IsOpenAIGPT6Model(r.Model) {
 		return "developer"
 	}
 	return "system"

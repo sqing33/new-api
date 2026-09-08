@@ -1046,8 +1046,25 @@ func UpdateChannel(c *gin.Context) {
 	// reasons, times) are index-keyed and would silently misalign.
 	if !channel.ChannelInfo.IsMultiKey && channel.IsMultiKeyRequest != nil && *channel.IsMultiKeyRequest {
 		if keys := channel.GetKeys(); len(keys) > 1 {
+			// 单→多升级时把原单密钥合并进新列表（原密钥在前、去重）：
+			// 编辑态下前端拿不到已保存密钥，若不合并用户提交的多行密钥会
+			// 整体覆盖 Key，导致原有单密钥丢失。
+			merged := make([]string, 0, len(keys)+1)
+			seen := make(map[string]struct{}, len(keys)+1)
+			for _, key := range append(originChannel.GetKeys(), keys...) {
+				key = strings.TrimSpace(key)
+				if key == "" {
+					continue
+				}
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+				merged = append(merged, key)
+			}
+			channel.Key = strings.Join(merged, "\n")
 			channel.ChannelInfo.IsMultiKey = true
-			channel.ChannelInfo.MultiKeySize = len(keys)
+			channel.ChannelInfo.MultiKeySize = len(merged)
 			channel.ChannelInfo.MultiKeyStatusList = map[int]int{}
 			channel.ChannelInfo.MultiKeyDisabledReason = map[int]string{}
 			channel.ChannelInfo.MultiKeyDisabledTime = map[int]int64{}

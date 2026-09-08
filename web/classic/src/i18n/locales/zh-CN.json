@@ -4505,6 +4505,10 @@
     "Weekly window (Flash-Lite)": "每周窗口（Flash-Lite）",
     "Each key row maps to one SenseNova account. Rows left empty are skipped when scanning; each account is queried with its own credentials for all four windows (default and Flash-Lite pools, 5-hour + weekly)": "每个密钥对应一个 SenseNova 账号，留空的行在扫描时跳过；每个账号使用自己的凭据查询全部四个窗口（通用池和 Flash-Lite 池的 5 小时 + 每周额度）",
     "Account username": "账号用户名",
-    "Account password": "账号密码"
+    "Account password": "账号密码",
+    "接口模式": "接口模式",
+    "单接口": "单接口",
+    "双接口": "双接口",
+    "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点": "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点"
   }
 }

@@ -2,6 +2,7 @@ package openai
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ import (
 	kitreasoning "github.com/QuantumNous/new-api/relaykit/relayconvert/reasoning"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/reasoning"
 	"github.com/samber/lo"
@@ -170,6 +172,10 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	case constant.ChannelTypeCustom:
 		url := info.ChannelBaseUrl
 		url = strings.Replace(url, "{model}", info.UpstreamModelName, -1)
+		// 模型配置为单接口时，edits 改打文生图端点（URL 与 baseUrl 相同，无需拼接）。
+		if info.RelayMode == relayconstant.RelayModeImagesEdits && setting.ImageModelUsesSingleEndpoint(info.OriginModelName) {
+			url = strings.Replace(url, "/images/edits", "/images/generations", 1)
+		}
 		return url, nil
 	default:
 		if (info.RelayFormat == types.RelayFormatClaude || info.RelayFormat == types.RelayFormatGemini) &&
@@ -177,12 +183,22 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 			info.RelayMode != relayconstant.RelayModeResponsesCompact {
 			return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
 		}
-		return relaycommon.GetFullRequestURL(info.ChannelBaseUrl, info.RequestURLPath, info.ChannelType), nil
+		fullRequestURL := relaycommon.GetFullRequestURL(info.ChannelBaseUrl, info.RequestURLPath, info.ChannelType)
+		// 模型配置为单接口时，edits 改打文生图端点。
+		if info.RelayMode == relayconstant.RelayModeImagesEdits && setting.ImageModelUsesSingleEndpoint(info.OriginModelName) {
+			fullRequestURL = strings.Replace(fullRequestURL, "/images/edits", "/images/generations", 1)
+		}
+		return fullRequestURL, nil
 	}
 }
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *relaycommon.RelayInfo) error {
 	channel.SetupApiRequestHeader(info, c, header)
+	// 单接口模型的 edits 请求已被重写为 JSON generations 请求，
+	// 不能把入站的 multipart/form-data 透传给上游。
+	if info.RelayMode == relayconstant.RelayModeImagesEdits && setting.ImageModelUsesSingleEndpoint(info.OriginModelName) {
+		header.Set("Content-Type", "application/json")
+	}
 	if info.ChannelType == constant.ChannelTypeAzure {
 		header.Set("api-key", info.ApiKey)
 		return nil
@@ -369,7 +385,7 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 
 	}
 	isOModel := dto.IsOpenAIReasoningOModel(info.UpstreamModelName)
-	isGPT5Model := dto.IsOpenAIGPT5Model(info.UpstreamModelName)
+	isGPT5Model := dto.IsOpenAIGPT5Model(info.UpstreamModelName) || dto.IsOpenAIGPT6Model(info.UpstreamModelName)
 	if isOModel || isGPT5Model {
 		if lo.FromPtrOr(request.MaxCompletionTokens, uint(0)) == 0 && lo.FromPtrOr(request.MaxTokens, uint(0)) != 0 {
 			request.MaxCompletionTokens = request.MaxTokens
@@ -380,7 +396,7 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 			request.Temperature = nil
 		}
 
-		// gpt-5系列模型适配 归零不再支持的参数
+		// gpt-5/gpt-6系列模型适配 归零不再支持的参数
 		if isGPT5Model {
 			request.Temperature = nil
 			request.TopP = nil
@@ -441,6 +457,15 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 		if info.ChannelType == constant.ChannelTypeOpenAI || info.ChannelType == constant.ChannelTypeAzure {
 			request.Reasoning = nil
 		}
+	}
+
+	// gpt-6系列在 /v1/chat/completions 上禁止 function tools 与非 none 的 reasoning_effort
+	// 同时出现。服务端默认开启推理，客户端未传 effort（空串）同样会命中 400，
+	// 因此除显式 none 外一律强制降级；仅影响当次请求，不改变其他请求的推理等级。
+	if dto.IsOpenAIGPT6Model(info.UpstreamModelName) && len(request.Tools) > 0 && request.ReasoningEffort != string(kitreasoning.EffortNone) {
+		request.ReasoningEffort = string(kitreasoning.EffortNone)
+		request.Reasoning = nil
+		info.SetReasoningEffort(string(kitreasoning.EffortNone))
 	}
 
 	return request, nil
@@ -523,6 +548,12 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
 	switch info.RelayMode {
 	case relayconstant.RelayModeImagesEdits:
+		// 模型配置为单接口时没有独立的编辑端点：把 edits 请求改写成
+		// 文生图 JSON 请求，参考图以 base64 data URI 并入 image 字段，
+		// 由上游在生成时引用。
+		if setting.ImageModelUsesSingleEndpoint(info.OriginModelName) {
+			return convertImageEditToGenerationRequest(c, request)
+		}
 		if isJSONRequest(c) {
 			return request, nil
 		}
@@ -681,6 +712,101 @@ func detectImageMimeType(filename string) string {
 	}
 }
 
+// imageFileToDataURI reads an uploaded reference image and encodes it as a
+// base64 data URI so a single-endpoint generation request can carry it.
+func imageFileToDataURI(fileHeader *multipart.FileHeader) (string, error) {
+	file, err := fileHeader.Open()
+	if err != nil {
+		return "", fmt.Errorf("failed to open image file %s: %w", fileHeader.Filename, err)
+	}
+	defer file.Close()
+
+	imageBytes, err := io.ReadAll(file)
+	if err != nil {
+		return "", fmt.Errorf("failed to read image file %s: %w", fileHeader.Filename, err)
+	}
+
+	return "data:" + detectImageMimeType(fileHeader.Filename) + ";base64," + base64.StdEncoding.EncodeToString(imageBytes), nil
+}
+
+// convertImageEditToGenerationRequest rewrites an edits request (JSON body or
+// multipart form) into a JSON generations request for models whose upstream
+// only exposes one image endpoint. Reference images are inlined as base64
+// data URIs in the image field; the model receives the prompt unchanged.
+func convertImageEditToGenerationRequest(c *gin.Context, request dto.ImageRequest) (dto.ImageRequest, error) {
+	converted := request
+	converted.Image = nil
+	converted.Mask = nil
+
+	referenceImages := make([]string, 0, 1)
+
+	if isJSONRequest(c) {
+		// JSON edits carry references in image/images fields.
+		var images []string
+		if len(request.Images) > 0 {
+			if err := common.Unmarshal(request.Images, &images); err != nil {
+				images = nil
+			}
+		}
+		if len(images) == 0 && len(request.Image) > 0 {
+			var single string
+			if err := common.Unmarshal(request.Image, &single); err == nil {
+				images = []string{single}
+			} else if err := common.Unmarshal(request.Image, &images); err != nil {
+				images = nil
+			}
+		}
+		for _, img := range images {
+			if strings.TrimSpace(img) != "" {
+				referenceImages = append(referenceImages, img)
+			}
+		}
+	} else {
+		mf := c.Request.MultipartForm
+		if mf == nil {
+			form, err := common.ParseMultipartFormReusable(c)
+			if err != nil {
+				return converted, fmt.Errorf("failed to parse multipart form: %w", err)
+			}
+			c.Request.MultipartForm = form
+			c.Request.PostForm = url.Values(form.Value)
+			mf = form
+		}
+		// The multipart parser does not lift response_format; recover it
+		// so clients requesting b64_json keep getting base64 output.
+		if converted.ResponseFormat == "" {
+			converted.ResponseFormat = c.Request.PostForm.Get("response_format")
+		}
+
+		files := append(append([]*multipart.FileHeader{}, mf.File["image"]...), mf.File["image[]"]...)
+		if len(files) == 0 {
+			// Fall back to any field named image[...] (e.g. image[0], image[1]).
+			for fieldName, fieldFiles := range mf.File {
+				if strings.HasPrefix(fieldName, "image[") {
+					files = append(files, fieldFiles...)
+				}
+			}
+		}
+		for _, fileHeader := range files {
+			dataURI, err := imageFileToDataURI(fileHeader)
+			if err != nil {
+				return converted, err
+			}
+			referenceImages = append(referenceImages, dataURI)
+		}
+	}
+
+	if len(referenceImages) > 0 {
+		imagesJSON, err := common.Marshal(referenceImages)
+		if err != nil {
+			return converted, fmt.Errorf("failed to marshal reference images: %w", err)
+		}
+		converted.Images = imagesJSON
+	}
+
+	return converted, nil
+}
+
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
 	//  转换模型推理力度后缀
 	effort, originModel := reasoning.ParseOpenAIReasoningEffortFromModelSuffix(request.Model)
@@ -737,7 +863,7 @@ func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommo
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {
 	if info.RelayMode == relayconstant.RelayModeAudioTranscription ||
 		info.RelayMode == relayconstant.RelayModeAudioTranslation ||
-		(info.RelayMode == relayconstant.RelayModeImagesEdits && !isJSONRequest(c)) {
+		(info.RelayMode == relayconstant.RelayModeImagesEdits && !isJSONRequest(c) && !setting.ImageModelUsesSingleEndpoint(info.OriginModelName)) {
 		return channel.DoFormRequest(a, c, info, requestBody)
 	} else if info.RelayMode == relayconstant.RelayModeRealtime {
 		return channel.DoWssRequest(a, c, info, requestBody)

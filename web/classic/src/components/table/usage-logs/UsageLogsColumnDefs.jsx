@@ -576,7 +576,9 @@ export const getLogsColumns = ({
             </span>
             {isMultiKey && (
               <Tag color='white' shape='circle'>
-                {multiKeyIndex}
+                {/* multi_key_index 是 0-based 数组下标；与渠道设置的密钥
+                    索引（#1 开始）对齐，显示时 +1，方便按序号定位禁用。 */}
+                {Number(multiKeyIndex) + 1}
               </Tag>
             )}
           </Space>

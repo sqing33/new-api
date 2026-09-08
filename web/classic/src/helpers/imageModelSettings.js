@@ -90,6 +90,8 @@ export const normalizeImageModelSetting = (setting) => {
     model: typeof setting?.model === 'string' ? setting.model.trim() : '',
     modes,
     max_n: Math.min(Math.max(Number(setting?.max_n) || 1, 1), 12),
+    // 单接口模型：上游只有文生图端点，图生图由网关合并进文生图请求
+    single_endpoint: setting?.single_endpoint === true,
   };
 
   if (videoModes.length > 0 || setting?.video) {

@@ -4369,6 +4369,10 @@
     "Weekly window (Flash-Lite)": "週間ウィンドウ（Flash-Lite）",
     "Each key row maps to one SenseNova account. Rows left empty are skipped when scanning; each account is queried with its own credentials for all four windows (default and Flash-Lite pools, 5-hour + weekly)": "各キー行は 1 つの SenseNova アカウントに対応します。空行はスキャン時にスキップされ、各アカウントは独自の認証情報で 4 つのウィンドウ（デフォルトおよび Flash-Lite プールの 5 時間 + 週間）を照会されます",
     "Account username": "アカウントのユーザー名",
-    "Account password": "アカウントのパスワード"
+    "Account password": "アカウントのパスワード",
+    "接口模式": "エンドポイントモード",
+    "单接口": "シングルエンドポイント",
+    "双接口": "デュアルエンドポイント",
+    "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点": "シングル：画像から画像のリクエストをテキストから画像のエンドポイントに統合して送信。デュアル：それぞれ独立したエンドポイントを使用"
   }
 }
