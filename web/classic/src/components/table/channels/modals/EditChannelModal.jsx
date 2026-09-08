@@ -164,26 +164,43 @@ function type2secretPrompt(type) {
   }
 }
 
-// SenseNova per-key credentials: one UI row per key of the channel. Mirrors
-// the backend's key split (model.Channel.GetKeys): a JSON array (Vertex
-// style, one key per line inside the array) or newline-separated keys.
-const sensenovaKeyRows = (keyText) => {
-  const text = String(keyText || '').trim();
-  if (!text) return [];
-  if (text.startsWith('[')) {
+// SenseNova per-key credentials: one UI row per key of the channel.
+// Editing a multi-key channel never receives plaintext keys (the list API
+// masks them), so the row count comes from channel_info.multi_key_size and
+// the already-stored cred_N rows; the key textarea is only consulted when
+// it actually carries keys (new channels / single-key edits).
+const sensenovaKeyCount = (inputs) => {
+  const stored = Object.keys(inputs.quota_query_extra || {}).filter((k) =>
+    /^cred_\d+$/.test(k),
+  );
+  let count = stored.length;
+  const chInfo = inputs.channel_info || {};
+  if (chInfo.is_multi_key === true && chInfo.multi_key_size > count) {
+    count = chInfo.multi_key_size;
+  }
+  const textRows = sensenovaKeyRows(inputs.key).length;
+  return Math.max(count, textRows);
+};
+
+// Parse cred rows of any accepted wire format ("user:pass" or JSON) into
+// {username, password} for the edit form.
+const sensenovaParseCred = (raw) => {
+  const text = String(raw || '').trim();
+  if (!text) return { username: '', password: '' };
+  if (text.startsWith('{')) {
     try {
-      const arr = JSON.parse(text);
-      if (Array.isArray(arr)) {
-        return arr.map((v) => String(v).trim()).filter(Boolean);
-      }
+      const parsed = JSON.parse(text);
+      return {
+        username: String(parsed.username || ''),
+        password: String(parsed.password || ''),
+      };
     } catch (error) {
-      // Fall through to the newline split below.
+      return { username: '', password: '' };
     }
   }
-  return text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const colon = text.indexOf(':');
+  if (colon <= 0) return { username: '', password: '' };
+  return { username: text.slice(0, colon), password: text.slice(colon + 1) };
 };
 
 const EditChannelModal = (props) => {
@@ -1083,19 +1100,16 @@ const EditChannelModal = (props) => {
 
       initialBaseUrlRef.current = data.base_url || '';
       setInputs(data);
-      // Hydrate the SenseNova per-key account rows from the stored
-      // "username:password" cred_N strings.
+      // Hydrate the SenseNova per-key account rows from the stored cred_N
+      // strings ("username:password" or a JSON object).
       const hydratedCreds = {};
       Object.entries(data.quota_query_extra || {}).forEach(([k, v]) => {
         const match = /^cred_(\d+)$/.exec(k);
         if (!match || typeof v !== 'string' || !v) return;
-        const idx = Number(match[1]);
-        const colon = v.indexOf(':');
-        if (colon <= 0) return;
-        hydratedCreds[idx] = {
-          username: v.slice(0, colon),
-          password: v.slice(colon + 1),
-        };
+        const cred = sensenovaParseCred(v);
+        if (cred.username || cred.password) {
+          hydratedCreds[Number(match[1])] = cred;
+        }
       });
       setSensenovaCreds(hydratedCreds);
       if (formApiRef.current) {
@@ -2532,10 +2546,10 @@ const EditChannelModal = (props) => {
                               'Each key row maps to one SenseNova account. Rows left empty are skipped when scanning; each account is queried with its own credentials for all four windows (default and Flash-Lite pools, 5-hour + weekly)',
                             )}
                           </Text>
-                          {(sensenovaKeyRows(inputs.key).length > 0
-                            ? sensenovaKeyRows(inputs.key)
-                            : ['']
-                          ).map((_, index) => (
+                          {Array.from(
+                            { length: Math.max(1, sensenovaKeyCount(inputs)) },
+                            (_, index) => index,
+                          ).map((index) => (
                             <div
                               key={index}
                               style={{ marginTop: 12 }}
