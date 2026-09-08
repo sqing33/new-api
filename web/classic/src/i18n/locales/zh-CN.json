@@ -4500,6 +4500,11 @@
     "User ID": "用户 ID",
     "Upstream personal access token": "上游个人访问令牌",
     "Upstream user id, e.g. 1": "上游用户 ID，如 13",
-    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "通过上游 new-api 的控制台接口查询订阅额度：填写上游用户 PAT 和用户 ID，查询不使用转发密钥"
+    "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "通过上游 new-api 的控制台接口查询订阅额度：填写上游用户 PAT 和用户 ID，查询不使用转发密钥",
+    "5-hour window (Flash-Lite)": "5 小时窗口（Flash-Lite）",
+    "Weekly window (Flash-Lite)": "每周窗口（Flash-Lite）",
+    "Each key row maps to one SenseNova account. Rows left empty are skipped when scanning; each account is queried with its own credentials for all four windows (default and Flash-Lite pools, 5-hour + weekly)": "每个密钥对应一个 SenseNova 账号，留空的行在扫描时跳过；每个账号使用自己的凭据查询全部四个窗口（通用池和 Flash-Lite 池的 5 小时 + 每周额度）",
+    "Account username": "账号用户名",
+    "Account password": "账号密码"
   }
 }

@@ -81,6 +81,8 @@ export const WINDOW_NAME_KEYS = {
   daily: 'Daily window',
   quota_window: 'Quota window',
   subscription: 'Subscription quota',
+  five_hour_flash: '5-hour window (Flash-Lite)',
+  weekly_limit_flash: 'Weekly window (Flash-Lite)',
 };
 
 export const windowTitle = (name, t) => {

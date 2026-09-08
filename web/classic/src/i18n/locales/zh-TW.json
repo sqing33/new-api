@@ -4388,6 +4388,11 @@
     "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "透過上游 new-api 的控制台介面查詢訂閱額度：填寫上游使用者 PAT 和使用者 ID，查詢不使用轉發金鑰",
     "密钥优先级已更新": "金鑰優先級已更新",
     "更新优先级失败": "更新優先級失敗",
-    "数字越大越优先；同优先级随机/轮询；0 为默认": "數字越大越優先；同優先級隨機/輪詢；0 為預設"
+    "数字越大越优先；同优先级随机/轮询；0 为默认": "數字越大越優先；同優先級隨機/輪詢；0 為預設",
+    "5-hour window (Flash-Lite)": "5 小時視窗（Flash-Lite）",
+    "Weekly window (Flash-Lite)": "每週視窗（Flash-Lite）",
+    "Each key row maps to one SenseNova account. Rows left empty are skipped when scanning; each account is queried with its own credentials for all four windows (default and Flash-Lite pools, 5-hour + weekly)": "每個金鑰對應一個 SenseNova 帳號，留空的列在掃描時跳過；每個帳號使用自己的憑證查詢全部四個視窗（通用池和 Flash-Lite 池的 5 小時 + 每週額度）",
+    "Account username": "帳號使用者名稱",
+    "Account password": "帳號密碼"
   }
 }

@@ -173,6 +173,23 @@ func QueryChannelQuotaWithOption(ctx context.Context, ch *model.Channel, refresh
 			}
 		} else if cfg.ResolvedPresetID == "new_api_subscription" {
 			r = queryNewApiSubscriptionUsage(requestCtx, &client, ch.GetBaseURL(), cfg.Extra)
+		} else if cfg.ResolvedPresetID == "sensenova_token_plan" {
+			// Per-key credentials: key index i logs in with the account in
+			// cred_<i>. A missing row is configuration, not an upstream error.
+			keyCount := 1
+			if ch.ChannelInfo.IsMultiKey {
+				keyCount = len(ch.GetKeys())
+			}
+			index := 0
+			if cfg.KeyIndex != nil {
+				index = *cfg.KeyIndex
+			}
+			rows := parseSensenovaCredentialRows(cfg.Extra, keyCount)
+			if index < 0 || index >= len(rows) || rows[index] == (sensenovaCredential{}) {
+				r = quotaResult("needs_configuration")
+			} else {
+				r = querySensenovaUsage(requestCtx, &client, rows[index])
+			}
 		} else {
 			r = fetchQuotaUsage(requestCtx, &client, cfg, QuotaQueryCredential{Key: key})
 		}

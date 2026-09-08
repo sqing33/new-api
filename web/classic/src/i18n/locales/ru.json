@@ -4427,6 +4427,11 @@
     "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Запрашивает подписку апстрим-new-api через его консольный API: укажите PAT и ID пользователя апстрима; ключ пересылки для запроса не используется",
     "密钥优先级已更新": "Приоритет ключа обновлён",
     "更新优先级失败": "Не удалось обновить приоритет",
-    "数字越大越优先；同优先级随机/轮询；0 为默认": "Чем больше число, тем выше приоритет; равные приоритеты распределяются случайно или по кругу; 0 — значение по умолчанию"
+    "数字越大越优先；同优先级随机/轮询；0 为默认": "Чем больше число, тем выше приоритет; равные приоритеты распределяются случайно или по кругу; 0 — значение по умолчанию",
+    "5-hour window (Flash-Lite)": "5-часовое окно (Flash-Lite)",
+    "Weekly window (Flash-Lite)": "Недельное окно (Flash-Lite)",
+    "Each key row maps to one SenseNova account. Rows left empty are skipped when scanning; each account is queried with its own credentials for all four windows (default and Flash-Lite pools, 5-hour + weekly)": "Каждая строка ключа соответствует одной учётной записи SenseNova. Пустые строки пропускаются при сканировании; каждая учётная запись запрашивается со своими учётными данными по всем четырём окнам (пулы по умолчанию и Flash-Lite, 5 часов + неделя)",
+    "Account username": "Имя пользователя аккаунта",
+    "Account password": "Пароль аккаунта"
   }
 }

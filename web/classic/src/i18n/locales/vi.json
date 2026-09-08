@@ -4917,6 +4917,11 @@
     "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "Truy vấn gói đăng ký new-api thượng nguồn qua API bảng điều khiển của nó: điền PAT và ID người dùng thượng nguồn; khóa chuyển tiếp không dùng cho truy vấn",
     "密钥优先级已更新": "Đã cập nhật mức ưu tiên của khóa",
     "更新优先级失败": "Cập nhật mức ưu tiên thất bại",
-    "数字越大越优先；同优先级随机/轮询；0 为默认": "Số càng lớn càng được ưu tiên; cùng mức ưu tiên phân bổ ngẫu nhiên hoặc theo vòng; 0 là mặc định"
+    "数字越大越优先；同优先级随机/轮询；0 为默认": "Số càng lớn càng được ưu tiên; cùng mức ưu tiên phân bổ ngẫu nhiên hoặc theo vòng; 0 là mặc định",
+    "5-hour window (Flash-Lite)": "Cửa sổ 5 giờ (Flash-Lite)",
+    "Weekly window (Flash-Lite)": "Cửa sổ tuần (Flash-Lite)",
+    "Each key row maps to one SenseNova account. Rows left empty are skipped when scanning; each account is queried with its own credentials for all four windows (default and Flash-Lite pools, 5-hour + weekly)": "Mỗi dòng khóa tương ứng với một tài khoản SenseNova. Các dòng để trống sẽ được bỏ qua khi quét; mỗi tài khoản được truy vấn bằng thông tin xác thực riêng cho cả bốn cửa sổ (pool mặc định và Flash-Lite, 5 giờ + tuần)",
+    "Account username": "Tên người dùng tài khoản",
+    "Account password": "Mật khẩu tài khoản"
   }
 }

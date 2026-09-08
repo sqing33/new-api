@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -47,6 +48,13 @@ func GetQuotaQueryPresets() []QuotaQueryPreset {
 		// The PAT and user id are stored in quota_query_extra (admin-only
 		// settings JSON, same exposure class as the channel key field).
 		{ID: "new_api_subscription", Name: "New API 订阅（上游实例）", CredentialMode: "separate", QueryImplemented: true, SupportedKinds: []string{"quota_window"}, RequiredExtraFields: []string{"access_token", "user_id"}},
+		// sensenova_token_plan queries SenseNova's account-level credit pools
+		// (5-hour + weekly, default and Flash-Lite) through the platform
+		// console API. The sk- inference key cannot read it: the endpoint
+		// requires a short-lived user JWT obtained by the console's own
+		// password login flow, so each key row needs its account's username
+		// and password in quota_query_extra (cred_<key_index> rows).
+		{ID: "sensenova_token_plan", Name: "SenseNova Token Plan", CredentialMode: "channel_key", QueryImplemented: true, SupportedKinds: []string{"quota_window"}, RequiredExtraFields: []string{"sensenova_credentials"}},
 	}
 }
 
@@ -94,6 +102,10 @@ func DetectQuotaQueryPreset(raw string) string {
 	case "zenmux.ai":
 		if path == "/api/v1" || path == "/api/anthropic" || path == "/api/vertex-ai" {
 			return "zenmux"
+		}
+	case "token.sensenova.cn":
+		if path == "/v1" {
+			return "sensenova_token_plan"
 		}
 	}
 	return ""
@@ -175,19 +187,97 @@ func ValidateQuotaQueryBinding(ch *model.Channel) error {
 		resolved = DetectQuotaQueryPreset(ch.GetBaseURL())
 	}
 	allowed := map[string]bool{}
+	sensenova := false
 	for _, p := range GetQuotaQueryPresets() {
 		if p.ID == resolved {
 			for _, k := range p.RequiredExtraFields {
 				allowed[k] = true
 			}
+			if p.ID == "sensenova_token_plan" {
+				sensenova = true
+			}
 		}
 	}
+	// sensenova_token_plan stores one credential row per key as cred_<index>
+	// entries; the sentinel required field is only a UI hint and never read.
 	for k, v := range s.QuotaQueryExtra {
+		if sensenova {
+			if k != "sensenova_credentials" && !sensenovaCredRowPattern.MatchString(k) {
+				return fmt.Errorf("unsupported quota query extra field")
+			}
+			if strings.TrimSpace(v) == "" {
+				// Empty rows are legal: admins may only own credentials for
+				// some keys.
+				continue
+			}
+			if !sensenovaCredRowPattern.MatchString(k) {
+				return fmt.Errorf("unsupported quota query extra field")
+			}
+			if len(v) > 256 || strings.ContainsAny(v, "\r\n") {
+				return fmt.Errorf("invalid quota query extra value")
+			}
+			continue
+		}
 		if !allowed[k] {
 			return fmt.Errorf("unsupported quota query extra field")
 		}
 		if len(v) > 256 || strings.ContainsAny(v, "\r\n") {
 			return fmt.Errorf("invalid quota query extra value")
+		}
+	}
+	if sensenova {
+		if err := validateSensenovaCredentialRows(s.QuotaQueryExtra, ch); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// sensenovaCredRowPattern matches the per-key credential rows cred_0,
+// cred_1, ... bound to the channel's key indexes.
+var sensenovaCredRowPattern = regexp.MustCompile(`^cred_(0|[1-9][0-9]*)$`)
+
+// sensenovaHasAnyCredentialRow reports whether at least one cred_<index>
+// row within the key count carries a full username+password pair.
+func sensenovaHasAnyCredentialRow(extra map[string]string, keyCount int) bool {
+	for _, cred := range parseSensenovaCredentialRows(extra, keyCount) {
+		if cred != (sensenovaCredential{}) {
+			return true
+		}
+	}
+	return false
+}
+
+// validateSensenovaCredentialRows checks that every configured row parses
+// into a username+password pair so a typo surfaces at save time instead of
+// as a mysterious authentication_error at query time.
+func validateSensenovaCredentialRows(extra map[string]string, ch *model.Channel) error {
+	keyCount := 0
+	if strings.TrimSpace(ch.Key) != "" {
+		keyCount = 1
+		if ch.ChannelInfo.IsMultiKey {
+			keyCount = len(ch.GetKeys())
+		}
+	}
+	for i := 0; i < keyCount; i++ {
+		raw := strings.TrimSpace(extra[fmt.Sprintf("cred_%d", i)])
+		if raw == "" {
+			continue
+		}
+		var row sensenovaCredential
+		if strings.HasPrefix(raw, "{") {
+			var parsed struct {
+				Username string `json:"username"`
+				Password string `json:"password"`
+			}
+			if err := common.Unmarshal([]byte(raw), &parsed); err == nil {
+				row = sensenovaCredential{Username: strings.TrimSpace(parsed.Username), Password: parsed.Password}
+			}
+		} else if idx := strings.Index(raw, ":"); idx > 0 {
+			row = sensenovaCredential{Username: strings.TrimSpace(raw[:idx]), Password: raw[idx+1:]}
+		}
+		if row.Username == "" || row.Password == "" {
+			return fmt.Errorf("sensenova credential rows need both username and password")
 		}
 	}
 	return nil
@@ -260,7 +350,9 @@ func GetQuotaQueryConfigWithOption(ch *model.Channel, opt QuotaQueryOption) (Quo
 		return cfg, nil
 	}
 	cfg.Status = "unsupported"
-	if ch.ChannelInfo.IsMultiKey && cfg.KeyIndex == nil {
+	// SenseNova is always queried per key (the all-keys scan passes the
+	// index), so a bare multi-key config view is not "missing key_index".
+	if ch.ChannelInfo.IsMultiKey && cfg.KeyIndex == nil && cfg.ResolvedPresetID != "sensenova_token_plan" {
 		cfg.MissingFields = append(cfg.MissingFields, "key_index")
 	}
 	for _, p := range GetQuotaQueryPresets() {
@@ -270,6 +362,26 @@ func GetQuotaQueryConfigWithOption(ch *model.Channel, opt QuotaQueryOption) (Quo
 		cfg.QueryImplemented = p.QueryImplemented
 		if cfg.CredentialMode == "" {
 			cfg.CredentialMode = p.CredentialMode
+		}
+		if p.ID == "sensenova_token_plan" {
+			// SenseNova reads per-key credentials (cred_<index> rows) from
+			// extra; the sentinel required field is a UI hint only. Readiness
+			// means at least one row is filled — a channel whose keys all
+			// lack credentials stays needs_configuration.
+			usesChannelKey := strings.TrimSpace(ch.Key) != ""
+			keyCount := 0
+			if usesChannelKey {
+				keyCount = 1
+				if ch.ChannelInfo.IsMultiKey {
+					keyCount = len(ch.GetKeys())
+				}
+			}
+			if !usesChannelKey {
+				cfg.MissingFields = append(cfg.MissingFields, "channel_key")
+			} else if !sensenovaHasAnyCredentialRow(cfg.Extra, keyCount) {
+				cfg.MissingFields = append(cfg.MissingFields, "sensenova_credentials")
+			}
+			break
 		}
 		for _, k := range p.RequiredExtraFields {
 			if strings.TrimSpace(cfg.Extra[k]) == "" {

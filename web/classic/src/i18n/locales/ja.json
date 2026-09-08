@@ -4364,6 +4364,11 @@
     "Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query": "上流 new-api のコンソール API でサブスクリプション枠を照会します：上流の PAT とユーザー ID を入力してください。転送キーは照会に使いません",
     "密钥优先级已更新": "キーの優先度を更新しました",
     "更新优先级失败": "優先度の更新に失敗しました",
-    "数字越大越优先；同优先级随机/轮询；0 为默认": "数値が大きいほど優先されます；同じ優先度はランダム/ポーリングで分散；0 がデフォルトです"
+    "数字越大越优先；同优先级随机/轮询；0 为默认": "数値が大きいほど優先されます；同じ優先度はランダム/ポーリングで分散；0 がデフォルトです",
+    "5-hour window (Flash-Lite)": "5時間ウィンドウ（Flash-Lite）",
+    "Weekly window (Flash-Lite)": "週間ウィンドウ（Flash-Lite）",
+    "Each key row maps to one SenseNova account. Rows left empty are skipped when scanning; each account is queried with its own credentials for all four windows (default and Flash-Lite pools, 5-hour + weekly)": "各キー行は 1 つの SenseNova アカウントに対応します。空行はスキャン時にスキップされ、各アカウントは独自の認証情報で 4 つのウィンドウ（デフォルトおよび Flash-Lite プールの 5 時間 + 週間）を照会されます",
+    "Account username": "アカウントのユーザー名",
+    "Account password": "アカウントのパスワード"
   }
 }

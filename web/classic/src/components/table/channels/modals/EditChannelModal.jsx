@@ -137,6 +137,7 @@ const MODEL_FETCHABLE_TYPES = new Set([
   1, 4, 14, 34, 17, 26, 27, 24, 47, 25, 20, 23, 31, 40, 42, 48, 43,
 ]);
 
+// 密钥输入提示（按渠道类型）
 function type2secretPrompt(type) {
   // inputs.type === 15 ? '按照如下格式输入：APIKey|SecretKey' : (inputs.type === 18 ? '按照如下格式输入：APPID|APISecret|APIKey' : '请输入渠道对应的鉴权密钥')
   switch (type) {
@@ -162,6 +163,14 @@ function type2secretPrompt(type) {
       return '请输入渠道对应的鉴权密钥';
   }
 }
+
+// SenseNova per-key credentials: one UI row per non-empty key line of the
+// channel. Mirrors the backend's newline key split (model.Channel.GetKeys).
+const sensenovaKeyRows = (keyText) =>
+  String(keyText || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
 
 const EditChannelModal = (props) => {
   const { t } = useTranslation();
@@ -399,6 +408,10 @@ const EditChannelModal = (props) => {
     useState(false);
   const [quotaQueryPresetOptions, setQuotaQueryPresetOptions] = useState([]);
   const [quotaQueryPresetCatalog, setQuotaQueryPresetCatalog] = useState({});
+  // SenseNova per-key account credentials: { [keyIndex]: {username, password} }.
+  // Kept outside the Semi form because cred_N stores a combined
+  // "username:password" string in quota_query_extra.
+  const [sensenovaCreds, setSensenovaCreds] = useState({});
 
   const fetchQuotaQueryPresets = async () => {
     try {
@@ -1056,6 +1069,21 @@ const EditChannelModal = (props) => {
 
       initialBaseUrlRef.current = data.base_url || '';
       setInputs(data);
+      // Hydrate the SenseNova per-key account rows from the stored
+      // "username:password" cred_N strings.
+      const hydratedCreds = {};
+      Object.entries(data.quota_query_extra || {}).forEach(([k, v]) => {
+        const match = /^cred_(\d+)$/.exec(k);
+        if (!match || typeof v !== 'string' || !v) return;
+        const idx = Number(match[1]);
+        const colon = v.indexOf(':');
+        if (colon <= 0) return;
+        hydratedCreds[idx] = {
+          username: v.slice(0, colon),
+          password: v.slice(colon + 1),
+        };
+      });
+      setSensenovaCreds(hydratedCreds);
       if (formApiRef.current) {
         formApiRef.current.setValues(data);
       }
@@ -1930,6 +1958,19 @@ const EditChannelModal = (props) => {
           }
         });
       }
+      if (
+        String(localInputs.quota_query_preset_id || '').trim() ===
+        'sensenova_token_plan'
+      ) {
+        // Per-key account rows: {username, password} state -> cred_N string.
+        Object.entries(sensenovaCreds).forEach(([index, cred]) => {
+          const username = String(cred?.username || '').trim();
+          const password = String(cred?.password || '');
+          if (username && password) {
+            normalizedExtra[`cred_${index}`] = `${username}:${password}`;
+          }
+        });
+      }
       if (Object.keys(normalizedExtra).length > 0) {
         settings.quota_query_extra = normalizedExtra;
       } else {
@@ -2465,6 +2506,63 @@ const EditChannelModal = (props) => {
                             'Query the upstream new-api subscription via its dashboard API: fill the upstream user PAT and user id. The forwarding key is not used for the query',
                           )}
                         </Text>
+                      )}
+                      {currentQuotaQueryPreset?.id ===
+                        'sensenova_token_plan' && (
+                        <>
+                          <Text type='tertiary' size='small' className='block'>
+                            {t(
+                              'Each key row maps to one SenseNova account. Rows left empty are skipped when scanning; each account is queried with its own credentials for all four windows (default and Flash-Lite pools, 5-hour + weekly)',
+                            )}
+                          </Text>
+                          {(sensenovaKeyRows(inputs.key).length > 0
+                            ? sensenovaKeyRows(inputs.key)
+                            : ['']
+                          ).map((_, index) => (
+                            <div
+                              key={index}
+                              style={{ marginTop: 12 }}
+                              className='flex items-center gap-2'
+                            >
+                              <span className='shrink-0 text-xs text-gray-500 w-16'>
+                                {t('Key {{index}}', { index: index + 1 })}
+                              </span>
+                              <Input
+                                placeholder={t('Account username')}
+                                value={
+                                  sensenovaCreds[index]?.username || ''
+                                }
+                                onChange={(value) =>
+                                  setSensenovaCreds((prev) => ({
+                                    ...prev,
+                                    [index]: {
+                                      ...(prev[index] || {}),
+                                      username: value,
+                                    },
+                                  }))
+                                }
+                                style={{ flex: 1 }}
+                              />
+                              <Input
+                                placeholder={t('Account password')}
+                                mode='password'
+                                value={
+                                  sensenovaCreds[index]?.password || ''
+                                }
+                                onChange={(value) =>
+                                  setSensenovaCreds((prev) => ({
+                                    ...prev,
+                                    [index]: {
+                                      ...(prev[index] || {}),
+                                      password: value,
+                                    },
+                                  }))
+                                }
+                                style={{ flex: 1 }}
+                              />
+                            </div>
+                          ))}
+                        </>
                       )}
                       {quotaQueryRequiredExtraFields.map((field) => (
                         <Form.Input
