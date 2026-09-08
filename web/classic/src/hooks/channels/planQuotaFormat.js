@@ -29,6 +29,14 @@ export const clampPercent = (value) => {
   return Math.max(0, Math.min(100, v));
 };
 
+// Percent display: at most 2 decimal places, trailing zeros trimmed
+// (0.46038784000000005 -> 0.46, 0 -> 0, 12.5 -> 12.5). Falls back to 0 for
+// non-finite input.
+export const formatPercent = (value) => {
+  const p = clampPercent(value);
+  return String(Math.round(p * 100) / 100);
+};
+
 export const pickStrokeColor = (percent) => {
   const p = clampPercent(percent);
   if (p >= 95) return '#ef4444';
@@ -139,7 +147,7 @@ export const windowTooltipLines = (item, t) => {
   }
   const usedPercent = resolveWindowUsedPercent(item);
   if (usedPercent != null) {
-    lines.push(`${t('Remaining: ')}${100 - usedPercent}%`);
+    lines.push(`${t('Remaining: ')}${formatPercent(100 - usedPercent)}%`);
   }
   if (item?.remaining != null) {
     lines.push(
@@ -305,7 +313,7 @@ export const aggregateTooltipKeyLines = (
     }
     const usedPercent = resolveWindowUsedPercent(item);
     if (usedPercent != null) {
-      parts.push(`${usedPercent}%`);
+      parts.push(`${formatPercent(usedPercent)}%`);
     }
     const resetText = formatResetTime(item?.reset);
     if (resetText) {

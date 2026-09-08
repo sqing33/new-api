@@ -549,17 +549,26 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
     {
       title: t('禁用原因'),
       dataIndex: 'reason',
-      width: 200,
+      width: 120,
       render: (reason, record) => {
         if (record.status === 1 || !reason) {
           return <Text type='quaternary'>-</Text>;
         }
+        // Narrow column: full reason wraps on multiple lines instead of
+        // being truncated to one line behind a tooltip.
         return (
-          <Tooltip content={reason}>
-            <Text style={{ maxWidth: '200px', display: 'block' }} ellipsis>
-              {reason}
-            </Text>
-          </Tooltip>
+          <Text
+            style={{
+              maxWidth: '120px',
+              display: 'block',
+              whiteSpace: 'pre-line',
+              wordBreak: 'break-word',
+              fontSize: 12,
+              lineHeight: '18px',
+            }}
+          >
+            {reason}
+          </Text>
         );
       },
     },

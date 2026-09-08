@@ -30,6 +30,7 @@ import {
   aggregateTooltipKeyLines,
   clampPercent,
   formatAmount,
+  formatPercent,
   formatResetShort,
   formatResetTime,
   pickStrokeColor,
@@ -107,7 +108,7 @@ export const PlanQuotaWindowLine = ({ t, item, tooltipExtraLines }) => {
               className='inline-block shrink-0 text-right text-xs font-medium text-semi-color-text-1'
               style={percentSpanStyle}
             >
-              {usedPercent}%
+              {formatPercent(usedPercent)}%
             </span>
           </div>
         ) : null}
