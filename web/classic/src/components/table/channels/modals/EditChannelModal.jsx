@@ -164,13 +164,27 @@ function type2secretPrompt(type) {
   }
 }
 
-// SenseNova per-key credentials: one UI row per non-empty key line of the
-// channel. Mirrors the backend's newline key split (model.Channel.GetKeys).
-const sensenovaKeyRows = (keyText) =>
-  String(keyText || '')
+// SenseNova per-key credentials: one UI row per key of the channel. Mirrors
+// the backend's key split (model.Channel.GetKeys): a JSON array (Vertex
+// style, one key per line inside the array) or newline-separated keys.
+const sensenovaKeyRows = (keyText) => {
+  const text = String(keyText || '').trim();
+  if (!text) return [];
+  if (text.startsWith('[')) {
+    try {
+      const arr = JSON.parse(text);
+      if (Array.isArray(arr)) {
+        return arr.map((v) => String(v).trim()).filter(Boolean);
+      }
+    } catch (error) {
+      // Fall through to the newline split below.
+    }
+  }
+  return text
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
+};
 
 const EditChannelModal = (props) => {
   const { t } = useTranslation();

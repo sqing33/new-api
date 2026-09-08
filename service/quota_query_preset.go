@@ -54,7 +54,7 @@ func GetQuotaQueryPresets() []QuotaQueryPreset {
 		// requires a short-lived user JWT obtained by the console's own
 		// password login flow, so each key row needs its account's username
 		// and password in quota_query_extra (cred_<key_index> rows).
-		{ID: "sensenova_token_plan", Name: "SenseNova Token Plan", CredentialMode: "channel_key", QueryImplemented: true, SupportedKinds: []string{"quota_window"}, RequiredExtraFields: []string{"sensenova_credentials"}},
+		{ID: "sensenova_token_plan", Name: "SenseNova Token Plan", CredentialMode: "channel_key", QueryImplemented: true, SupportedKinds: []string{"quota_window"}},
 	}
 }
 
@@ -199,19 +199,15 @@ func ValidateQuotaQueryBinding(ch *model.Channel) error {
 		}
 	}
 	// sensenova_token_plan stores one credential row per key as cred_<index>
-	// entries; the sentinel required field is only a UI hint and never read.
+	// entries; empty rows are legal because admins may only own credentials
+	// for some keys.
 	for k, v := range s.QuotaQueryExtra {
 		if sensenova {
-			if k != "sensenova_credentials" && !sensenovaCredRowPattern.MatchString(k) {
+			if !sensenovaCredRowPattern.MatchString(k) {
 				return fmt.Errorf("unsupported quota query extra field")
 			}
 			if strings.TrimSpace(v) == "" {
-				// Empty rows are legal: admins may only own credentials for
-				// some keys.
 				continue
-			}
-			if !sensenovaCredRowPattern.MatchString(k) {
-				return fmt.Errorf("unsupported quota query extra field")
 			}
 			if len(v) > 256 || strings.ContainsAny(v, "\r\n") {
 				return fmt.Errorf("invalid quota query extra value")
@@ -365,9 +361,8 @@ func GetQuotaQueryConfigWithOption(ch *model.Channel, opt QuotaQueryOption) (Quo
 		}
 		if p.ID == "sensenova_token_plan" {
 			// SenseNova reads per-key credentials (cred_<index> rows) from
-			// extra; the sentinel required field is a UI hint only. Readiness
-			// means at least one row is filled — a channel whose keys all
-			// lack credentials stays needs_configuration.
+			// extra. Readiness means at least one row is filled — a channel
+			// whose keys all lack credentials stays needs_configuration.
 			usesChannelKey := strings.TrimSpace(ch.Key) != ""
 			keyCount := 0
 			if usesChannelKey {
