@@ -215,11 +215,14 @@ func sensenovaLogin(ctx context.Context, client *http.Client, cred sensenovaCred
 	// The Hydra authorization flow issues a CSRF session cookie on the first
 	// request and requires it on every following hop (live-verified: without
 	// the jar the loop ends in request_forbidden / No CSRF value available).
+	// A jar-scoped copy of the client is used so the shared quota-query
+	// client never carries login cookies into usage requests.
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return sensenovaSession{}, err
 	}
-	client.Jar = jar
+	loginClient := *client
+	loginClient.Jar = jar
 	authURL := fmt.Sprintf("%s/oauth2/auth?response_type=code&client_id=%s&scope=%s&code_challenge=%s&code_challenge_method=S256&state=%s&prompt=login&redirect_uri=%s",
 		authBase,
 		url.QueryEscape(sensenovaOAuthClientID),
@@ -231,7 +234,7 @@ func sensenovaLogin(ctx context.Context, client *http.Client, cred sensenovaCred
 	if err != nil {
 		return sensenovaSession{}, err
 	}
-	resp, err := client.Do(req)
+	resp, err := loginClient.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
 			return sensenovaSession{}, fmt.Errorf("timeout")
@@ -258,7 +261,7 @@ func sensenovaLogin(ctx context.Context, client *http.Client, cred sensenovaCred
 	}
 	loginReq.Header.Set("Content-Type", "application/json")
 	loginReq.Header.Set("Accept", "application/json")
-	loginResp, err := client.Do(loginReq)
+	loginResp, err := loginClient.Do(loginReq)
 	if err != nil {
 		if ctx.Err() != nil {
 			return sensenovaSession{}, fmt.Errorf("timeout")
@@ -299,20 +302,22 @@ func sensenovaLogin(ctx context.Context, client *http.Client, cred sensenovaCred
 	var code string
 	for hop := 0; hop < 5 && redirect != ""; hop++ {
 		redirect = sensenovaSwapToAuthHost(redirect)
-		code = sensenovaFollowRedirectForCode(ctx, client, redirect, pkce.state)
-		if code != "" {
-			break
-		}
-		next, err := sensenovaPeekLocation(ctx, client, redirect)
+		// Single GET per hop: the verifier parameters are one-shot, so the
+		// same URL must never be requested twice.
+		next, hopCode, err := sensenovaFollowRedirect(ctx, &loginClient, redirect, pkce.state)
 		if err != nil {
 			return sensenovaSession{}, err
+		}
+		if hopCode != "" {
+			code = hopCode
+			break
 		}
 		redirect = next
 	}
 	if code == "" {
 		return sensenovaSession{}, fmt.Errorf("invalid_response")
 	}
-	return sensenovaExchangeCode(ctx, client, authBase, code, pkce.verifier)
+	return sensenovaExchangeCode(ctx, &loginClient, authBase, code, pkce.verifier)
 }
 
 // sensenovaSwapToAuthHost re-points a platform console redirect at the auth
@@ -325,47 +330,29 @@ func sensenovaSwapToAuthHost(redirect string) string {
 	return strings.Replace(redirect, sensenovaUsageOrigin+"/", authHost+"/", 1)
 }
 
-// sensenovaFollowRedirectForCode issues GET and extracts code+state from the
-// Location header when the loop reaches the terminal redirect.
-func sensenovaFollowRedirectForCode(ctx context.Context, client *http.Client, redirect, state string) string {
+// sensenovaFollowRedirect GETs one redirect hop and returns both its
+// Location header and the authorization code when that hop is the terminal
+// one (code present in Location). The verifier parameters are one-shot, so
+// each hop URL is requested exactly once.
+func sensenovaFollowRedirect(ctx context.Context, client *http.Client, redirect, state string) (location, code string, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, redirect, nil)
 	if err != nil {
-		return ""
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return ""
-	}
-	location := resp.Header.Get("Location")
-	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
-	resp.Body.Close()
-	code, ok := sensenovaExtractCodeAndState(location, state)
-	if !ok {
-		return ""
-	}
-	return code
-}
-
-// sensenovaPeekLocation GETs a redirect hop and returns its Location header.
-func sensenovaPeekLocation(ctx context.Context, client *http.Client, redirect string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, redirect, nil)
-	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
-			return "", fmt.Errorf("timeout")
+			return "", "", fmt.Errorf("timeout")
 		}
-		return "", fmt.Errorf("network_error")
+		return "", "", fmt.Errorf("network_error")
 	}
-	location := resp.Header.Get("Location")
+	loc := resp.Header.Get("Location")
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
 	resp.Body.Close()
-	if location == "" {
-		return "", fmt.Errorf("invalid_response")
+	if c, ok := sensenovaExtractCodeAndState(loc, state); ok {
+		return loc, c, nil
 	}
-	return location, nil
+	return loc, "", nil
 }
 
 // sensenovaExchangeCode swaps the authorization code for tokens.
