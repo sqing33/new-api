@@ -164,6 +164,14 @@ function type2secretPrompt(type) {
   }
 }
 
+// Newline split of the key textarea (JSON-array keys are handled by the
+// backend on save; the textarea holds one key per line in the UI).
+const sensenovaKeyRows = (keyText) =>
+  String(keyText || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
 // SenseNova per-key credentials: one UI row per key of the channel.
 // Editing a multi-key channel never receives plaintext keys (the list API
 // masks them), so the row count comes from channel_info.multi_key_size and
