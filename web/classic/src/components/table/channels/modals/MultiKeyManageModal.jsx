@@ -74,7 +74,8 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
   const [loading, setLoading] = useState(false);
   const [keyStatusList, setKeyStatusList] = useState([]);
   const [operationLoading, setOperationLoading] = useState({});
-  // key index -> 未提交的优先级草稿；失焦时与服务端值比对后才提交
+  // key index -> 未提交的优先级草稿。草稿同时作为 InputNumber 的受控值回传：
+  // Semi 受控数字输入的步进按钮不会更新内部显示值，必须把新值写回 value prop
   const [keyPriorityDrafts, setKeyPriorityDrafts] = useState({});
 
   // Pagination states
@@ -211,6 +212,12 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
 
       if (res.data.success) {
         showSuccess(t('密钥优先级已更新'));
+        // 服务端已落库，清掉草稿让受控值回落到服务端数据
+        setKeyPriorityDrafts((prev) => {
+          const next = { ...prev };
+          delete next[keyIndex];
+          return next;
+        });
         await loadKeyStatus(currentPage, pageSize);
         onRefresh && onRefresh();
       } else {
@@ -287,6 +294,8 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
 
       if (res.data.success) {
         showSuccess(res.data.message);
+        // 删除会使后续密钥索引前移，全部草稿作废
+        setKeyPriorityDrafts({});
         // Reset to first page after deletion as data structure might change
         setCurrentPage(1);
         await loadKeyStatus(1, pageSize);
@@ -315,6 +324,8 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
 
       if (res.data.success) {
         showSuccess(t('密钥已删除'));
+        // 删除会使后续密钥索引前移，全部草稿作废
+        setKeyPriorityDrafts({});
         await loadKeyStatus(currentPage, pageSize); // Reload current page
         onRefresh && onRefresh(); // Refresh parent component
       } else {
@@ -366,6 +377,7 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
       setManualDisabledCount(0);
       setAutoDisabledCount(0);
       setStatusFilter(null); // Reset filter
+      setKeyPriorityDrafts({}); // Reset priority drafts
     }
   }, [visible]);
 
@@ -578,32 +590,51 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
       title: t('优先级'),
       dataIndex: 'priority',
       width: 120,
-      render: (priority, record) => (
-        <Tooltip content={t('数字越大越优先；同优先级随机/轮询；0 为默认')}>
-          <InputNumber
-            size='small'
-            min={0}
-            max={100}
-            precision={0}
-            style={{ width: 90 }}
-            value={Number(record.priority) || 0}
-            disabled={operationLoading[`priority_${record.index}`]}
-            onNumberChange={(value) => {
-              // 本地即时暂存，失焦提交见 onBlur
-              setKeyPriorityDrafts((prev) => ({
-                ...prev,
-                [record.index]: value,
-              }));
-            }}
-            onBlur={() => {
-              const draft = keyPriorityDrafts[record.index];
-              if (draft === undefined) return;
-              if ((Number(record.priority) || 0) === draft) return;
-              handleSetPriority(record.index, draft);
-            }}
-          />
-        </Tooltip>
-      ),
+      render: (priority, record) => {
+        const serverValue = Number(record.priority) || 0;
+        const draft = keyPriorityDrafts[record.index];
+        const value = draft === undefined ? serverValue : draft;
+        return (
+          <Tooltip content={t('数字越大越优先；同优先级随机/轮询；0 为默认')}>
+            <InputNumber
+              size='small'
+              min={0}
+              max={100}
+              precision={0}
+              style={{ width: 90 }}
+              value={value}
+              disabled={operationLoading[`priority_${record.index}`]}
+              onNumberChange={(nextValue) => {
+                // 本地即时暂存并回显；失焦/步进时提交
+                setKeyPriorityDrafts((prev) => ({
+                  ...prev,
+                  [record.index]: nextValue,
+                }));
+              }}
+              onUpClick={(nextValue) =>
+                handleSetPriority(record.index, Number(nextValue))
+              }
+              onDownClick={(nextValue) =>
+                handleSetPriority(record.index, Number(nextValue))
+              }
+              onBlur={() => {
+                const pending = keyPriorityDrafts[record.index];
+                if (pending === undefined) return;
+                if (serverValue === pending) {
+                  // 未变化的草稿直接丢弃，避免残留旧草稿盖住服务端新值
+                  setKeyPriorityDrafts((prev) => {
+                    const next = { ...prev };
+                    delete next[record.index];
+                    return next;
+                  });
+                  return;
+                }
+                handleSetPriority(record.index, pending);
+              }}
+            />
+          </Tooltip>
+        );
+      },
     },
     {
       title: t('操作'),
