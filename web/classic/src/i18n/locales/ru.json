@@ -967,6 +967,7 @@
     "分组名称": "Group Name",
     "分组名称到倍率的映射": "Mapping of group names to ratios",
     "分组指标": "",
+    "渠道指标": "Метрики по каналам",
     "分组描述": "Group Description",
     "分组是用于控制计费倍率和模型访问权限的核心概念。每个用户属于一个分组，每个令牌也可以指定使用某个分组。": "Groups are a core concept for controlling billing ratios and model access. Each user belongs to a group, and each token can be assigned to a specific group.",
     "分组特殊倍率": "Специальный коэффициент группы",

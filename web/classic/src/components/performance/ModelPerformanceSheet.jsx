@@ -57,6 +57,7 @@ const ModelPerformanceSheet = ({
 }) => {
   const isMobile = useIsMobile();
   const groups = detail?.groups || [];
+  const channels = detail?.channels || [];
 
   // 跨分组聚合的整体指标
   const overall = useMemo(() => {
@@ -173,6 +174,62 @@ const ModelPerformanceSheet = ({
     },
   ];
 
+  const channelColumns = [
+    {
+      title: t('渠道'),
+      dataIndex: 'channel',
+      width: 120,
+      render: (name) => (
+        <Text
+          className='font-mono text-xs'
+          ellipsis={{ showTooltip: true }}
+          style={{ maxWidth: 120 }}
+        >
+          {name}
+        </Text>
+      ),
+    },
+    {
+      title: t('平均延迟'),
+      dataIndex: 'avg_latency_ms',
+      render: (value) => (
+        <Text className='font-mono text-xs tabular-nums'>
+          {formatLatency(value)}
+        </Text>
+      ),
+    },
+    {
+      title: 'TTFT',
+      dataIndex: 'avg_ttft_ms',
+      render: (value) => (
+        <Text className='font-mono text-xs tabular-nums'>
+          {formatLatency(value)}
+        </Text>
+      ),
+    },
+    {
+      title: t('成功率'),
+      dataIndex: 'success_rate',
+      render: (value) => (
+        <Text
+          className='font-mono text-xs tabular-nums'
+          style={{ color: getSuccessRateColor(value) }}
+        >
+          {formatUptimePct(value)}
+        </Text>
+      ),
+    },
+    {
+      title: t('吞吐'),
+      dataIndex: 'avg_tps',
+      render: (value) => (
+        <Text className='font-mono text-xs tabular-nums'>
+          {formatThroughput(value)}
+        </Text>
+      ),
+    },
+  ];
+
   return (
     <SideSheet
       title={
@@ -228,6 +285,21 @@ const ModelPerformanceSheet = ({
                     rowKey='group'
                   />
                 </div>
+                {channels.length > 0 && (
+                  <div>
+                    <Text strong className='text-sm'>
+                      {t('渠道指标')}
+                    </Text>
+                    <Table
+                      className='mt-2'
+                      columns={channelColumns}
+                      dataSource={channels}
+                      pagination={false}
+                      size='small'
+                      rowKey='channel'
+                    />
+                  </div>
+                )}
                 <div>
                   <Text strong className='text-sm'>
                     {t('TTFT 趋势')}

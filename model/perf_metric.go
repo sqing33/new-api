@@ -1,7 +1,10 @@
 package model
 
 import (
+	"fmt"
 	"time"
+
+	"github.com/QuantumNous/new-api/common"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -10,9 +13,10 @@ import (
 // PerfMetric stores aggregated relay performance metrics for the model square.
 type PerfMetric struct {
 	Id             int    `json:"id" gorm:"primaryKey"`
-	ModelName      string `json:"model_name" gorm:"size:128;uniqueIndex:idx_perf_model_group_bucket,priority:1"`
-	Group          string `json:"group" gorm:"column:group;size:64;uniqueIndex:idx_perf_model_group_bucket,priority:2"`
-	BucketTs       int64  `json:"bucket_ts" gorm:"uniqueIndex:idx_perf_model_group_bucket,priority:3;index:idx_perf_bucket_ts"`
+	ModelName      string `json:"model_name" gorm:"size:128;uniqueIndex:idx_perf_model_group_channel_bucket,priority:1"`
+	Group          string `json:"group" gorm:"column:group;size:64;uniqueIndex:idx_perf_model_group_channel_bucket,priority:2"`
+	ChannelName    string `json:"channel_name" gorm:"column:channel_name;size:255;uniqueIndex:idx_perf_model_group_channel_bucket,priority:3"`
+	BucketTs       int64  `json:"bucket_ts" gorm:"uniqueIndex:idx_perf_model_group_channel_bucket,priority:4;index:idx_perf_bucket_ts"`
 	RequestCount   int64  `json:"-" gorm:"default:0"`
 	SuccessCount   int64  `json:"-" gorm:"default:0"`
 	TotalLatencyMs int64  `json:"-" gorm:"default:0"`
@@ -26,6 +30,32 @@ func (PerfMetric) TableName() string {
 	return "perf_metrics"
 }
 
+// perfMetricLegacyUniqueIndexes lists unique indexes left by previous schema
+// versions. They must be dropped before AutoMigrate creates the new four-column
+// unique index, otherwise (model_name, group, bucket_ts) still collides and
+// channel-level upserts would fail.
+var perfMetricLegacyUniqueIndexes = []string{"idx_perf_model_group_bucket"}
+
+func migratePerfMetricUniqueIndex(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("migrate perf metric unique index: database is nil")
+	}
+	migrator := db.Migrator()
+	if !migrator.HasTable(&PerfMetric{}) {
+		return nil
+	}
+	for _, indexName := range perfMetricLegacyUniqueIndexes {
+		if !migrator.HasIndex(&PerfMetric{}, indexName) {
+			continue
+		}
+		common.SysLog(fmt.Sprintf("dropping legacy perf_metrics unique index %q (%s)", indexName, db.Dialector.Name()))
+		if err := migrator.DropIndex(&PerfMetric{}, indexName); err != nil {
+			return fmt.Errorf("drop legacy perf metric index %q: %w", indexName, err)
+		}
+	}
+	return nil
+}
+
 func UpsertPerfMetric(metric *PerfMetric) error {
 	if metric == nil || metric.RequestCount == 0 {
 		return nil
@@ -34,6 +64,7 @@ func UpsertPerfMetric(metric *PerfMetric) error {
 		Columns: []clause.Column{
 			{Name: "model_name"},
 			{Name: "group"},
+			{Name: "channel_name"},
 			{Name: "bucket_ts"},
 		},
 		DoUpdates: clause.Assignments(map[string]interface{}{
