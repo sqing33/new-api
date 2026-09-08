@@ -49,5 +49,9 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
+          # 前端产物嵌入 Go 二进制，builder-classic 阶段禁用缓存：
+          # GHA 层缓存曾把旧 dist 打进新镜像（源码变更后 bun build 层仍命中）。
+          no-cache-filters: |
+            builder-classic
           cache-from: type=gha
           cache-to: type=gha,mode=max
