@@ -385,7 +385,7 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 
 	}
 	isOModel := dto.IsOpenAIReasoningOModel(info.UpstreamModelName)
-	isGPT5Model := dto.IsOpenAIGPT5Model(info.UpstreamModelName)
+	isGPT5Model := dto.IsOpenAIGPT5Model(info.UpstreamModelName) || dto.IsOpenAIGPT6Model(info.UpstreamModelName)
 	if isOModel || isGPT5Model {
 		if lo.FromPtrOr(request.MaxCompletionTokens, uint(0)) == 0 && lo.FromPtrOr(request.MaxTokens, uint(0)) != 0 {
 			request.MaxCompletionTokens = request.MaxTokens
@@ -396,7 +396,7 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 			request.Temperature = nil
 		}
 
-		// gpt-5系列模型适配 归零不再支持的参数
+		// gpt-5/gpt-6系列模型适配 归零不再支持的参数
 		if isGPT5Model {
 			request.Temperature = nil
 			request.TopP = nil
