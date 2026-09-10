@@ -24,6 +24,34 @@ func Init() {
 	go flushLoop()
 }
 
+// generationDuration is the generation phase duration in milliseconds. Streamed
+// responses exclude the time to first token; other requests use the full
+// latency. A non-positive streamed result falls back to the full latency so a
+// stalled or inverted clock cannot produce a negative duration.
+func generationDuration(info *relaycommon.RelayInfo, now time.Time) int64 {
+	latencyMs := now.Sub(info.StartTime).Milliseconds()
+	if info.IsStream && info.HasSendResponse() {
+		if generationMs := now.Sub(info.FirstResponseTime).Milliseconds(); generationMs > 0 {
+			return generationMs
+		}
+	}
+	return latencyMs
+}
+
+// OutputTokensPerSecond returns a single request's generation throughput using
+// the same definition as the aggregated performance metrics, so a per-request
+// usage log shows the same figure as the dashboard throughput column.
+func OutputTokensPerSecond(info *relaycommon.RelayInfo, outputTokens int64) float64 {
+	if info == nil || outputTokens <= 0 || info.StartTime.IsZero() {
+		return 0
+	}
+	generationMs := generationDuration(info, time.Now())
+	if generationMs <= 0 {
+		return 0
+	}
+	return float64(outputTokens) / (float64(generationMs) / 1000)
+}
+
 func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens int64) {
 	if info == nil {
 		return
@@ -34,14 +62,6 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens i
 	if hasTtft {
 		ttftMs = info.FirstResponseTime.Sub(info.StartTime).Milliseconds()
 	}
-	latencyMs := now.Sub(info.StartTime).Milliseconds()
-	generationMs := latencyMs
-	if hasTtft {
-		generationMs = now.Sub(info.FirstResponseTime).Milliseconds()
-	}
-	if generationMs <= 0 {
-		generationMs = latencyMs
-	}
 	channelName := ""
 	if info.ChannelMeta != nil {
 		channelName = info.ChannelMeta.ChannelName
@@ -50,12 +70,12 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens i
 		Model:        info.OriginModelName,
 		Group:        info.UsingGroup,
 		ChannelName:  channelName,
-		LatencyMs:    latencyMs,
+		LatencyMs:    now.Sub(info.StartTime).Milliseconds(),
 		TtftMs:       ttftMs,
 		HasTtft:      hasTtft,
 		Success:      success,
 		OutputTokens: outputTokens,
-		GenerationMs: generationMs,
+		GenerationMs: generationDuration(info, now),
 	})
 }
 

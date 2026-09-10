@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/model"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -85,4 +86,29 @@ func TestRecordDefaultsUnknownChannel(t *testing.T) {
 		return true
 	})
 	assert.True(t, found, "sample without channel should land in the unknown-channel bucket")
+}
+
+func TestOutputTokensPerSecond(t *testing.T) {
+	t.Run("missing info or tokens yields zero", func(t *testing.T) {
+		assert.Equal(t, 0.0, OutputTokensPerSecond(nil, 100))
+		assert.Equal(t, 0.0, OutputTokensPerSecond(&relaycommon.RelayInfo{}, 100))
+		assert.Equal(t, 0.0, OutputTokensPerSecond(&relaycommon.RelayInfo{StartTime: time.Now()}, 0))
+	})
+
+	t.Run("non-stream divides by the full latency", func(t *testing.T) {
+		// 2s 总耗时、200 输出 tokens => 约 100 t/s
+		info := &relaycommon.RelayInfo{StartTime: time.Now().Add(-2 * time.Second)}
+		assert.InDelta(t, 100, OutputTokensPerSecond(info, 200), 5)
+	})
+
+	t.Run("stream excludes the time to first token", func(t *testing.T) {
+		// 总耗时 3s，其中首字用掉 2s => 生成阶段约 1s，200 tokens => 约 200 t/s
+		start := time.Now().Add(-3 * time.Second)
+		info := &relaycommon.RelayInfo{
+			StartTime:         start,
+			IsStream:          true,
+			FirstResponseTime: start.Add(2 * time.Second),
+		}
+		assert.InDelta(t, 200, OutputTokensPerSecond(info, 200), 15)
+	})
 }

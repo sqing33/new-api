@@ -35,6 +35,7 @@ import {
   renderModelPriceSimple,
   renderTieredModelPriceSimple,
 } from '../../../helpers';
+import { formatThroughput } from '../../performance/format';
 import { IconHelpCircle } from '@douyinfe/semi-icons';
 import { CircleAlert, Route, Sparkles } from 'lucide-react';
 
@@ -255,6 +256,50 @@ function renderFirstUseTime(type, t) {
       </Tag>
     );
   }
+}
+
+// 输出速度优先取后端在写消费日志时、按与看板「吞吐」相同的口径算出的
+// other.tps；改动前的历史日志没有该字段，则用「输出 tokens ÷ 生成耗时」
+// 粗略估算兜底（用时为整秒，估算值精度有限）。
+function renderOutputSpeed(record, t) {
+  if (
+    !(
+      record.type === 0 ||
+      record.type === 2 ||
+      record.type === 5 ||
+      record.type === 6
+    )
+  ) {
+    return <></>;
+  }
+
+  const other = getLogOther(record.other) || {};
+  let tps = Number(other.tps);
+
+  if (!Number.isFinite(tps) || tps <= 0) {
+    const completionTokens = toTokenNumber(record.completion_tokens);
+    const useTime = Number(record.use_time);
+    if (completionTokens <= 0 || !Number.isFinite(useTime) || useTime <= 0) {
+      return <></>;
+    }
+    // 非流式用整段耗时；流式需扣掉首字耗时（other.frt 单位为毫秒）。
+    // other.frt 对非流式请求是无意义的负值，因此只在流式下使用。
+    const generationSeconds = record.is_stream
+      ? useTime - toTokenNumber(other.frt) / 1000
+      : useTime;
+    if (!(generationSeconds > 0)) {
+      return <></>;
+    }
+    tps = completionTokens / generationSeconds;
+  }
+
+  if (!Number.isFinite(tps) || tps <= 0) {
+    return <></>;
+  }
+
+  return (
+    <span className='font-mono tabular-nums'>{formatThroughput(tps)}</span>
+  );
 }
 
 function renderBillingTag(record, t) {
@@ -802,6 +847,23 @@ export const getLogsColumns = ({
           <></>
         );
       },
+    },
+    {
+      key: COLUMN_KEYS.OUTPUT_SPEED,
+      title: (
+        <div className='flex items-center gap-1'>
+          {t('输出速度')}
+          <Tooltip
+            content={t(
+              '每秒生成的输出 token 数，与数据看板「性能指标」中的吞吐口径一致；流式请求会排除首字耗时。改动前的历史日志为粗略估算值。',
+            )}
+          >
+            <IconHelpCircle className='text-gray-400 cursor-help' />
+          </Tooltip>
+        </div>
+      ),
+      dataIndex: 'completion_tokens',
+      render: (text, record, index) => renderOutputSpeed(record, t),
     },
     {
       key: COLUMN_KEYS.COST,
