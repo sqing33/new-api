@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
@@ -15,6 +16,53 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func newPinnedKeyTestChannel() *model.Channel {
+	return &model.Channel{
+		Id:     1,
+		Type:   constant.ChannelTypeOpenAI,
+		Key:    "key-a\nkey-b",
+		Models: "gpt-4o",
+		ChannelInfo: model.ChannelInfo{
+			IsMultiKey:         true,
+			MultiKeySize:       2,
+			MultiKeyStatusList: map[int]int{0: common.ChannelStatusAutoDisabled},
+		},
+	}
+}
+
+func TestSetupContextForSelectedChannelSkipsAutoDisabledKeyByDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	apiErr := SetupContextForSelectedChannel(c, newPinnedKeyTestChannel(), "gpt-4o")
+
+	require.Nil(t, apiErr)
+	assert.Equal(t, "key-b", common.GetContextKeyString(c, constant.ContextKeyChannelKey))
+}
+
+func TestSetupContextForSelectedChannelHonorsPinnedKeyIndex(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	common.SetContextKey(c, constant.ContextKeyChannelForceKeyIndex, 0)
+
+	apiErr := SetupContextForSelectedChannel(c, newPinnedKeyTestChannel(), "gpt-4o")
+
+	require.Nil(t, apiErr)
+	assert.Equal(t, "key-a", common.GetContextKeyString(c, constant.ContextKeyChannelKey))
+	assert.Equal(t, 0, common.GetContextKeyInt(c, constant.ContextKeyChannelMultiKeyIndex))
+}
+
+func TestSetupContextForSelectedChannelIgnoresUnknownPinnedKeyIndex(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	common.SetContextKey(c, constant.ContextKeyChannelForceKeyIndex, "not-an-index")
+
+	apiErr := SetupContextForSelectedChannel(c, newPinnedKeyTestChannel(), "gpt-4o")
+
+	require.Nil(t, apiErr)
+	assert.Equal(t, "key-b", common.GetContextKeyString(c, constant.ContextKeyChannelKey))
+}
 
 func TestChannelMatchesExpectedTaskPluginUsesGenericChannelSetting(t *testing.T) {
 	channel := &model.Channel{Type: constant.ChannelTypeTaskPlugin}

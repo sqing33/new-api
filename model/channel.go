@@ -331,6 +331,22 @@ func (channel *Channel) GetNextEnabledKey() (string, int, *types.NewAPIError) {
 	}
 }
 
+// GetKeyByIndex returns one specific key of a multi-key channel. It exists for
+// channel tests that need to probe a key which is currently disabled:
+// GetNextEnabledKey deliberately never hands out such a key, because production
+// traffic must not reach a disabled key.
+func (channel *Channel) GetKeyByIndex(index int) (string, int, *types.NewAPIError) {
+	keys := channel.GetKeys()
+	if index < 0 || index >= len(keys) {
+		return "", 0, types.NewError(
+			fmt.Errorf("key index %d out of range for channel %d", index, channel.Id),
+			types.ErrorCodeGetChannelFailed,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
+	return keys[index], index, nil
+}
+
 func (channel *Channel) SaveChannelInfo() error {
 	return DB.Model(channel).Update("channel_info", channel.ChannelInfo).Error
 }
@@ -723,56 +739,79 @@ func CleanupChannelPollingLocks() {
 	})
 }
 
-func handlerMultiKeyUpdate(channel *Channel, usingKey string, status int, reason string) {
+// setChannelStatus records a channel-level status transition together with its
+// reason. It reports whether the status actually changed, so callers can skip
+// redundant persistence and notification.
+func setChannelStatus(channel *Channel, status int, reason string) bool {
+	if channel.Status == status {
+		return false
+	}
+	channel.Status = status
+	info := channel.GetOtherInfo()
+	info["status_reason"] = reason
+	info["status_time"] = common.GetTimestamp()
+	channel.SetOtherInfo(info)
+	return true
+}
+
+// handlerMultiKeyUpdate applies a status change to one key of a multi-key
+// channel and keeps the derived channel status in sync: the channel only counts
+// as auto-disabled while no key is usable. It reports whether any persisted
+// state changed, which lets callers avoid re-notifying for a key that already
+// sits in the target state.
+func handlerMultiKeyUpdate(channel *Channel, usingKey string, status int, reason string) bool {
 	keys := channel.GetKeys()
 	if len(keys) == 0 {
-		channel.Status = status
-	} else {
-		keyIndex := -1
-		for i, key := range keys {
-			if key == usingKey {
-				keyIndex = i
-				break
-			}
-		}
-		if keyIndex < 0 {
-			if usingKey != "" {
-				common.SysLog(fmt.Sprintf("failed to update multi-key status: channel_id=%d, using key not found", channel.Id))
-				return
-			}
-			channel.Status = status
-			info := channel.GetOtherInfo()
-			info["status_reason"] = reason
-			info["status_time"] = common.GetTimestamp()
-			channel.SetOtherInfo(info)
-			return
-		}
-		if channel.ChannelInfo.MultiKeyStatusList == nil {
-			channel.ChannelInfo.MultiKeyStatusList = make(map[int]int)
-		}
-		if status == common.ChannelStatusEnabled {
-			delete(channel.ChannelInfo.MultiKeyStatusList, keyIndex)
-		} else {
-			channel.ChannelInfo.MultiKeyStatusList[keyIndex] = status
-			if channel.ChannelInfo.MultiKeyDisabledReason == nil {
-				channel.ChannelInfo.MultiKeyDisabledReason = make(map[int]string)
-			}
-			if channel.ChannelInfo.MultiKeyDisabledTime == nil {
-				channel.ChannelInfo.MultiKeyDisabledTime = make(map[int]int64)
-			}
-			channel.ChannelInfo.MultiKeyDisabledReason[keyIndex] = reason
-			channel.ChannelInfo.MultiKeyDisabledTime[keyIndex] = common.GetTimestamp()
-		}
-		if !hasEnabledMultiKey(keys, channel.ChannelInfo.MultiKeyStatusList) {
-			channel.Status = common.ChannelStatusAutoDisabled
-			info := channel.GetOtherInfo()
-			info["status_reason"] = "All keys are disabled"
-			info["status_time"] = common.GetTimestamp()
-			channel.SetOtherInfo(info)
-		} else if status == common.ChannelStatusEnabled {
-			channel.Status = common.ChannelStatusEnabled
+		return setChannelStatus(channel, status, reason)
+	}
+	keyIndex := -1
+	for i, key := range keys {
+		if key == usingKey {
+			keyIndex = i
+			break
 		}
 	}
+	if keyIndex < 0 {
+		// An unknown non-empty key cannot be attributed to any index; fall back
+		// to the channel-level status only when no key was specified at all.
+		if usingKey != "" {
+			common.SysLog(fmt.Sprintf("failed to update multi-key status: channel_id=%d, using key not found", channel.Id))
+			return false
+		}
+		return setChannelStatus(channel, status, reason)
+	}
+
+	if channel.ChannelInfo.MultiKeyStatusList == nil {
+		channel.ChannelInfo.MultiKeyStatusList = make(map[int]int)
+	}
+	changed := false
+	if status == common.ChannelStatusEnabled {
+		if _, exists := channel.ChannelInfo.MultiKeyStatusList[keyIndex]; exists {
+			delete(channel.ChannelInfo.MultiKeyStatusList, keyIndex)
+			changed = true
+		}
+		delete(channel.ChannelInfo.MultiKeyDisabledReason, keyIndex)
+		delete(channel.ChannelInfo.MultiKeyDisabledTime, keyIndex)
+	} else if channel.ChannelInfo.MultiKeyStatusList[keyIndex] != status {
+		channel.ChannelInfo.MultiKeyStatusList[keyIndex] = status
+		if channel.ChannelInfo.MultiKeyDisabledReason == nil {
+			channel.ChannelInfo.MultiKeyDisabledReason = make(map[int]string)
+		}
+		if channel.ChannelInfo.MultiKeyDisabledTime == nil {
+			channel.ChannelInfo.MultiKeyDisabledTime = make(map[int]int64)
+		}
+		channel.ChannelInfo.MultiKeyDisabledReason[keyIndex] = reason
+		channel.ChannelInfo.MultiKeyDisabledTime[keyIndex] = common.GetTimestamp()
+		changed = true
+	}
+
+	if !hasEnabledMultiKey(keys, channel.ChannelInfo.MultiKeyStatusList) {
+		return setChannelStatus(channel, common.ChannelStatusAutoDisabled, "All keys are disabled") || changed
+	}
+	if status == common.ChannelStatusEnabled {
+		return setChannelStatus(channel, common.ChannelStatusEnabled, reason) || changed
+	}
+	return changed
 }
 
 func hasEnabledMultiKey(keys []string, statusList map[int]int) bool {
@@ -836,30 +875,34 @@ func UpdateChannelStatus(channelId int, usingKey string, status int, reason stri
 	channel, err := GetChannelById(channelId, true)
 	if err != nil {
 		return false
+	}
+	if channel.ChannelInfo.IsMultiKey {
+		// A multi-key channel derives its status from the per-key list, so a
+		// request that only flips one key must still be persisted even when the
+		// channel-level status stays Enabled. Diffing on the channel status
+		// alone would silently drop the key change.
+		beforeStatus := channel.Status
+		if !handlerMultiKeyUpdate(channel, usingKey, status, reason) {
+			return false
+		}
+		if beforeStatus != channel.Status {
+			shouldUpdateAbilities = true
+		}
 	} else {
 		if channel.Status == status {
 			return false
 		}
-
-		if channel.ChannelInfo.IsMultiKey {
-			beforeStatus := channel.Status
-			handlerMultiKeyUpdate(channel, usingKey, status, reason)
-			if beforeStatus != channel.Status {
-				shouldUpdateAbilities = true
-			}
-		} else {
-			info := channel.GetOtherInfo()
-			info["status_reason"] = reason
-			info["status_time"] = common.GetTimestamp()
-			channel.SetOtherInfo(info)
-			channel.Status = status
-			shouldUpdateAbilities = true
-		}
-		err = channel.saveStatusState()
-		if err != nil {
-			common.SysLog(fmt.Sprintf("failed to update channel status: channel_id=%d, status=%d, error=%v", channel.Id, status, err))
-			return false
-		}
+		info := channel.GetOtherInfo()
+		info["status_reason"] = reason
+		info["status_time"] = common.GetTimestamp()
+		channel.SetOtherInfo(info)
+		channel.Status = status
+		shouldUpdateAbilities = true
+	}
+	err = channel.saveStatusState()
+	if err != nil {
+		common.SysLog(fmt.Sprintf("failed to update channel status: channel_id=%d, status=%d, error=%v", channel.Id, status, err))
+		return false
 	}
 	return true
 }

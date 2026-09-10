@@ -69,7 +69,11 @@ func resolveChannelTestUserID(c *gin.Context) (int, error) {
 	return rootUser.Id, nil
 }
 
-func testChannel(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool) testResult {
+// testChannel runs one upstream probe against a channel. probeKeyIndex pins a
+// specific key when the caller wants to probe a key that is currently disabled;
+// nil lets the channel serve the probe with whichever enabled key it would use
+// for production traffic.
+func testChannel(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, probeKeyIndex *int) testResult {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -167,6 +171,10 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	c.Set("base_url", channel.GetBaseURL())
 	group, _ := model.GetUserGroup(testUserID, false)
 	c.Set("group", group)
+
+	if probeKeyIndex != nil {
+		common.SetContextKey(c, constant.ContextKeyChannelForceKeyIndex, *probeKeyIndex)
+	}
 
 	newAPIError := middleware.SetupContextForSelectedChannel(c, channel, testModel)
 	if newAPIError != nil {
@@ -874,7 +882,7 @@ func TestChannel(c *gin.Context) {
 	if c.Request != nil {
 		requestCtx = c.Request.Context()
 	}
-	result := testChannel(requestCtx, channel, testUserID, testModel, endpointType, isStream)
+	result := testChannel(requestCtx, channel, testUserID, testModel, endpointType, isStream, nil)
 	if result.localErr != nil {
 		resp := gin.H{
 			"success": false,
@@ -917,11 +925,43 @@ type channelTestSummary struct {
 	Enabled   int `json:"enabled"`
 }
 
+// selectRecoveryProbeKeyIndex picks the auto-disabled key a health check should
+// probe, oldest disable first, so degraded keys are retried in the order they
+// went bad. Recovering such a key is the only thing this pass can learn that
+// live traffic cannot, because live traffic already exercises every enabled
+// key. It returns nil when there is nothing to recover, which also covers
+// single-key channels and channels whose keys are all healthy.
+func selectRecoveryProbeKeyIndex(channel *model.Channel) *int {
+	if channel == nil || !channel.ChannelInfo.IsMultiKey {
+		return nil
+	}
+	selected := -1
+	var selectedTime int64
+	for idx := range channel.GetKeys() {
+		if channel.ChannelInfo.MultiKeyStatusList[idx] != common.ChannelStatusAutoDisabled {
+			continue
+		}
+		disabledAt := channel.ChannelInfo.MultiKeyDisabledTime[idx]
+		if selected < 0 || disabledAt < selectedTime {
+			selected = idx
+			selectedTime = disabledAt
+		}
+	}
+	if selected < 0 {
+		return nil
+	}
+	return &selected
+}
+
 func testChannelForHealthCheck(ctx context.Context, channel *model.Channel, testUserID int, allowDisable bool, disableThreshold int64) channelTestSummary {
 	summary := channelTestSummary{}
 	isChannelEnabled := channel.Status == common.ChannelStatusEnabled
+	var probeKeyIndex *int
+	if common.AutomaticEnableChannelEnabled {
+		probeKeyIndex = selectRecoveryProbeKeyIndex(channel)
+	}
 	tik := time.Now()
-	result := testChannel(ctx, channel, testUserID, "", "", shouldUseStreamForAutomaticChannelTest(channel))
+	result := testChannel(ctx, channel, testUserID, "", "", shouldUseStreamForAutomaticChannelTest(channel), probeKeyIndex)
 	milliseconds := time.Since(tik).Milliseconds()
 	if ctx.Err() != nil {
 		return summary
@@ -949,13 +989,29 @@ func testChannelForHealthCheck(ctx context.Context, channel *model.Channel, test
 		summary.Failed++
 	}
 
-	if allowDisable && isChannelEnabled && shouldBanChannel && channel.GetAutoBan() {
-		processChannelError(result.context, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, nil)
+	usingKey := common.GetContextKeyString(result.context, constant.ContextKeyChannelKey)
+
+	// A probe of an already auto-disabled key must not re-enter the disable flow:
+	// the key stays disabled either way, so it would only re-notify a state the
+	// operators already know about.
+	if allowDisable && isChannelEnabled && shouldBanChannel && channel.GetAutoBan() && probeKeyIndex == nil {
+		processChannelError(result.context, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, usingKey, channel.GetAutoBan()), newAPIError, nil)
 		summary.Disabled++
 	}
 
-	if result.localErr == nil && !isChannelEnabled && service.ShouldEnableChannel(newAPIError, channel.Status) {
-		service.EnableChannel(channel.Id, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.Name)
+	recovered := false
+	if result.localErr == nil {
+		if probeKeyIndex != nil {
+			// Key-level recovery: a disabled key reached upstream, so it goes
+			// back into rotation. Enabling it also lifts the channel-level
+			// auto-disable once at least one key works again.
+			recovered = service.ShouldEnableMultiKey(newAPIError, channel.ChannelInfo.MultiKeyStatusList[*probeKeyIndex])
+		} else {
+			recovered = !isChannelEnabled && service.ShouldEnableChannel(newAPIError, channel.Status)
+		}
+	}
+	if recovered {
+		service.EnableChannel(channel.Id, usingKey, channel.Name)
 		summary.Enabled++
 	}
 

@@ -76,3 +76,16 @@ func ShouldEnableChannel(newAPIError *types.NewAPIError, status int) bool {
 	}
 	return true
 }
+
+// ShouldEnableMultiKey is the key-level counterpart of ShouldEnableChannel: a
+// single key of a multi-key channel may return to rotation once a probe reaches
+// upstream with it, even though the channel-level status never left Enabled.
+func ShouldEnableMultiKey(newAPIError *types.NewAPIError, keyStatus int) bool {
+	if !common.AutomaticEnableChannelEnabled {
+		return false
+	}
+	if newAPIError != nil {
+		return false
+	}
+	return keyStatus == common.ChannelStatusAutoDisabled
+}

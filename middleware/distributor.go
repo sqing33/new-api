@@ -670,9 +670,24 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	common.SetContextKey(c, constant.ContextKeyChannelModelMapping, channel.GetModelMapping())
 	common.SetContextKey(c, constant.ContextKeyChannelStatusCodeMapping, channel.GetStatusCodeMapping())
 
-	key, index, newAPIError := channel.GetNextEnabledKey()
-	if newAPIError != nil {
-		return newAPIError
+	// A channel test may pin one key so it can probe an auto-disabled key for
+	// recovery. Production traffic never pins a key, so GetNextEnabledKey stays
+	// the only source of keys on the relay path and a disabled key can never
+	// serve a real request.
+	key := ""
+	index := 0
+	var keyErr *types.NewAPIError
+	forcedIndex, pinned := 0, false
+	if forced, exists := common.GetContextKey(c, constant.ContextKeyChannelForceKeyIndex); exists {
+		forcedIndex, pinned = forced.(int)
+	}
+	if pinned {
+		key, index, keyErr = channel.GetKeyByIndex(forcedIndex)
+	} else {
+		key, index, keyErr = channel.GetNextEnabledKey()
+	}
+	if keyErr != nil {
+		return keyErr
 	}
 	if channel.ChannelInfo.IsMultiKey {
 		common.SetContextKey(c, constant.ContextKeyChannelIsMultiKey, true)

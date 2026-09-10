@@ -342,6 +342,65 @@ func TestSelectChannelsForAutomaticTestAutoBanOnlyUsesEligibleChannels(t *testin
 	require.Equal(t, 3, selected[1].Id)
 }
 
+func TestSelectRecoveryProbeKeyIndexPrefersOldestAutoDisabledKey(t *testing.T) {
+	channel := &model.Channel{
+		Id:  1,
+		Key: "key-a\nkey-b\nkey-c",
+		ChannelInfo: model.ChannelInfo{
+			IsMultiKey:           true,
+			MultiKeySize:         3,
+			MultiKeyStatusList:   map[int]int{1: common.ChannelStatusAutoDisabled, 2: common.ChannelStatusAutoDisabled},
+			MultiKeyDisabledTime: map[int]int64{1: 222, 2: 111},
+		},
+	}
+
+	index := selectRecoveryProbeKeyIndex(channel)
+
+	require.NotNil(t, index)
+	assert.Equal(t, 2, *index)
+}
+
+func TestSelectRecoveryProbeKeyIndexIgnoresKeysWithoutAutoDisable(t *testing.T) {
+	healthy := &model.Channel{
+		Id:          1,
+		Key:         "key-a\nkey-b",
+		ChannelInfo: model.ChannelInfo{IsMultiKey: true, MultiKeySize: 2},
+	}
+	assert.Nil(t, selectRecoveryProbeKeyIndex(healthy))
+
+	singleKey := &model.Channel{Id: 2, Key: "only-key"}
+	assert.Nil(t, selectRecoveryProbeKeyIndex(singleKey))
+
+	manuallyDisabled := &model.Channel{
+		Id:  3,
+		Key: "key-a\nkey-b",
+		ChannelInfo: model.ChannelInfo{
+			IsMultiKey:         true,
+			MultiKeySize:       2,
+			MultiKeyStatusList: map[int]int{0: common.ChannelStatusManuallyDisabled},
+		},
+	}
+	assert.Nil(t, selectRecoveryProbeKeyIndex(manuallyDisabled), "a manual disable is an operator decision")
+}
+
+func TestSelectRecoveryProbeKeyIndexCoversFullyDisabledChannel(t *testing.T) {
+	channel := &model.Channel{
+		Id:  4,
+		Key: "key-a\nkey-b",
+		ChannelInfo: model.ChannelInfo{
+			IsMultiKey:           true,
+			MultiKeySize:         2,
+			MultiKeyStatusList:   map[int]int{0: common.ChannelStatusAutoDisabled, 1: common.ChannelStatusAutoDisabled},
+			MultiKeyDisabledTime: map[int]int64{0: 300, 1: 200},
+		},
+	}
+
+	index := selectRecoveryProbeKeyIndex(channel)
+
+	require.NotNil(t, index)
+	assert.Equal(t, 1, *index)
+}
+
 func TestRunChannelTestWorkersHonorsConfiguredConcurrency(t *testing.T) {
 	originalInterval := common.RequestInterval
 	common.RequestInterval = 0
