@@ -298,7 +298,7 @@ function renderOutputSpeed(record, t) {
   }
 
   return (
-    <span className='font-mono tabular-nums'>{formatThroughput(tps)}</span>
+    <span className='tabular-nums'>{formatThroughput(tps)}</span>
   );
 }
 
