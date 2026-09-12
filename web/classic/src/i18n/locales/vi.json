@@ -4994,6 +4994,18 @@
     "请先完善操作条件": "Vui lòng hoàn tất điều kiện thao tác trước",
     "请先预览操作": "Vui lòng xem trước trước khi áp dụng",
     "可选任意未分配模型，执行后将其归属到目标供应商": "Có thể chọn bất kỳ mô hình nào; sau khi áp dụng sẽ thuộc về nhà cung cấp đích",
-    "操作成功：更新 {{models}} 个模型，删除 {{vendors}} 个供应商": "Thành công: cập nhật {{models}} mô hình, xóa {{vendors}} nhà cung cấp"
+    "操作成功：更新 {{models}} 个模型，删除 {{vendors}} 个供应商": "Thành công: cập nhật {{models}} mô hình, xóa {{vendors}} nhà cung cấp",
+    "旧价转表达式": "Chuyển giá cũ sang biểu thức",
+    "旧价转表达式预览": "Xem trước chuyển đổi sang biểu thức",
+    "生成的表达式": "Biểu thức được tạo",
+    "生效定价快照": "Ảnh chụp giá hiệu lực",
+    "缓存写入模式": "Chế độ ghi cache",
+    "应用表达式": "Áp dụng biểu thức",
+    "已转换为表达式，保存后生效": "Đã chuyển sang biểu thức, có hiệu lực sau khi lưu.",
+    "无法转换为表达式": "Không thể chuyển sang biểu thức",
+    "转换结果为空": "Kết quả chuyển đổi trống",
+    "序列化旧定价失败": "Chuẩn hóa giá cũ thất bại",
+    "该模型已使用表达式计费": "Mô hình này đã dùng biểu thức",
+    "确认后将切换到表达式/阶梯计费，保存后生效；取消不影响当前草稿。": "Xác nhận sẽ chuyển sang biểu thức/bậc thang, hiệu lực sau khi lưu; hủy không ảnh hưởng bản nháp."
   }
 }

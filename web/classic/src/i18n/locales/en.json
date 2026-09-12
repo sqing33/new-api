@@ -4611,6 +4611,18 @@
     "请先完善操作条件": "Complete the operation criteria first",
     "请先预览操作": "Preview the operation first",
     "可选任意未分配模型，执行后将其归属到目标供应商": "Pick any models; they will belong to the target vendor after applying",
-    "操作成功：更新 {{models}} 个模型，删除 {{vendors}} 个供应商": "Done: updated {{models}} models, deleted {{vendors}} vendors"
+    "操作成功：更新 {{models}} 个模型，删除 {{vendors}} 个供应商": "Done: updated {{models}} models, deleted {{vendors}} vendors",
+    "旧价转表达式": "Convert legacy pricing to expression",
+    "旧价转表达式预览": "Legacy pricing to expression preview",
+    "生成的表达式": "Generated expression",
+    "生效定价快照": "Effective pricing snapshot",
+    "缓存写入模式": "Cache write mode",
+    "应用表达式": "Apply expression",
+    "已转换为表达式，保存后生效": "Converted to expression. Takes effect after saving.",
+    "无法转换为表达式": "Cannot convert to expression",
+    "转换结果为空": "Conversion returned no expression",
+    "序列化旧定价失败": "Failed to serialize legacy pricing",
+    "该模型已使用表达式计费": "This model already uses expression billing",
+    "确认后将切换到表达式/阶梯计费，保存后生效；取消不影响当前草稿。": "Confirming switches this model to expression/tiered billing. Takes effect after saving; cancelling leaves the draft unchanged."
   }
 }

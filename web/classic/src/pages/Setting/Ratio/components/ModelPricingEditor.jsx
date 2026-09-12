@@ -130,6 +130,10 @@ export default function ModelPricingEditor({
     addModel,
     deleteModel,
     applySelectedModelPricing,
+    handleConvertLegacyPricing,
+    confirmConvertLegacyPricing,
+    cancelConvertLegacyPricing,
+    convertPreview,
   } = useModelPricingEditorState({
     options,
     refresh,
@@ -416,6 +420,18 @@ export default function ModelPricingEditor({
                     <Radio value='per-request'>{t('按次计费')}</Radio>
                     <Radio value='tiered_expr'>{t('表达式/阶梯计费')}</Radio>
                   </RadioGroup>
+                  {selectedModel.billingMode !== 'tiered_expr' && (
+                    <Button
+                      size='small'
+                      type='tertiary'
+                      theme='outline'
+                      loading={loading}
+                      className='ml-2'
+                      onClick={handleConvertLegacyPricing}
+                    >
+                      {t('旧价转表达式')}
+                    </Button>
+                  )}
                   <div className='mt-2 text-xs text-gray-500'>
                     {t(
                       '普通按量/按次直接填价格就行；如果价格要跟请求参数或请求头联动，请切到表达式/阶梯计费。',
@@ -775,6 +791,54 @@ export default function ModelPricingEditor({
             )}
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        title={t('旧价转表达式预览')}
+        visible={!!convertPreview}
+        onCancel={cancelConvertLegacyPricing}
+        width={620}
+        footer={
+          <div className='flex justify-end gap-2'>
+            <Button onClick={cancelConvertLegacyPricing}>{t('取消')}</Button>
+            <Button theme='solid' onClick={confirmConvertLegacyPricing}>
+              {t('应用表达式')}
+            </Button>
+          </div>
+        }
+      >
+        {convertPreview && (
+          <div className='flex flex-col gap-3 py-1'>
+            <div className='text-sm'>
+              {t('模型')}: <Text code>{convertPreview.modelName}</Text>
+              {convertPreview.cacheWriteMode ? (
+                <span className='ml-2'>
+                  {t('缓存写入模式')}: <Text code>{convertPreview.cacheWriteMode}</Text>
+                </span>
+              ) : null}
+            </div>
+            <div>
+              <div className='font-medium mb-1'>{t('生成的表达式')}</div>
+              <pre className='text-xs bg-gray-50 rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all'>
+                {convertPreview.expression}
+              </pre>
+            </div>
+            {convertPreview.effective &&
+              Object.keys(convertPreview.effective).length > 0 && (
+                <div>
+                  <div className='font-medium mb-1'>{t('生效定价快照')}</div>
+                  <pre className='text-xs bg-gray-50 rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all'>
+                    {JSON.stringify(convertPreview.effective, null, 2)}
+                  </pre>
+                </div>
+              )}
+            <div className='text-xs text-gray-500'>
+              {t(
+                '确认后将切换到表达式/阶梯计费，保存后生效；取消不影响当前草稿。',
+              )}
+            </div>
+          </div>
+        )}
       </Modal>
     </>
   );

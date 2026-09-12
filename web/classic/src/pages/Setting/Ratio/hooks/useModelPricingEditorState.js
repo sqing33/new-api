@@ -634,6 +634,7 @@ export function useModelPricingEditorState({
   const [loading, setLoading] = useState(false);
   const [conflictOnly, setConflictOnly] = useState(false);
   const [optionalFieldToggles, setOptionalFieldToggles] = useState({});
+  const [convertPreview, setConvertPreview] = useState(null);
 
   useEffect(() => {
     const sourceMaps = {
@@ -763,6 +764,76 @@ export function useModelPricingEditorState({
       }),
     );
   };
+
+  // 旧定价一键转表达式：调用后端 convert 接口生成表达式，
+  // 预览确认后切换该模型到 tiered_expr 模式（保存仍走原提交路径）。
+  const handleConvertLegacyPricing = async () => {
+    if (!selectedModel) return;
+    if (selectedModel.billingMode === 'tiered_expr') {
+      showError(t('该模型已使用表达式计费'));
+      return;
+    }
+    let draft;
+    try {
+      draft = serializeModel(selectedModel, t);
+    } catch (e) {
+      showError(e.message || t('序列化旧定价失败'));
+      return;
+    }
+    const pricing = {};
+    Object.entries(draft).forEach(([key, value]) => {
+      if (value !== null) pricing[key] = value;
+    });
+
+    setLoading(true);
+    try {
+      const res = await API.post('/api/option/model_pricing/convert', {
+        model_name: selectedModel.name,
+        pricing,
+      });
+      const { success, message, data } = res.data || {};
+      if (!success) {
+        showError(message || t('转换失败'));
+        return;
+      }
+      if (data?.unsupported_reason) {
+        showError(`${t('无法转换为表达式')}: ${data.unsupported_reason}`);
+        return;
+      }
+      if (!data?.expression) {
+        showError(t('转换结果为空'));
+        return;
+      }
+      setConvertPreview({
+        modelName: selectedModel.name,
+        expression: data.expression,
+        effective: data.effective || {},
+        cacheWriteMode: data.cache_write_mode || '',
+      });
+    } catch (error) {
+      showError(error?.response?.data?.message || error?.message || t('转换失败'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmConvertLegacyPricing = () => {
+    if (!convertPreview) return;
+    const { modelName, expression } = convertPreview;
+    const { billingExpr, requestRuleExpr } =
+      splitBillingExprAndRequestRules(expression);
+    upsertModel(modelName, (model) => ({
+      ...model,
+      billingMode: 'tiered_expr',
+      billingExpr,
+      requestRuleExpr,
+    }));
+    setSelectedModelName(modelName);
+    setConvertPreview(null);
+    showSuccess(t('已转换为表达式，保存后生效'));
+  };
+
+  const cancelConvertLegacyPricing = () => setConvertPreview(null);
 
   const isOptionalFieldEnabled = (model, field) => {
     if (!model) return false;
@@ -1129,5 +1200,9 @@ export function useModelPricingEditorState({
     addModel,
     deleteModel,
     applySelectedModelPricing,
+    handleConvertLegacyPricing,
+    confirmConvertLegacyPricing,
+    cancelConvertLegacyPricing,
+    convertPreview,
   };
 }
