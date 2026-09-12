@@ -164,7 +164,15 @@ const renderQuotaUsage = (text, record, t) => {
     <Popover content={popoverContent} position='top'>
       <Tag color='white' shape='circle'>
         <div className='flex flex-col items-end'>
-          <span className='text-xs leading-none'>{`${renderQuota(remain)} / ${renderQuota(total)}`}</span>
+          <div className='flex items-center gap-2 text-xs leading-none'>
+            <span>
+              {t('已用')} {renderQuota(used)}
+            </span>
+            <span className='text-gray-400'>|</span>
+            <span>
+              {t('剩余')} {renderQuota(remain)}
+            </span>
+          </div>
           <Progress
             percent={percent}
             aria-label='quota usage'

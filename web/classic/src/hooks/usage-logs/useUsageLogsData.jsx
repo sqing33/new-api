@@ -198,6 +198,8 @@ export const useLogsData = ({
     useState(null);
   const [showParamOverrideModal, setShowParamOverrideModal] = useState(false);
   const [paramOverrideTarget, setParamOverrideTarget] = useState(null);
+  // 分组可搜索筛选：管理员从 /api/group/ 拉取全量分组供下拉搜索
+  const [groupOptions, setGroupOptions] = useState([]);
 
   // Initialize default column visibility
   const initDefaultColumns = () => {
@@ -243,6 +245,25 @@ export const useLogsData = ({
   useEffect(() => {
     localStorage.setItem(BILLING_DISPLAY_MODE_STORAGE_KEY, billingDisplayMode);
   }, [BILLING_DISPLAY_MODE_STORAGE_KEY, billingDisplayMode]);
+
+  useEffect(() => {
+    if (!isAdminUser || groupOptions.length > 0) return;
+    let cancelled = false;
+    API.get('/api/group/')
+      .then((res) => {
+        if (cancelled || res === undefined) return;
+        const groups = res.data?.data;
+        if (Array.isArray(groups)) {
+          setGroupOptions(
+            groups.map((group) => ({ label: group, value: group })),
+          );
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdminUser, groupOptions.length]);
 
   // 获取表单值的辅助函数，确保所有值都是字符串
   const getFormValues = () => {
@@ -978,6 +999,7 @@ export const useLogsData = ({
     logType,
     stat,
     isAdminUser,
+    groupOptions,
 
     // Form state
     formApi,

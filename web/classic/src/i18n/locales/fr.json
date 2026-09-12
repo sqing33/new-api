@@ -4415,6 +4415,20 @@
     "接口模式": "Mode de point de terminaison",
     "单接口": "Point unique",
     "双接口": "Points doubles",
-    "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点": "Unique : les requêtes d'image à image sont fusionnées vers le point de terminaison de texte à image ; Double : points de terminaison séparés pour texte à image et image à image"
+    "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点": "Unique : les requêtes d'image à image sont fusionnées vers le point de terminaison de texte à image ; Double : points de terminaison séparés pour texte à image et image à image",
+    "删除所选兑换码": "Supprimer les codes de rachat sélectionnés",
+    "确定删除所选的 {{count}} 个兑换码吗？": "Supprimer les {{count}} codes de rachat sélectionnés ?",
+    "删除后不可恢复，请谨慎操作。": "Cette action est irréversible. Veuillez agir avec prudence.",
+    "已删除 {{count}} 个兑换码！": "{{count}} codes de rachat supprimés !",
+    "兑换码": "Code de rachat",
+    "兑换码创建成功，可保存为文件。": "Codes de rachat créés. Vous pouvez les enregistrer dans un fichier.",
+    "保存为文件": "Enregistrer dans un fichier",
+    "保存并完成": "Enregistrer et terminer",
+    "包含名称": "Inclure le nom",
+    "包含额度": "Inclure le quota",
+    "发现新版本": "Nouvelle version disponible",
+    "（当前版本 {{version}}）": "(version actuelle {{version}})",
+    "查看更新": "Voir la mise à jour",
+    "忽略此版本": "Ignorer cette version"
   }
 }

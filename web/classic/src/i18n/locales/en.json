@@ -4544,6 +4544,20 @@
     "接口模式": "Endpoint mode",
     "单接口": "Single endpoint",
     "双接口": "Dual endpoint",
-    "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点": "Single: image-to-image requests are merged into the text-to-image endpoint; Dual: text-to-image and image-to-image use separate endpoints"
+    "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点": "Single: image-to-image requests are merged into the text-to-image endpoint; Dual: text-to-image and image-to-image use separate endpoints",
+    "删除所选兑换码": "Delete selected redemption codes",
+    "确定删除所选的 {{count}} 个兑换码吗？": "Delete the {{count}} selected redemption codes?",
+    "删除后不可恢复，请谨慎操作。": "This cannot be undone. Please proceed with caution.",
+    "已删除 {{count}} 个兑换码！": "Deleted {{count}} redemption codes!",
+    "兑换码": "Redemption code",
+    "兑换码创建成功，可保存为文件。": "Redemption codes created. You can save them to a file.",
+    "保存为文件": "Save to file",
+    "保存并完成": "Save and finish",
+    "包含名称": "Include name",
+    "包含额度": "Include quota",
+    "发现新版本": "New version available",
+    "（当前版本 {{version}}）": "(current version {{version}})",
+    "查看更新": "View update",
+    "忽略此版本": "Ignore this version"
   }
 }

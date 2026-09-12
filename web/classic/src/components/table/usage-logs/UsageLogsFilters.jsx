@@ -32,6 +32,7 @@ const LogsFilters = ({
   setLogType,
   loading,
   isAdminUser,
+  groupOptions = [],
   imageOnly,
   imageModelOptions,
   t,
@@ -185,13 +186,20 @@ const LogsFilters = ({
                 size='small'
               />
 
-              <Form.Input
+              <Form.Select
                 field='group'
-                prefix={<IconSearch />}
                 placeholder={t('分组')}
                 showClear
                 pure
                 size='small'
+                filter
+                className='min-w-0'
+                optionList={groupOptions}
+                onChange={() => {
+                  setTimeout(() => {
+                    refresh();
+                  }, 0);
+                }}
               />
 
               <Form.Input

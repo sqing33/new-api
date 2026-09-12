@@ -4929,6 +4929,20 @@
     "接口模式": "Chế độ endpoint",
     "单接口": "Một endpoint",
     "双接口": "Hai endpoint",
-    "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点": "Một: yêu cầu ảnh-sang-ảnh được gộp vào endpoint văn-bản-sang-ảnh; Hai: dùng endpoint riêng biệt cho từng loại"
+    "单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点": "Một: yêu cầu ảnh-sang-ảnh được gộp vào endpoint văn-bản-sang-ảnh; Hai: dùng endpoint riêng biệt cho từng loại",
+    "删除所选兑换码": "Xóa các mã đã chọn",
+    "确定删除所选的 {{count}} 个兑换码吗？": "Xóa {{count}} mã đã chọn?",
+    "删除后不可恢复，请谨慎操作。": "Không thể khôi phục sau khi xóa, hãy thao tác cẩn thận.",
+    "已删除 {{count}} 个兑换码！": "Đã xóa {{count}} mã!",
+    "兑换码": "Mã đổi thưởng",
+    "兑换码创建成功，可保存为文件。": "Đã tạo mã đổi thưởng. Bạn có thể lưu vào tệp.",
+    "保存为文件": "Lưu thành tệp",
+    "保存并完成": "Lưu và hoàn tất",
+    "包含名称": "Bao gồm tên",
+    "包含额度": "Bao gồm hạn mức",
+    "发现新版本": "Có phiên bản mới",
+    "（当前版本 {{version}}）": "(phiên bản hiện tại {{version}})",
+    "查看更新": "Xem cập nhật",
+    "忽略此版本": "Bỏ qua phiên bản này"
   }
 }
