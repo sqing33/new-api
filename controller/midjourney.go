@@ -495,6 +495,7 @@ func runMidjourneyTaskUpdateOnce(ctx context.Context, report func(processed, tot
 	}
 	return summary
 }
+
 type midjourneyPollSummary struct {
 	UnfinishedTasks int `json:"unfinished_tasks"`
 	ChannelsScanned int `json:"channels_scanned"`
