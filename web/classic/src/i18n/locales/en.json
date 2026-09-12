@@ -4590,6 +4590,27 @@
     "吊销令牌": "Revoke token",
     "访问令牌已吊销": "Access token revoked",
     "生成访问令牌": "Generate access token",
-    "吊销访问令牌": "Revoke access token"
+    "吊销访问令牌": "Revoke access token",
+    "供应商批量操作": "Vendor bulk operations",
+    "合并供应商": "Merge vendors",
+    "删除供应商": "Delete vendors",
+    "分配模型到供应商": "Assign models to vendor",
+    "选择要合并的供应商": "Select vendors to merge",
+    "选择要删除的供应商": "Select vendors to delete",
+    "选择要分配的模型": "Select models to assign",
+    "目标供应商": "Target vendor",
+    "分配到供应商": "Assign to vendor",
+    "选择目标供应商": "Select target vendor",
+    "选择供应商": "Select vendors",
+    "预览影响": "Preview impact",
+    "执行操作": "Apply",
+    "影响预览": "Impact preview",
+    "涉及供应商": "Vendors involved",
+    "涉及模型": "Models involved",
+    "执行后将按此预览生效（含并发版本校验）": "Applying takes effect as previewed (with optimistic version check)",
+    "请先完善操作条件": "Complete the operation criteria first",
+    "请先预览操作": "Preview the operation first",
+    "可选任意未分配模型，执行后将其归属到目标供应商": "Pick any models; they will belong to the target vendor after applying",
+    "操作成功：更新 {{models}} 个模型，删除 {{vendors}} 个供应商": "Done: updated {{models}} models, deleted {{vendors}} vendors"
   }
 }

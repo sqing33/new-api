@@ -36,6 +36,7 @@ const ModelsTabs = ({
   setShowEditVendor,
   setEditingVendor,
   loadVendors,
+  setShowVendorOps,
   t,
 }) => {
   const handleTabChange = (key) => {
@@ -80,13 +81,18 @@ const ModelsTabs = ({
       onChange={handleTabChange}
       className='mb-2'
       tabBarExtraContent={
-        <Button
-          type='primary'
-          size='small'
-          onClick={() => setShowAddVendor(true)}
-        >
-          {t('新增供应商')}
-        </Button>
+        <div className='flex gap-2'>
+          <Button size='small' onClick={() => setShowVendorOps(true)}>
+            {t('批量操作')}
+          </Button>
+          <Button
+            type='primary'
+            size='small'
+            onClick={() => setShowAddVendor(true)}
+          >
+            {t('新增供应商')}
+          </Button>
+        </div>
       }
     >
       <TabPane

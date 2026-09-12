@@ -4973,6 +4973,27 @@
     "从未使用": "Chưa từng dùng",
     "吊销令牌": "Thu hồi mã",
     "访问令牌已吊销": "Đã thu hồi mã truy cập",
-    "吊销访问令牌": "Thu hồi mã truy cập"
+    "吊销访问令牌": "Thu hồi mã truy cập",
+    "供应商批量操作": "Thao tác hàng loạt nhà cung cấp",
+    "合并供应商": "Gộp nhà cung cấp",
+    "删除供应商": "Xóa nhà cung cấp",
+    "分配模型到供应商": "Gán mô hình cho nhà cung cấp",
+    "选择要合并的供应商": "Chọn nhà cung cấp cần gộp",
+    "选择要删除的供应商": "Chọn nhà cung cấp cần xóa",
+    "选择要分配的模型": "Chọn mô hình cần gán",
+    "目标供应商": "Nhà cung cấp đích",
+    "分配到供应商": "Gán cho nhà cung cấp",
+    "选择目标供应商": "Chọn nhà cung cấp đích",
+    "选择供应商": "Chọn nhà cung cấp",
+    "预览影响": "Xem trước ảnh hưởng",
+    "执行操作": "Áp dụng",
+    "影响预览": "Xem trước ảnh hưởng",
+    "涉及供应商": "Nhà cung cấp liên quan",
+    "涉及模型": "Mô hình liên quan",
+    "执行后将按此预览生效（含并发版本校验）": "Áp dụng sẽ có hiệu lực như xem trước (có kiểm tra phiên bản)",
+    "请先完善操作条件": "Vui lòng hoàn tất điều kiện thao tác trước",
+    "请先预览操作": "Vui lòng xem trước trước khi áp dụng",
+    "可选任意未分配模型，执行后将其归属到目标供应商": "Có thể chọn bất kỳ mô hình nào; sau khi áp dụng sẽ thuộc về nhà cung cấp đích",
+    "操作成功：更新 {{models}} 个模型，删除 {{vendors}} 个供应商": "Thành công: cập nhật {{models}} mô hình, xóa {{vendors}} nhà cung cấp"
   }
 }

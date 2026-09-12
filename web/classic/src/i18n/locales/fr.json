@@ -4461,6 +4461,27 @@
     "吊销令牌": "Révoquer le jeton",
     "访问令牌已吊销": "Jeton d'accès révoqué",
     "生成访问令牌": "Générer un jeton d'accès",
-    "吊销访问令牌": "Révoquer le jeton d'accès"
+    "吊销访问令牌": "Révoquer le jeton d'accès",
+    "供应商批量操作": "Opérations groupées sur les fournisseurs",
+    "合并供应商": "Fusionner des fournisseurs",
+    "删除供应商": "Supprimer des fournisseurs",
+    "分配模型到供应商": "Affecter des modèles à un fournisseur",
+    "选择要合并的供应商": "Sélectionnez les fournisseurs à fusionner",
+    "选择要删除的供应商": "Sélectionnez les fournisseurs à supprimer",
+    "选择要分配的模型": "Sélectionnez les modèles à affecter",
+    "目标供应商": "Fournisseur cible",
+    "分配到供应商": "Affecter au fournisseur",
+    "选择目标供应商": "Sélectionnez le fournisseur cible",
+    "选择供应商": "Sélectionner des fournisseurs",
+    "预览影响": "Aperçu de l'impact",
+    "执行操作": "Appliquer",
+    "影响预览": "Aperçu de l'impact",
+    "涉及供应商": "Fournisseurs concernés",
+    "涉及模型": "Modèles concernés",
+    "执行后将按此预览生效（含并发版本校验）": "L'application prendra effet comme prévu (avec contrôle de version optimiste)",
+    "请先完善操作条件": "Complétez d'abord les critères de l'opération",
+    "请先预览操作": "Prévisualisez d'abord l'opération",
+    "可选任意未分配模型，执行后将其归属到目标供应商": "Choisissez n'importe quels modèles ; ils appartiendront au fournisseur cible après application",
+    "操作成功：更新 {{models}} 个模型，删除 {{vendors}} 个供应商": "Terminé : {{models}} modèles mis à jour, {{vendors}} fournisseurs supprimés"
   }
 }
