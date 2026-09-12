@@ -40,10 +40,25 @@ import {
 import React, { useEffect, useState } from 'react';
 
 import { QRCodeSVG } from 'qrcode.react';
+import { useSecurityProof } from '../../../../hooks/common/useSecurityProof';
+import SecurityProofModal from '../../../common/modals/SecurityProofModal';
+import {
+  SecurityProofService,
+  secureProofHeaders,
+} from '../../../../services/securityProof';
 
 const { Text, Paragraph } = Typography;
 
 const TwoFASetting = ({ t }) => {
+  const {
+    proofState,
+    requireProof,
+    submitProof,
+    cancelProof,
+    selectProofMethod,
+    setProofCode,
+    setProofPassword,
+  } = useSecurityProof();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({
     enabled: false,
@@ -84,16 +99,24 @@ const TwoFASetting = ({ t }) => {
   const handleSetup2FA = async () => {
     setLoading(true);
     try {
-      const res = await API.post('/api/user/2fa/setup');
-      if (res.data.success) {
-        setSetupData(res.data.data);
-        setSetupModalVisible(true);
-        setCurrentStep(0);
-      } else {
-        showError(res.data.message);
-      }
+      await requireProof({
+        scope: '2fa.setup',
+        title: t('设置两步验证'),
+        onSuccess: async (proof) => {
+          const res = await API.post('/api/user/2fa/setup', {}, {
+            headers: secureProofHeaders(proof),
+          });
+          if (res.data.success) {
+            setSetupData(res.data.data);
+            setSetupModalVisible(true);
+            setCurrentStep(0);
+          } else {
+            showError(res.data.message);
+          }
+        },
+      });
     } catch (error) {
-      showError(t('设置2FA失败'));
+      showError(error?.message || t('设置2FA失败'));
     } finally {
       setLoading(false);
     }
@@ -142,9 +165,16 @@ const TwoFASetting = ({ t }) => {
 
     setLoading(true);
     try {
-      const res = await API.post('/api/user/2fa/disable', {
-        code: verificationCode,
-      });
+      // 用输入的验证码换取操作证明，再携带证明调用禁用接口
+      const proof = await SecurityProofService.verifyWith2FA(
+        '2fa.disable',
+        verificationCode,
+      );
+      const res = await API.post(
+        '/api/user/2fa/disable',
+        { code: verificationCode },
+        { headers: secureProofHeaders(proof) },
+      );
       if (res.data.success) {
         showSuccess(t('两步验证已禁用'));
         setDisableModalVisible(false);
@@ -170,9 +200,16 @@ const TwoFASetting = ({ t }) => {
 
     setLoading(true);
     try {
-      const res = await API.post('/api/user/2fa/backup_codes', {
-        code: verificationCode,
-      });
+      // 用输入的验证码换取操作证明，再携带证明调用备用码接口
+      const proof = await SecurityProofService.verifyWith2FA(
+        '2fa.backup_codes.regenerate',
+        verificationCode,
+      );
+      const res = await API.post(
+        '/api/user/2fa/backup_codes',
+        { code: verificationCode },
+        { headers: secureProofHeaders(proof) },
+      );
       if (res.data.success) {
         setBackupCodes(res.data.data.backup_codes);
         showSuccess(t('备用码重新生成成功'));
@@ -716,6 +753,16 @@ const TwoFASetting = ({ t }) => {
           )}
         </div>
       </Modal>
+
+      <SecurityProofModal
+        proofState={proofState}
+        submitProof={submitProof}
+        cancelProof={cancelProof}
+        selectProofMethod={selectProofMethod}
+        setProofCode={setProofCode}
+        setProofPassword={setProofPassword}
+        t={t}
+      />
     </>
   );
 };

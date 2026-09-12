@@ -38,6 +38,7 @@ import {
   IconLock,
   IconDelete,
 } from '@douyinfe/semi-icons';
+import { timestamp2string } from '../../../../helpers';
 import { SiTelegram, SiWechat, SiLinux, SiDiscord } from 'react-icons/si';
 import { UserPlus, ShieldCheck } from 'lucide-react';
 import TelegramLoginButton from 'react-telegram-login';
@@ -63,6 +64,9 @@ const AccountManagement = ({
   setShowWeChatBindModal,
   generateAccessToken,
   handleSystemTokenClick,
+  revokeAccessToken,
+  revokingAccessToken = false,
+  accessTokenStatus = null,
   setShowChangePasswordModal,
   setShowAccountDeleteModal,
   passkeyStatus,
@@ -605,6 +609,25 @@ const AccountManagement = ({
                         <Typography.Text type='tertiary' className='text-sm'>
                           {t('用于API调用的身份验证令牌，请妥善保管')}
                         </Typography.Text>
+                        {accessTokenStatus?.exists && (
+                          <div className='mt-2 text-xs text-gray-500 flex flex-col gap-0.5'>
+                            <span>
+                              {t('令牌指纹')}: {accessTokenStatus.token_ref}
+                            </span>
+                            <span>
+                              {t('创建时间')}:{' '}
+                              {accessTokenStatus.created_at
+                                ? timestamp2string(accessTokenStatus.created_at)
+                                : '-'}
+                            </span>
+                            <span>
+                              {t('最近使用')}:{' '}
+                              {accessTokenStatus.last_used_at
+                                ? timestamp2string(accessTokenStatus.last_used_at)
+                                : t('从未使用')}
+                            </span>
+                          </div>
+                        )}
                         {systemToken && (
                           <div className='mt-3'>
                             <Input
@@ -618,15 +641,28 @@ const AccountManagement = ({
                         )}
                       </div>
                     </div>
-                    <Button
-                      type='primary'
-                      theme='solid'
-                      onClick={generateAccessToken}
-                      className='!bg-slate-600 hover:!bg-slate-700 w-full sm:w-auto'
-                      icon={<IconKey />}
-                    >
-                      {systemToken ? t('重新生成') : t('生成令牌')}
-                    </Button>
+                    <div className='flex flex-col gap-2 w-full sm:w-auto'>
+                      <Button
+                        type='primary'
+                        theme='solid'
+                        onClick={generateAccessToken}
+                        className='!bg-slate-600 hover:!bg-slate-700 w-full sm:w-auto'
+                        icon={<IconKey />}
+                      >
+                        {t('重新生成')}
+                      </Button>
+                      {accessTokenStatus?.exists && (
+                        <Button
+                          type='danger'
+                          theme='light'
+                          onClick={revokeAccessToken}
+                          loading={revokingAccessToken}
+                          className='w-full sm:w-auto'
+                        >
+                          {t('吊销令牌')}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </Card>
 

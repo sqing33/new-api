@@ -45,8 +45,9 @@ import EmailBindModal from './personal/modals/EmailBindModal';
 import WeChatBindModal from './personal/modals/WeChatBindModal';
 import AccountDeleteModal from './personal/modals/AccountDeleteModal';
 import ChangePasswordModal from './personal/modals/ChangePasswordModal';
-import SecureVerificationModal from '../common/modals/SecureVerificationModal';
-import { useSecureVerification } from '../../hooks/common/useSecureVerification';
+import SecurityProofModal from '../common/modals/SecurityProofModal';
+import { useSecurityProof } from '../../hooks/common/useSecurityProof';
+import { secureProofHeaders } from '../../services/securityProof';
 import TopUp from '../topup';
 
 const PersonalSetting = () => {
@@ -79,10 +80,8 @@ const PersonalSetting = () => {
   const [passkeyRegisterLoading, setPasskeyRegisterLoading] = useState(false);
   const [passkeyDeleteLoading, setPasskeyDeleteLoading] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(false);
-  const [
-    passkeyRequiredVerificationMethod,
-    setPasskeyRequiredVerificationMethod,
-  ] = useState(null);
+  const [accessTokenStatus, setAccessTokenStatus] = useState(null);
+  const [revokingAccessToken, setRevokingAccessToken] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState({
     warningType: 'email',
     warningThreshold: 100000,
@@ -100,32 +99,24 @@ const PersonalSetting = () => {
   });
 
   const {
-    isModalVisible: isPasskeyVerificationModalVisible,
-    verificationMethods: passkeyVerificationMethods,
-    verificationState: passkeyVerificationState,
-    startVerification: startPasskeyVerification,
-    executeVerification: executePasskeyVerification,
-    cancelVerification: cancelPasskeyVerification,
-    setVerificationCode: setPasskeyVerificationCode,
-    switchVerificationMethod: switchPasskeyVerificationMethod,
-    checkVerificationMethods: checkPasskeyVerificationMethods,
-  } = useSecureVerification({
-    onSuccess: () => {
-      setPasskeyRequiredVerificationMethod(null);
-    },
-  });
+    proofState: passkeyProofState,
+    requireProof: requirePasskeyProof,
+    submitProof: submitPasskeyProof,
+    cancelProof: cancelPasskeyProof,
+    selectProofMethod: selectPasskeyProofMethod,
+    setProofCode: setPasskeyProofCode,
+    setProofPassword: setPasskeyProofPassword,
+  } = useSecurityProof();
 
-  const visiblePasskeyVerificationMethods = passkeyRequiredVerificationMethod
-    ? {
-        ...passkeyVerificationMethods,
-        has2FA:
-          passkeyRequiredVerificationMethod === '2fa' &&
-          passkeyVerificationMethods.has2FA,
-        hasPasskey:
-          passkeyRequiredVerificationMethod === 'passkey' &&
-          passkeyVerificationMethods.hasPasskey,
-      }
-    : passkeyVerificationMethods;
+  const {
+    proofState: selfProofState,
+    requireProof: requireSelfServiceProof,
+    submitProof: submitSelfServiceProof,
+    cancelProof: cancelSelfServiceProof,
+    selectProofMethod: selectSelfServiceProofMethod,
+    setProofCode: setSelfServiceProofCode,
+    setProofPassword: setSelfServiceProofPassword,
+  } = useSecurityProof();
 
   useEffect(() => {
     let saved = localStorage.getItem('status');
@@ -162,6 +153,8 @@ const PersonalSetting = () => {
     })();
 
     getUserData();
+
+    loadAccessTokenStatus();
 
     isPasskeySupported()
       .then(setPasskeySupported)
@@ -211,14 +204,66 @@ const PersonalSetting = () => {
   };
 
   const generateAccessToken = async () => {
-    const res = await API.get('/api/user/token');
-    const { success, message, data } = res.data;
-    if (success) {
-      setSystemToken(data);
-      await copy(data);
-      showSuccess(t('令牌已重置并已复制到剪贴板'));
-    } else {
-      showError(message);
+    try {
+      await requireSelfServiceProof({
+        scope: 'access_token.generate',
+        title: t('生成访问令牌'),
+        onSuccess: async (proof) => {
+          const res = await API.post('/api/user/token', {}, {
+            headers: secureProofHeaders(proof),
+          });
+          const { success, message, data } = res.data;
+          if (success) {
+            setSystemToken(data);
+            await copy(data);
+            showSuccess(t('令牌已重置并已复制到剪贴板'));
+            await loadAccessTokenStatus();
+          } else {
+            showError(message);
+          }
+        },
+      });
+    } catch (error) {
+      showError(error?.message || t('操作失败，请重试'));
+    }
+  };
+
+  const revokeAccessToken = async () => {
+    setRevokingAccessToken(true);
+    try {
+      await requireSelfServiceProof({
+        scope: 'access_token.revoke',
+        title: t('吊销访问令牌'),
+        onSuccess: async (proof) => {
+          const res = await API.delete('/api/user/token', {
+            headers: secureProofHeaders(proof),
+          });
+          const { success, message } = res.data;
+          if (success) {
+            setSystemToken('');
+            showSuccess(t('访问令牌已吊销'));
+            await loadAccessTokenStatus();
+          } else {
+            showError(message);
+          }
+        },
+      });
+    } catch (error) {
+      showError(error?.message || t('操作失败，请重试'));
+    } finally {
+      setRevokingAccessToken(false);
+    }
+  };
+
+  const loadAccessTokenStatus = async () => {
+    try {
+      const res = await API.get('/api/user/token/status');
+      const { success, data } = res.data;
+      if (success && data) {
+        setAccessTokenStatus(data);
+      }
+    } catch (error) {
+      // 状态加载失败时保持默认
     }
   };
 
@@ -242,53 +287,27 @@ const PersonalSetting = () => {
   };
 
   const startPasskeyManagementVerification = async (apiCall, options = {}) => {
-    const methods = await checkPasskeyVerificationMethods();
-    const requiredMethod = methods.has2FA
-      ? '2fa'
-      : methods.hasPasskey
-        ? 'passkey'
-        : null;
-
-    if (!requiredMethod) {
-      showError(t('您需要先启用两步验证或 Passkey 才能执行此操作'));
-      return;
-    }
-
-    if (requiredMethod === 'passkey' && !methods.passkeySupported) {
-      showInfo(t('当前设备不支持 Passkey'));
-      return;
-    }
-
-    setPasskeyRequiredVerificationMethod(requiredMethod);
-    await startPasskeyVerification(apiCall, {
-      preferredMethod: requiredMethod,
+    await requirePasskeyProof({
+      scope: options.scope,
       title: t('安全验证'),
-      ...options,
+      onSuccess: apiCall,
     });
   };
 
   const startPasskeyRegistration = async () => {
-    const methods = await checkPasskeyVerificationMethods();
-    if (!methods.has2FA) {
-      try {
-        await registerPasskey();
-      } catch (error) {
-        showError(error.message || t('Passkey 注册失败，请重试'));
-      }
-      return;
-    }
-
-    setPasskeyRequiredVerificationMethod('2fa');
-    await startPasskeyVerification(registerPasskey, {
-      preferredMethod: '2fa',
-      title: t('安全验证'),
+    await startPasskeyManagementVerification(registerPasskey, {
+      scope: 'passkey.register',
     });
   };
 
-  const registerPasskey = async () => {
+  const registerPasskey = async (proof) => {
     setPasskeyRegisterLoading(true);
     try {
-      const beginRes = await API.post('/api/user/passkey/register/begin');
+      const beginRes = await API.post(
+        '/api/user/passkey/register/begin',
+        {},
+        { headers: secureProofHeaders(proof) },
+      );
       const { success, message, data } = beginRes.data;
       if (!success) {
         throw new Error(message || t('无法发起 Passkey 注册'));
@@ -335,10 +354,12 @@ const PersonalSetting = () => {
     await startPasskeyRegistration();
   };
 
-  const removePasskey = async () => {
+  const removePasskey = async (proof) => {
     setPasskeyDeleteLoading(true);
     try {
-      const res = await API.delete('/api/user/passkey');
+      const res = await API.delete('/api/user/passkey', {
+        headers: secureProofHeaders(proof),
+      });
       const { success, message } = res.data;
       if (!success) {
         throw new Error(message || t('操作失败，请重试'));
@@ -355,12 +376,13 @@ const PersonalSetting = () => {
   };
 
   const handleRemovePasskey = async () => {
-    await startPasskeyManagementVerification(removePasskey);
+    await startPasskeyManagementVerification(removePasskey, {
+      scope: 'passkey.delete',
+    });
   };
 
   const handlePasskeyVerificationCancel = () => {
-    setPasskeyRequiredVerificationMethod(null);
-    cancelPasskeyVerification();
+    cancelPasskeyProof();
   };
 
   const getUserData = async () => {
@@ -387,18 +409,26 @@ const PersonalSetting = () => {
       return;
     }
 
-    const res = await API.delete('/api/user/self');
-    const { success, message } = res.data;
+    await requireSelfServiceProof({
+      scope: 'account.delete',
+      title: t('删除账户'),
+      onSuccess: async (proof) => {
+        const res = await API.delete('/api/user/self', {
+          headers: secureProofHeaders(proof),
+        });
+        const { success, message } = res.data;
 
-    if (success) {
-      showSuccess(t('账户已删除！'));
-      await API.get('/api/user/logout');
-      userDispatch({ type: 'logout' });
-      localStorage.removeItem('user');
-      navigate('/login');
-    } else {
-      showError(message);
-    }
+        if (success) {
+          showSuccess(t('账户已删除！'));
+          await API.get('/api/user/logout');
+          userDispatch({ type: 'logout' });
+          localStorage.removeItem('user');
+          navigate('/login');
+        } else {
+          showError(message);
+        }
+      },
+    });
   };
 
   const bindWeChat = async () => {
@@ -432,18 +462,31 @@ const PersonalSetting = () => {
       showError(t('两次输入的密码不一致！'));
       return;
     }
-    const res = await API.put(`/api/user/self`, {
-      original_password: inputs.original_password,
-      password: inputs.set_new_password,
+    const changePasswordCall = async (proof) => {
+      const res = await API.put(
+        `/api/user/self`,
+        {
+          original_password: inputs.original_password,
+          password: inputs.set_new_password,
+        },
+        { headers: secureProofHeaders(proof) },
+      );
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess(t('密码修改成功！'));
+        setShowChangePasswordModal(false);
+      } else {
+        showError(message);
+      }
+      return success;
+    };
+
+    // 首次设置密码与修改密码都是安全操作，需要先换取操作证明
+    await requireSelfServiceProof({
+      scope: inputs.original_password === '' ? 'account.password.set' : 'account.password.change',
+      title: t('修改密码'),
+      onSuccess: changePasswordCall,
     });
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('密码修改成功！'));
-      setShowWeChatBindModal(false);
-    } else {
-      showError(message);
-    }
-    setShowChangePasswordModal(false);
   };
 
   const sendVerificationCode = async () => {
@@ -591,6 +634,9 @@ const PersonalSetting = () => {
                 setShowWeChatBindModal={setShowWeChatBindModal}
                 generateAccessToken={generateAccessToken}
                 handleSystemTokenClick={handleSystemTokenClick}
+                revokeAccessToken={revokeAccessToken}
+                revokingAccessToken={revokingAccessToken}
+                accessTokenStatus={accessTokenStatus}
                 setShowChangePasswordModal={setShowChangePasswordModal}
                 setShowAccountDeleteModal={setShowAccountDeleteModal}
                 passkeyStatus={passkeyStatus}
@@ -668,16 +714,24 @@ const PersonalSetting = () => {
         setTurnstileToken={setTurnstileToken}
       />
 
-      <SecureVerificationModal
-        visible={isPasskeyVerificationModalVisible}
-        verificationMethods={visiblePasskeyVerificationMethods}
-        verificationState={passkeyVerificationState}
-        onVerify={executePasskeyVerification}
-        onCancel={handlePasskeyVerificationCancel}
-        onCodeChange={setPasskeyVerificationCode}
-        onMethodSwitch={switchPasskeyVerificationMethod}
-        title={passkeyVerificationState.title}
-        description={passkeyVerificationState.description}
+      <SecurityProofModal
+        proofState={passkeyProofState}
+        submitProof={submitPasskeyProof}
+        cancelProof={cancelPasskeyProof}
+        selectProofMethod={selectPasskeyProofMethod}
+        setProofCode={setPasskeyProofCode}
+        setProofPassword={setPasskeyProofPassword}
+        t={t}
+      />
+
+      <SecurityProofModal
+        proofState={selfProofState}
+        submitProof={submitSelfServiceProof}
+        cancelProof={cancelSelfServiceProof}
+        selectProofMethod={selectSelfServiceProofMethod}
+        setProofCode={setSelfServiceProofCode}
+        setProofPassword={setSelfServiceProofPassword}
+        t={t}
       />
     </div>
   );

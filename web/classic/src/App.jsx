@@ -58,6 +58,7 @@ import Subscription from './pages/Subscription';
 import Tools from './pages/Tools';
 import ToolInstallSettingPage from './pages/ToolInstallSetting';
 import SystemInfoPage from './pages/SystemInfo';
+import AuditPage from './pages/Audit';
 import TaskPluginsPage from './pages/TaskPlugins';
 import OAuth2Callback from './components/auth/OAuth2Callback';
 import PersonalSetting from './components/settings/PersonalSetting';
@@ -154,6 +155,14 @@ function App() {
           element={
             <AdminRoute>
               <SystemInfoPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path='/audit'
+          element={
+            <AdminRoute>
+              <AuditPage />
             </AdminRoute>
           }
         />
