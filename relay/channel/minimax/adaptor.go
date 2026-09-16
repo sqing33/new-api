@@ -136,6 +136,9 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	if info.RelayMode == constant.RelayModeImagesGenerations || info.RelayMode == constant.RelayModeImagesEdits {
 		return miniMaxImageHandler(c, resp, info)
 	}
+	if newAPIError := inspectChatBusinessError(resp, info); newAPIError != nil {
+		return nil, newAPIError
+	}
 
 	switch info.RelayFormat {
 	case types.RelayFormatClaude:
