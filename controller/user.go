@@ -220,6 +220,17 @@ func writeLoginResponse(c *gin.Context, user *model.User, bundle *service.AuthBu
 		"message": "",
 		"success": true,
 		"data": gin.H{
+			// The classic dashboard persists this payload as-is and derives the
+			// New-Api-User header from data.id, which legacySessionCredential
+			// requires. Moving the identity into data.user alone made every
+			// post-login dashboard request fail with 401, so the flat fields
+			// stay alongside the nested user object.
+			"id":                user.Id,
+			"username":          user.Username,
+			"display_name":      user.DisplayName,
+			"role":              user.Role,
+			"status":            user.Status,
+			"group":             user.Group,
 			"access_token":      bundle.AccessToken,
 			"token_type":        bundle.TokenType,
 			"access_expires_at": bundle.AccessExpiresAt,

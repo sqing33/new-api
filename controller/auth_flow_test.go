@@ -816,3 +816,59 @@ func TestOAuthBindProviderErrorConsumesSessionBoundFlow(t *testing.T) {
 	assert.Zero(t, provider.exchangeCalls)
 	assert.Zero(t, provider.userInfoCalls)
 }
+
+// A successful login must keep answering the classic dashboard's flat
+// identity contract: that client persists data verbatim and derives the
+// New-Api-User header from data.id, which legacySessionCredential requires.
+// Dropping the flat fields while moving the identity into data.user made
+// every post-login dashboard request fail with 401.
+func TestLoginResponseKeepsClassicIdentityFields(t *testing.T) {
+	user, _ := setupSecurityEnrollmentTest(t)
+	body, err := common.Marshal(map[string]string{"username": user.Username, "password": "enrollment-password"})
+	require.NoError(t, err)
+	response := httptest.NewRecorder()
+	router := gin.New()
+	router.POST("/api/user/login", Login)
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/user/login", strings.NewReader(string(body))))
+
+	var result struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Data    struct {
+			ID          int    `json:"id"`
+			Username    string `json:"username"`
+			DisplayName string `json:"display_name"`
+			Role        int    `json:"role"`
+			Status      int    `json:"status"`
+			Group       string `json:"group"`
+			AccessToken string `json:"access_token"`
+			User        struct {
+				ID int `json:"id"`
+			} `json:"user"`
+		} `json:"data"`
+		Raw map[string]any `json:"-"`
+	}
+	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+	require.True(t, result.Success, response.Body.String())
+
+	assert.Equal(t, user.Id, result.Data.ID)
+	assert.Equal(t, user.Username, result.Data.Username)
+	assert.Equal(t, user.DisplayName, result.Data.DisplayName)
+	assert.Equal(t, user.Role, result.Data.Role)
+	assert.Equal(t, user.Status, result.Data.Status)
+	assert.Equal(t, user.Group, result.Data.Group)
+
+	// The nested contract introduced with the stateless session work stays
+	// available for clients that adopted it.
+	assert.Equal(t, user.Id, result.Data.User.ID)
+	assert.NotEmpty(t, result.Data.AccessToken)
+
+	// Refresh tokens reach the browser only through the HttpOnly cookie, never
+	// in a payload scripts can read.
+	var envelope struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &envelope))
+	assert.NotContains(t, envelope.Data, "refresh_token")
+	assert.NotContains(t, envelope.Data, "session_id")
+}
