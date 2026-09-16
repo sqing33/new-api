@@ -27,6 +27,7 @@ import ModelsFilters from './ModelsFilters';
 import ModelsTabs from './ModelsTabs';
 import EditModelModal from './modals/EditModelModal';
 import EditVendorModal from './modals/EditVendorModal';
+import VendorOperationsModal from './modals/VendorOperationsModal';
 import ColumnSelectorModal from './modals/ColumnSelectorModal';
 import { useModelsData } from '../../../hooks/models/useModelsData';
 import { useModelPricingDrawer } from '../../../hooks/models/useModelPricingDrawer';
@@ -79,10 +80,14 @@ const ModelsPage = () => {
     saveImageModelSettings,
     showColumnSelector,
     setShowColumnSelector,
+    vendors,
+    models,
 
     // Translation
     t,
   } = modelsData;
+
+  const [showVendorOps, setShowVendorOps] = useState(false);
 
   const [showMarketplaceDisplayNotice, setShowMarketplaceDisplayNotice] =
     useState(() => {
@@ -129,6 +134,17 @@ const ModelsPage = () => {
 
       <ColumnSelectorModal {...modelsData} />
 
+      <VendorOperationsModal
+        visible={showVendorOps}
+        onClose={() => setShowVendorOps(false)}
+        vendors={modelsData.vendors || []}
+        models={modelsData.models || []}
+        onApplied={() => {
+          loadVendors();
+          refresh();
+        }}
+      />
+
       <EditVendorModal
         visible={showAddVendor || showEditVendor}
         handleClose={() => {
@@ -172,7 +188,9 @@ const ModelsPage = () => {
       ) : null}
       <CardPro
         type='type3'
-        tabsArea={<ModelsTabs {...modelsData} />}
+        tabsArea={
+          <ModelsTabs {...modelsData} setShowVendorOps={setShowVendorOps} />
+        }
         actionsArea={
           <div className='flex flex-col md:flex-row justify-between items-center gap-2 w-full'>
             <ModelsActions

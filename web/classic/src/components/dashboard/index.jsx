@@ -29,6 +29,7 @@ import ApiInfoPanel from './ApiInfoPanel';
 import AnnouncementsPanel from './AnnouncementsPanel';
 import FaqPanel from './FaqPanel';
 import PerformancePanel from './PerformancePanel';
+import UpdateNoticeBanner from './UpdateNoticeBanner';
 import SearchModal from './modals/SearchModal';
 
 import { useDashboardData } from '../../hooks/dashboard/useDashboardData';
@@ -158,6 +159,12 @@ const Dashboard = () => {
         dataExportDefaultTime={dashboardData.dataExportDefaultTime}
         timeOptions={dashboardData.timeOptions}
         handleInputChange={dashboardData.handleInputChange}
+        t={dashboardData.t}
+      />
+
+      <UpdateNoticeBanner
+        isAdminUser={dashboardData.isAdminUser}
+        currentVersion={statusState?.status?.version || ''}
         t={dashboardData.t}
       />
 

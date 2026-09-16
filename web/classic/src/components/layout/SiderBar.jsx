@@ -317,6 +317,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className: isRoot() ? '' : 'tableHiddle',
       },
       {
+        text: t('审计日志'),
+        itemKey: 'audit',
+        to: '/audit',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
         text: t('任务插件'),
         itemKey: 'task-plugins',
         to: '/task-plugins',

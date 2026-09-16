@@ -21,17 +21,14 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   API,
-  downloadTextAsFile,
   showError,
   showSuccess,
   renderQuota,
   getCurrencyConfig,
 } from '../../../../helpers';
-import {
-  quotaToDisplayAmount,
-  displayAmountToQuota,
-} from '../../../../helpers/quota';
+import { quotaToDisplayAmount, displayAmountToQuota } from '../../../../helpers/quota';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
+import ExportRedemptionModal from './ExportRedemptionModal';
 import {
   Button,
   Modal,
@@ -71,6 +68,8 @@ const EditRedemptionModal = (props) => {
     count: 1,
     expired_time: null,
   });
+
+  const [exportData, setExportData] = useState(null);
 
   const handleCancel = () => {
     props.handleClose();
@@ -152,26 +151,17 @@ const EditRedemptionModal = (props) => {
     } else {
       showError(message);
     }
-    if (!isEdit && data) {
-      let text = '';
-      for (let i = 0; i < data.length; i++) {
-        text += data[i] + '\n';
-      }
-      Modal.confirm({
-        title: t('兑换码创建成功'),
-        content: (
-          <div>
-            <p>{t('兑换码创建成功，是否下载兑换码？')}</p>
-            <p>{t('兑换码将以文本文件的形式下载，文件名为兑换码的名称。')}</p>
-          </div>
-        ),
-        onOk: () => {
-          downloadTextAsFile(text, `${localInputs.name}.txt`);
-        },
+    if (!isEdit && data && data.length > 0) {
+      setExportData({
+        keys: data,
+        name: localInputs.name,
+        quota: renderQuota(localInputs.quota),
       });
     }
     setLoading(false);
   };
+
+  const closeExport = () => setExportData(null);
 
   return (
     <>
@@ -385,6 +375,11 @@ const EditRedemptionModal = (props) => {
           </Form>
         </Spin>
       </SideSheet>
+      <ExportRedemptionModal
+        visible={exportData !== null}
+        data={exportData}
+        onClose={closeExport}
+      />
     </>
   );
 };

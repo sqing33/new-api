@@ -13,8 +13,8 @@ import (
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -49,7 +49,7 @@ func nearlyEqual(a, b float64) bool {
 	return b-a < floatEpsilon
 }
 
-func valuesEqual(a, b interface{}) bool {
+func valuesEqual(a, b any) bool {
 	af, aok := a.(float64)
 	bf, bok := b.(float64)
 	if aok && bok {
@@ -134,6 +134,75 @@ func getLocalPricingSyncData() map[string]any {
 	data["audio_ratio"] = ratio_setting.GetAudioRatioCopy()
 	data["audio_completion_ratio"] = ratio_setting.GetAudioCompletionRatioCopy()
 	return data
+}
+
+// effectivePricingSyncData follows the billing engine's mode precedence. An
+// inactive expression and numeric settings covered by an active expression
+// are not separate prices and must not appear as synchronization differences.
+func effectivePricingSyncData(data map[string]any) map[string]any {
+	result := make(map[string]any, len(pricingSyncFields))
+	names := make(map[string]struct{})
+	for _, field := range pricingSyncFields {
+		entries := make(map[string]any)
+		for name, raw := range valueMap(data[field]) {
+			value := normalizeSyncValue(field, raw)
+			if numericPricingSyncFields[field] {
+				number, ok := value.(float64)
+				if !ok || math.IsNaN(number) || math.IsInf(number, 0) || number < 0 {
+					continue
+				}
+			}
+			entries[name] = value
+			names[name] = struct{}{}
+		}
+		result[field] = entries
+	}
+	modes := valueMap(result[billing_setting.BillingModeField])
+	expressions := valueMap(result[billing_setting.BillingExprField])
+	for name := range names {
+		expression, _ := expressions[name].(string)
+		if modes[name] == billing_setting.BillingModeTieredExpr {
+			if strings.TrimSpace(expression) == "" {
+				for _, field := range pricingSyncFields {
+					delete(valueMap(result[field]), name)
+				}
+				continue
+			}
+			expressions[name] = strings.TrimSpace(expression)
+			for field := range numericPricingSyncFields {
+				delete(valueMap(result[field]), name)
+			}
+			continue
+		}
+		delete(expressions, name)
+		modes[name] = billing_setting.BillingModeRatio
+		_, fixed := valueMap(result["model_price"])[name]
+		_, token := valueMap(result["model_ratio"])[name]
+		if !fixed && !token {
+			for _, field := range pricingSyncFields {
+				delete(valueMap(result[field]), name)
+			}
+			continue
+		}
+		if fixed {
+			for field := range numericPricingSyncFields {
+				if field != "model_price" {
+					delete(valueMap(result[field]), name)
+				}
+			}
+		}
+	}
+	return result
+}
+
+func modelPricingSyncValues(data map[string]any, name string) map[string]any {
+	values := make(map[string]any)
+	for _, field := range pricingSyncFields {
+		if value, exists := valueMap(data[field])[name]; exists {
+			values[field] = value
+		}
+	}
+	return values
 }
 
 func FetchUpstreamRatios(c *gin.Context) {
@@ -235,7 +304,7 @@ func FetchUpstreamRatios(c *gin.Context) {
 	wg.Wait()
 	close(ch)
 
-	localData := getLocalPricingSyncData()
+	localData := effectivePricingSyncData(getLocalPricingSyncData())
 
 	var testResults []dto.TestResult
 	var successfulChannels []struct {
@@ -258,16 +327,39 @@ func FetchUpstreamRatios(c *gin.Context) {
 			successfulChannels = append(successfulChannels, struct {
 				name string
 				data map[string]any
-			}{name: r.Name, data: r.Data})
+			}{name: r.Name, data: effectivePricingSyncData(r.Data)})
 		}
 	}
 
 	differences := buildDifferences(localData, successfulChannels)
+	type modelSyncPrices struct {
+		Current   map[string]any            `json:"current"`
+		Upstreams map[string]map[string]any `json:"upstreams"`
+	}
+	prices := make(map[string]modelSyncPrices, len(differences))
+	for name, fields := range differences {
+		row := modelSyncPrices{Current: modelPricingSyncValues(localData, name), Upstreams: make(map[string]map[string]any)}
+		_, expressionPriority := fields[billing_setting.BillingExprField]
+		for _, channel := range successfulChannels {
+			candidate := modelPricingSyncValues(channel.data, name)
+			if expressionPriority && candidate[billing_setting.BillingModeField] != billing_setting.BillingModeTieredExpr {
+				continue
+			}
+			_, hasRatio := candidate["model_ratio"]
+			_, hasPrice := candidate["model_price"]
+			_, hasExpression := candidate[billing_setting.BillingExprField]
+			if hasRatio || hasPrice || hasExpression {
+				row.Upstreams[channel.name] = candidate
+			}
+		}
+		prices[name] = row
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
 			"differences":  differences,
+			"prices":       prices,
 			"test_results": testResults,
 		},
 	})
@@ -278,6 +370,16 @@ func buildDifferences(localData map[string]any, successfulChannels []struct {
 	data map[string]any
 }) map[string]map[string]dto.DifferenceItem {
 	differences := make(map[string]map[string]dto.DifferenceItem)
+	localData = effectivePricingSyncData(localData)
+	normalizedChannels := make([]struct {
+		name string
+		data map[string]any
+	}, 0, len(successfulChannels))
+	for _, channel := range successfulChannels {
+		channel.data = effectivePricingSyncData(channel.data)
+		normalizedChannels = append(normalizedChannels, channel)
+	}
+	successfulChannels = normalizedChannels
 
 	allModels := make(map[string]struct{})
 
@@ -331,19 +433,31 @@ func buildDifferences(localData map[string]any, successfulChannels []struct {
 	}
 
 	for modelName := range allModels {
+		expressionPriority := valueMap(localData[billing_setting.BillingModeField])[modelName] == billing_setting.BillingModeTieredExpr
+		for _, channel := range successfulChannels {
+			if valueMap(channel.data[billing_setting.BillingModeField])[modelName] == billing_setting.BillingModeTieredExpr {
+				expressionPriority = true
+			}
+		}
 		for _, ratioType := range pricingSyncFields {
-			var localValue interface{} = nil
+			if expressionPriority && numericPricingSyncFields[ratioType] {
+				continue
+			}
+			var localValue any = nil
 			if val, exists := valueMap(localData[ratioType])[modelName]; exists {
 				localValue = normalizeSyncValue(ratioType, val)
 			}
 
-			upstreamValues := make(map[string]interface{})
+			upstreamValues := make(map[string]any)
 			confidenceValues := make(map[string]bool)
 			hasUpstreamValue := false
 			hasDifference := false
 
 			for _, channel := range successfulChannels {
-				var upstreamValue interface{} = nil
+				if expressionPriority && valueMap(channel.data[billing_setting.BillingModeField])[modelName] != billing_setting.BillingModeTieredExpr {
+					continue
+				}
+				var upstreamValue any = nil
 
 				if val, exists := valueMap(channel.data[ratioType])[modelName]; exists {
 					upstreamValue = normalizeSyncValue(ratioType, val)

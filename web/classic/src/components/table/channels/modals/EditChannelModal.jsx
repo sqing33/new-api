@@ -66,12 +66,12 @@ import OllamaModelModal from './OllamaModelModal';
 import CodexOAuthModal from './CodexOAuthModal';
 import ParamOverrideEditorModal from './ParamOverrideEditorModal';
 import JSONEditor from '../../../common/ui/JSONEditor';
-import SecureVerificationModal from '../../../common/modals/SecureVerificationModal';
+import SecurityProofModal from '../../../common/modals/SecurityProofModal';
 import StatusCodeRiskGuardModal from './StatusCodeRiskGuardModal';
 import ChannelKeyDisplay from '../../../common/ui/ChannelKeyDisplay';
-import { useSecureVerification } from '../../../../hooks/common/useSecureVerification';
+import { useSecurityProof } from '../../../../hooks/common/useSecurityProof';
 import { parseChannelConnectionString } from '../../../../helpers/token';
-import { createApiCalls } from '../../../../services/secureVerification';
+import { secureProofHeaders } from '../../../../services/securityProof';
 import {
   collectInvalidStatusCodeEntries,
   collectNewDisallowedStatusCodeRedirects,
@@ -553,36 +553,24 @@ const EditChannelModal = (props) => {
   const updateTwoFAState = (updates) => {
     setTwoFAState((prev) => ({ ...prev, ...updates }));
   };
-  // 使用通用安全验证 Hook
+  // 使用安全操作证明 Hook（新版 proof 契约）
   const {
-    isModalVisible,
-    verificationMethods,
-    verificationState,
-    withVerification,
-    executeVerification,
-    cancelVerification,
-    setVerificationCode,
-    switchVerificationMethod,
-  } = useSecureVerification({
-    onSuccess: (result) => {
-      // 验证成功后显示密钥
-      console.log('Verification success, result:', result);
-      if (result && result.success && result.data?.key) {
-        showSuccess(t('密钥获取成功'));
-        setKeyDisplayState({
-          showModal: true,
-          keyData: result.data.key,
-        });
-      } else if (result && result.key) {
-        // 直接返回了 key（没有包装在 data 中）
-        showSuccess(t('密钥获取成功'));
-        setKeyDisplayState({
-          showModal: true,
-          keyData: result.key,
-        });
-      }
-    },
-  });
+    proofState,
+    requireProof,
+    submitProof,
+    cancelProof,
+    selectProofMethod,
+    setProofCode,
+    setProofPassword,
+  } = useSecurityProof();
+
+  const showChannelKeyWithProof = (key) => {
+    showSuccess(t('密钥获取成功'));
+    setKeyDisplayState({
+      showModal: true,
+      keyData: key,
+    });
+  };
 
   // 重置密钥显示状态
   const resetKeyDisplayState = () => {
@@ -1344,27 +1332,28 @@ const EditChannelModal = (props) => {
     }
   };
 
-  // 查看渠道密钥（透明验证）
+  // 查看渠道密钥（安全操作证明）
   const handleShow2FAModal = async () => {
     try {
-      // 使用 withVerification 包装，会自动处理需要验证的情况
-      const result = await withVerification(
-        createApiCalls.viewChannelKey(channelId),
-        {
-          title: t('查看渠道密钥'),
-          description: t('为了保护账户安全，请验证您的身份。'),
-          preferredMethod: 'passkey', // 优先使用 Passkey
+      await requireProof({
+        scope: 'channel.key.read',
+        context: { channel_id: channelId },
+        title: t('查看渠道密钥'),
+        onSuccess: async (proof) => {
+          const response = await API.post(
+            `/api/channel/${channelId}/key`,
+            {},
+            { headers: secureProofHeaders(proof) },
+          );
+          if (response.data?.success && response.data?.data?.key) {
+            showChannelKeyWithProof(response.data.data.key);
+          } else if (response.data?.data?.key) {
+            showChannelKeyWithProof(response.data.data.key);
+          } else {
+            showError(response.data?.message || t('获取密钥失败'));
+          }
         },
-      );
-
-      // 如果直接返回了结果（已验证），显示密钥
-      if (result && result.success && result.data?.key) {
-        showSuccess(t('密钥获取成功'));
-        setKeyDisplayState({
-          showModal: true,
-          keyData: result.data.key,
-        });
-      }
+      });
     } catch (error) {
       console.error('Failed to view channel key:', error);
       showError(error.message || t('获取密钥失败'));
@@ -4658,16 +4647,14 @@ const EditChannelModal = (props) => {
         onConfirm={() => resolveStatusCodeRiskConfirm(true)}
       />
       {/* 使用通用安全验证模态框 */}
-      <SecureVerificationModal
-        visible={isModalVisible}
-        verificationMethods={verificationMethods}
-        verificationState={verificationState}
-        onVerify={executeVerification}
-        onCancel={cancelVerification}
-        onCodeChange={setVerificationCode}
-        onMethodSwitch={switchVerificationMethod}
-        title={verificationState.title}
-        description={verificationState.description}
+      <SecurityProofModal
+        proofState={proofState}
+        submitProof={submitProof}
+        cancelProof={cancelProof}
+        selectProofMethod={selectProofMethod}
+        setProofCode={setProofCode}
+        setProofPassword={setProofPassword}
+        t={t}
       />
 
       {/* 使用ChannelKeyDisplay组件显示密钥 */}
