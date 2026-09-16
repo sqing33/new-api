@@ -40,8 +40,8 @@ const VendorOperationsModal = ({
   vendors = [],
   models = [],
   onApplied,
-  t,
 }) => {
+  const { t } = useTranslation();
   const [action, setAction] = useState('merge');
   const [vendorIds, setVendorIds] = useState([]);
   const [modelIds, setModelIds] = useState([]);
