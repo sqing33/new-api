@@ -233,6 +233,7 @@ const EditChannelModal = (props) => {
     status_code_mapping: '',
     models: [],
     auto_ban: 1,
+    auto_test: 1,
     test_model: '',
     groups: ['default'],
     priority: 0,
@@ -280,6 +281,7 @@ const EditChannelModal = (props) => {
   const [multiToSingle, setMultiToSingle] = useState(false);
   const [multiKeyMode, setMultiKeyMode] = useState('random');
   const [autoBan, setAutoBan] = useState(true);
+  const [autoTest, setAutoTest] = useState(true);
   const [inputs, setInputs] = useState(originInputs);
   const [originModelOptions, setOriginModelOptions] = useState([]);
   const [modelOptions, setModelOptions] = useState([]);
@@ -928,6 +930,9 @@ const EditChannelModal = (props) => {
       } else {
         data.groups = data.group.split(',');
       }
+      if (data.auto_test !== 0) {
+        data.auto_test = 1;
+      }
       if (data.model_mapping !== '') {
         data.model_mapping = JSON.stringify(
           JSON.parse(data.model_mapping),
@@ -1116,6 +1121,7 @@ const EditChannelModal = (props) => {
       } else {
         setAutoBan(true);
       }
+      setAutoTest(data.auto_test === 1);
       // 同步企业账户状态
       setIsEnterpriseAccount(data.is_enterprise_account || false);
       setBasicModels(getChannelModels(data.type));
@@ -2081,6 +2087,7 @@ const EditChannelModal = (props) => {
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
+    localInputs.auto_test = localInputs.auto_test ? 1 : 0;
     localInputs.models = localInputs.models.join(',');
     localInputs.group = (localInputs.groups || []).join(',');
 
@@ -4470,6 +4477,19 @@ const EditChannelModal = (props) => {
                         )}
                       />
 
+                      {/* Auto Test - Core Config */}
+                      <Form.Switch
+                        field='auto_test'
+                        label={t('channel_auto_test')}
+                        checkedText={t('channel_auto_test_on')}
+                        uncheckedText={t('channel_auto_test_off')}
+                        onChange={(value) => setAutoTest(value)}
+                        extraText={t(
+                          'channel_auto_test_description',
+                        )}
+                        initValue={autoTest}
+                      />
+
                       {/* Auto Ban - Core Config */}
                       <Form.Switch
                         field='auto_ban'
@@ -4478,7 +4498,7 @@ const EditChannelModal = (props) => {
                         uncheckedText={t('关')}
                         onChange={(value) => setAutoBan(value)}
                         extraText={t(
-                          '仅当自动禁用开启时有效，关闭后不会自动禁用该渠道',
+                          'channel_auto_ban_description',
                         )}
                         initValue={autoBan}
                       />

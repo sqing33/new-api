@@ -326,45 +326,59 @@ func TestResolveChannelTestUserIDUsesRequestUser(t *testing.T) {
 	require.Equal(t, 2, userID)
 }
 
-func TestSelectChannelsForAutomaticTestPassiveRecoveryOnlyUsesAutoDisabled(t *testing.T) {
+func TestSelectChannelsForTestPassiveRecoveryUsesAutoTestEnabledAutoDisabled(t *testing.T) {
+	autoTestEnabled := 1
+	autoTestDisabled := 0
 	channels := []*model.Channel{
-		{Id: 1, Status: common.ChannelStatusEnabled},
-		{Id: 2, Status: common.ChannelStatusAutoDisabled},
-		{Id: 3, Status: common.ChannelStatusManuallyDisabled},
+		{Id: 1, Status: common.ChannelStatusEnabled, AutoTest: &autoTestEnabled},
+		{Id: 2, Status: common.ChannelStatusAutoDisabled, AutoTest: &autoTestEnabled},
+		{Id: 3, Status: common.ChannelStatusAutoDisabled, AutoTest: &autoTestDisabled},
+		{Id: 4, Status: common.ChannelStatusManuallyDisabled, AutoTest: &autoTestEnabled},
 	}
 
-	selected := selectChannelsForAutomaticTest(channels, operation_setting.ChannelTestModePassiveRecovery)
+	selected := selectChannelsForTest(channels, operation_setting.ChannelTestModePassiveRecovery, true)
 
 	require.Len(t, selected, 1)
 	require.Equal(t, 2, selected[0].Id)
 }
 
-func TestSelectChannelsForAutomaticTestScheduledSkipsManualDisabled(t *testing.T) {
+func TestSelectChannelsForTestScheduledHonorsAutoTestAndManualOverride(t *testing.T) {
+	autoTestEnabled := 1
+	autoTestDisabled := 0
 	channels := []*model.Channel{
 		{Id: 1, Status: common.ChannelStatusEnabled},
-		{Id: 2, Status: common.ChannelStatusAutoDisabled},
-		{Id: 3, Status: common.ChannelStatusManuallyDisabled},
+		{Id: 2, Status: common.ChannelStatusAutoDisabled, AutoTest: &autoTestEnabled},
+		{Id: 3, Status: common.ChannelStatusManuallyDisabled, AutoTest: &autoTestEnabled},
+		{Id: 4, Status: common.ChannelStatusEnabled, AutoTest: &autoTestDisabled},
 	}
 
-	selected := selectChannelsForAutomaticTest(channels, operation_setting.ChannelTestModeScheduledAll)
+	scheduled := selectChannelsForTest(channels, operation_setting.ChannelTestModeScheduledAll, true)
+	require.Len(t, scheduled, 2)
+	require.Equal(t, 1, scheduled[0].Id)
+	require.Equal(t, 2, scheduled[1].Id)
 
-	require.Len(t, selected, 2)
-	require.Equal(t, 1, selected[0].Id)
-	require.Equal(t, 2, selected[1].Id)
+	manual := selectChannelsForTest(channels, operation_setting.ChannelTestModeScheduledAll, false)
+	require.Len(t, manual, 3)
+	require.Equal(t, 1, manual[0].Id)
+	require.Equal(t, 2, manual[1].Id)
+	require.Equal(t, 4, manual[2].Id)
 }
 
-func TestSelectChannelsForAutomaticTestAutoBanOnlyUsesEligibleChannels(t *testing.T) {
+func TestSelectChannelsForTestAutoBanOnlyAlsoHonorsAutoTest(t *testing.T) {
 	autoBanEnabled := 1
 	autoBanDisabled := 0
+	autoTestEnabled := 1
+	autoTestDisabled := 0
 	channels := []*model.Channel{
-		{Id: 1, Status: common.ChannelStatusEnabled, AutoBan: &autoBanEnabled},
-		{Id: 2, Status: common.ChannelStatusEnabled, AutoBan: &autoBanDisabled},
-		{Id: 3, Status: common.ChannelStatusAutoDisabled, AutoBan: &autoBanEnabled},
-		{Id: 4, Status: common.ChannelStatusManuallyDisabled, AutoBan: &autoBanEnabled},
+		{Id: 1, Status: common.ChannelStatusEnabled, AutoBan: &autoBanEnabled, AutoTest: &autoTestEnabled},
+		{Id: 2, Status: common.ChannelStatusEnabled, AutoBan: &autoBanDisabled, AutoTest: &autoTestEnabled},
+		{Id: 3, Status: common.ChannelStatusAutoDisabled, AutoBan: &autoBanEnabled, AutoTest: &autoTestEnabled},
+		{Id: 4, Status: common.ChannelStatusManuallyDisabled, AutoBan: &autoBanEnabled, AutoTest: &autoTestEnabled},
 		{Id: 5, Status: common.ChannelStatusEnabled},
+		{Id: 6, Status: common.ChannelStatusEnabled, AutoBan: &autoBanEnabled, AutoTest: &autoTestDisabled},
 	}
 
-	selected := selectChannelsForAutomaticTest(channels, operation_setting.ChannelTestModeAutoBanOnly)
+	selected := selectChannelsForTest(channels, operation_setting.ChannelTestModeAutoBanOnly, true)
 
 	require.Len(t, selected, 2)
 	require.Equal(t, 1, selected[0].Id)

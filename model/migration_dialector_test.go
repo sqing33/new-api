@@ -56,6 +56,11 @@ type migrationDecimalV3 struct {
 	Price float64 `gorm:"type:decimal(12,6);not null;default:1.25"`
 }
 
+type migrationChannelV1 struct {
+	ID  int    `gorm:"primaryKey"`
+	Key string `gorm:"not null"`
+}
+
 func TestMigrationSchemaStability(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
@@ -139,6 +144,26 @@ func TestMigrationSchemaStability(t *testing.T) {
 				assert.Empty(t, recorder.schemaMutations())
 				require.NoError(t, db.Table(table).AutoMigrate(&migrationConstraintV1{}))
 				require.NoError(t, db.Table(table).Create(&migrationConstraintV1{Name: "existing"}).Error)
+			})
+
+			t.Run("channel_auto_test", func(t *testing.T) {
+				const table = "migration_channel_auto_test"
+				t.Cleanup(func() { _ = db.Migrator().DropTable(table) })
+				require.NoError(t, db.Table(table).AutoMigrate(&migrationChannelV1{}))
+				require.NoError(t, db.Table(table).Create(&migrationChannelV1{ID: 1, Key: "legacy"}).Error)
+
+				require.NoError(t, db.Table(table).AutoMigrate(&Channel{}))
+				var upgraded Channel
+				require.NoError(t, db.Table(table).First(&upgraded, "id = ?", 1).Error)
+				assert.Equal(t, "legacy", upgraded.Key)
+				assert.True(t, upgraded.GetAutoTest())
+
+				require.NoError(t, db.Table(table).Where("id = ?", 1).Update("auto_test", 0).Error)
+				require.NoError(t, db.Table(table).First(&upgraded, "id = ?", 1).Error)
+				assert.False(t, upgraded.GetAutoTest())
+
+				require.NoError(t, db.Table(table).AutoMigrate(&Channel{}))
+				require.NoError(t, db.Table(table).AutoMigrate(&Channel{}))
 			})
 
 			if dialect == "mysql" {

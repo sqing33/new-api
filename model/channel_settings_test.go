@@ -41,6 +41,17 @@ func TestChannelValidateSettingsRejectsInvalidHTTPTransport(t *testing.T) {
 	}
 }
 
+func TestChannelGetAutoTestDefaultsToEnabled(t *testing.T) {
+	zero := 0
+	one := 1
+	other := 2
+
+	assert.True(t, (&Channel{}).GetAutoTest())
+	assert.True(t, (&Channel{AutoTest: &one}).GetAutoTest())
+	assert.False(t, (&Channel{AutoTest: &zero}).GetAutoTest())
+	assert.False(t, (&Channel{AutoTest: &other}).GetAutoTest())
+}
+
 func TestAdvancedCustomChannelRequiresModelListRouteOnlyWhenUpdateChecksEnabled(t *testing.T) {
 	inferenceRoute := dto.AdvancedCustomRoute{
 		IncomingPath: "/v1/chat/completions",
