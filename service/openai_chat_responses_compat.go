@@ -1,12 +1,20 @@
 package service
 
 import (
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/service/openaicompat"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
 )
 
 func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*dto.OpenAIResponsesRequest, error) {
-	return openaicompat.ChatCompletionsRequestToResponsesRequest(req)
+	return relayconvert.ChatCompletionsRequestToResponsesRequest(req)
+}
+
+func ResponsesRequestToChatCompletionsRequest(req *dto.OpenAIResponsesRequest) (*dto.GeneralOpenAIRequest, error) {
+	return relayconvert.ResponsesRequestToChatCompletionsRequest(req)
+}
+
+func ChatCompletionsResponseToResponsesResponse(resp *dto.OpenAITextResponse, id string) (*dto.OpenAIResponsesResponse, *dto.Usage, error) {
+	return relayconvert.ChatCompletionsResponseToResponsesResponse(resp, id)
 }
 
 func ResponsesRequestToChatCompletionsRequest(req *dto.OpenAIResponsesRequest) (*dto.GeneralOpenAIRequest, error) {
@@ -18,7 +26,11 @@ func ResponsesRequestToChatCompletionsRequestWithToolMode(req *dto.OpenAIRespons
 }
 
 func ResponsesResponseToChatCompletionsResponse(resp *dto.OpenAIResponsesResponse, id string) (*dto.OpenAITextResponse, *dto.Usage, error) {
-	return openaicompat.ResponsesResponseToChatCompletionsResponse(resp, id)
+	return relayconvert.ResponsesResponseToChatCompletionsResponse(resp, id)
+}
+
+func ResponsesFinishReasonFromStatus(resp *dto.OpenAIResponsesResponse) (string, bool) {
+	return relayconvert.ResponsesFinishReasonFromStatus(resp)
 }
 
 func ChatCompletionsResponseToResponsesResponse(resp *dto.OpenAITextResponse, id string) (*dto.OpenAIResponsesResponse, *dto.Usage, error) {
@@ -30,5 +42,5 @@ func ChatCompletionsResponseToResponsesResponseWithToolMappings(resp *dto.OpenAI
 }
 
 func ExtractOutputTextFromResponses(resp *dto.OpenAIResponsesResponse) string {
-	return openaicompat.ExtractOutputTextFromResponses(resp)
+	return relayconvert.ExtractOutputTextFromResponses(resp)
 }
