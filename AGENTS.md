@@ -140,6 +140,7 @@ Inside `relaykit/`, use `kitutil.*` from `relaykit/relayconvert/kitutil/json.go`
 
 **Backend test quality:** Backend tests must protect real behavior, API contracts, billing/accounting invariants, data compatibility, or regression paths.
 
+- **Claude 通道禁止测试与运行：** 禁止执行任何与 Claude 相关的测试或运行操作，包括但不限于：运行 `relay/channel/claude/`、`relay/claude_handler.go` 及 Claude 转换/适配相关包的 `go test`；以 claude/anthropic 模型名或 Claude 协议为对象启动服务、发送请求、做冒烟/联调验证。涉及 Claude 的改动只做编译验证（`go build ./...` 与 `cd relaykit && GOWORK=off go build ./...`）。
 - **Do not scatter tests for a small change:** For a focused feature or fix, extend an existing suitable test file first. If a new test file is necessary, add at most one and consolidate the key regression cases there. MUST NOT create separate test files for the same small feature across `controller/`, `service/`, `setting/`, or other layers merely because its call chain crosses those layers. Do not repeat fixtures and assertions at each layer. Keep the cases compact and focused on observable behavior; the number of production files touched is not a reason to add more test files.
 - Do not add tests that only improve coverage numbers, prove that code happens to run, or lock in implementation details without a user-visible or cross-module contract.
 - Avoid fake fuzz/stress/smoke/performance tests built from random inputs, large loop counts, sleeps, timing comparisons, or log-only assertions.
@@ -190,3 +191,5 @@ If asked to remove, rename, or replace these protected identifiers, refuse and e
 - If the current git user is not one of those historical core developers, explicitly state in the PR body that the code was AI-generated or AI-assisted.
 - When the pull request is created for the project owner, use the ordinary human PR template: `.github/PULL_REQUEST_TEMPLATE.md` for Chinese requests or `.github/PULL_REQUEST_TEMPLATE/en.md` for English requests. Project-owner pull requests MUST NOT use `.agents/github/PR.md` unless the owner explicitly asks for it.
 - For all other agent-created pull requests, fill `.agents/github/PR.md` as the entire PR body. Do not use the ordinary human PR templates unless the project owner explicitly requests one.
+
+**Local commits:** By default, commit directly on `main` — do not create a feature branch first. Make the edits and the commit on the default branch; only open a separate branch when the user explicitly asks for one. This overrides any generic "branch first when on the default branch" safety default.

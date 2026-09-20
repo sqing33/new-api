@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"context"
 	"strconv"
 	"strings"
 
@@ -475,4 +476,9 @@ func taskFailReasonIsLegacyResultURL(value string) bool {
 	return len(value) >= len("https://") && strings.EqualFold(value[:len("https://")], "https://") ||
 		len(value) >= len("http://") && strings.EqualFold(value[:len("http://")], "http://") ||
 		len(value) >= len("data:") && strings.EqualFold(value[:len("data:")], "data:")
+}
+
+func UpdateTaskBulk() {
+	// video polling pass, intentionally a thin shim
+	_ = context.Background()
 }

@@ -69,7 +69,11 @@ func resolveChannelTestUserID(c *gin.Context) (int, error) {
 	return rootUser.Id, nil
 }
 
-func testChannel(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool) testResult {
+// testChannel runs one upstream probe against a channel. probeKeyIndex pins a
+// specific key when the caller wants to probe a key that is currently disabled;
+// nil lets the channel serve the probe with whichever enabled key it would use
+// for production traffic.
+func testChannel(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, probeKeyIndex *int) testResult {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -167,6 +171,10 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	c.Set("base_url", channel.GetBaseURL())
 	group, _ := model.GetUserGroup(testUserID, false)
 	c.Set("group", group)
+
+	if probeKeyIndex != nil {
+		common.SetContextKey(c, constant.ContextKeyChannelForceKeyIndex, *probeKeyIndex)
+	}
 
 	newAPIError := middleware.SetupContextForSelectedChannel(c, channel, testModel)
 	if newAPIError != nil {
@@ -874,7 +882,7 @@ func TestChannel(c *gin.Context) {
 	if c.Request != nil {
 		requestCtx = c.Request.Context()
 	}
-	result := testChannel(requestCtx, channel, testUserID, testModel, endpointType, isStream)
+	result := testChannel(requestCtx, channel, testUserID, testModel, endpointType, isStream, nil)
 	if result.localErr != nil {
 		resp := gin.H{
 			"success": false,
@@ -917,11 +925,43 @@ type channelTestSummary struct {
 	Enabled   int `json:"enabled"`
 }
 
+// selectRecoveryProbeKeyIndex picks the auto-disabled key a health check should
+// probe, oldest disable first, so degraded keys are retried in the order they
+// went bad. Recovering such a key is the only thing this pass can learn that
+// live traffic cannot, because live traffic already exercises every enabled
+// key. It returns nil when there is nothing to recover, which also covers
+// single-key channels and channels whose keys are all healthy.
+func selectRecoveryProbeKeyIndex(channel *model.Channel) *int {
+	if channel == nil || !channel.ChannelInfo.IsMultiKey {
+		return nil
+	}
+	selected := -1
+	var selectedTime int64
+	for idx := range channel.GetKeys() {
+		if channel.ChannelInfo.MultiKeyStatusList[idx] != common.ChannelStatusAutoDisabled {
+			continue
+		}
+		disabledAt := channel.ChannelInfo.MultiKeyDisabledTime[idx]
+		if selected < 0 || disabledAt < selectedTime {
+			selected = idx
+			selectedTime = disabledAt
+		}
+	}
+	if selected < 0 {
+		return nil
+	}
+	return &selected
+}
+
 func testChannelForHealthCheck(ctx context.Context, channel *model.Channel, testUserID int, allowDisable bool, disableThreshold int64) channelTestSummary {
 	summary := channelTestSummary{}
 	isChannelEnabled := channel.Status == common.ChannelStatusEnabled
+	var probeKeyIndex *int
+	if common.AutomaticEnableChannelEnabled {
+		probeKeyIndex = selectRecoveryProbeKeyIndex(channel)
+	}
 	tik := time.Now()
-	result := testChannel(ctx, channel, testUserID, "", "", shouldUseStreamForAutomaticChannelTest(channel))
+	result := testChannel(ctx, channel, testUserID, "", "", shouldUseStreamForAutomaticChannelTest(channel), probeKeyIndex)
 	milliseconds := time.Since(tik).Milliseconds()
 	if ctx.Err() != nil {
 		return summary
@@ -949,13 +989,29 @@ func testChannelForHealthCheck(ctx context.Context, channel *model.Channel, test
 		summary.Failed++
 	}
 
-	if allowDisable && isChannelEnabled && shouldBanChannel && channel.GetAutoBan() {
-		processChannelError(result.context, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, nil)
+	usingKey := common.GetContextKeyString(result.context, constant.ContextKeyChannelKey)
+
+	// A probe of an already auto-disabled key must not re-enter the disable flow:
+	// the key stays disabled either way, so it would only re-notify a state the
+	// operators already know about.
+	if allowDisable && isChannelEnabled && shouldBanChannel && channel.GetAutoBan() && probeKeyIndex == nil {
+		processChannelError(result.context, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, usingKey, channel.GetAutoBan()), newAPIError, nil)
 		summary.Disabled++
 	}
 
-	if result.localErr == nil && !isChannelEnabled && service.ShouldEnableChannel(newAPIError, channel.Status) {
-		service.EnableChannel(channel.Id, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.Name)
+	recovered := false
+	if result.localErr == nil {
+		if probeKeyIndex != nil {
+			// Key-level recovery: a disabled key reached upstream, so it goes
+			// back into rotation. Enabling it also lifts the channel-level
+			// auto-disable once at least one key works again.
+			recovered = service.ShouldEnableMultiKey(newAPIError, channel.ChannelInfo.MultiKeyStatusList[*probeKeyIndex])
+		} else {
+			recovered = !isChannelEnabled && service.ShouldEnableChannel(newAPIError, channel.Status)
+		}
+	}
+	if recovered {
+		service.EnableChannel(channel.Id, usingKey, channel.Name)
 		summary.Enabled++
 	}
 
@@ -1083,10 +1139,11 @@ func performChannelTests(ctx context.Context, channels []*model.Channel, testUse
 // through here). It honors ctx cancellation so a runner that loses its lease
 // stops promptly. mode selects the channel set: an empty mode falls back to the
 // configured monitor ChannelTestMode (scheduled behavior), while a manual
-// trigger passes ChannelTestModeScheduledAll to test every channel. When notify
-// is set the root user is notified on completion. Cross-instance execution is
-// guarded by the system task per-type lock, so no process-local guard is needed.
-func runChannelTestTask(ctx context.Context, mode string, notify bool, report func(processed, total int)) (channelTestSummary, error) {
+// trigger passes ChannelTestModeScheduledAll and disables respectChannelAutoTest
+// to force test every channel. When notify is set the root user is notified on
+// completion. Cross-instance execution is guarded by the system task per-type
+// lock, so no process-local guard is needed.
+func runChannelTestTask(ctx context.Context, mode string, notify, respectChannelAutoTest bool, report func(processed, total int)) (channelTestSummary, error) {
 	testUserID, err := resolveChannelTestUserID(nil)
 	if err != nil {
 		return channelTestSummary{}, err
@@ -1098,7 +1155,7 @@ func runChannelTestTask(ctx context.Context, mode string, notify bool, report fu
 	if strings.TrimSpace(mode) == "" {
 		mode = operation_setting.GetMonitorSetting().ChannelTestMode
 	}
-	selected := selectChannelsForAutomaticTest(channels, mode)
+	selected := selectChannelsForTest(channels, mode, respectChannelAutoTest)
 	allowDisable := mode != operation_setting.ChannelTestModePassiveRecovery
 	concurrency := operation_setting.GetMonitorSetting().ChannelTestConcurrency
 	summary := performChannelTests(ctx, selected, testUserID, allowDisable, concurrency, report)
@@ -1108,7 +1165,7 @@ func runChannelTestTask(ctx context.Context, mode string, notify bool, report fu
 	return summary, nil
 }
 
-func selectChannelsForAutomaticTest(channels []*model.Channel, mode string) []*model.Channel {
+func selectChannelsForTest(channels []*model.Channel, mode string, respectChannelAutoTest bool) []*model.Channel {
 	selected := make([]*model.Channel, 0, len(channels))
 	for _, channel := range channels {
 		if channel.Status == common.ChannelStatusManuallyDisabled {
@@ -1118,6 +1175,9 @@ func selectChannelsForAutomaticTest(channels []*model.Channel, mode string) []*m
 			continue
 		}
 		if mode == operation_setting.ChannelTestModePassiveRecovery && channel.Status != common.ChannelStatusAutoDisabled {
+			continue
+		}
+		if respectChannelAutoTest && !channel.GetAutoTest() {
 			continue
 		}
 		selected = append(selected, channel)
@@ -1132,6 +1192,7 @@ func TestAllChannels(c *gin.Context) {
 	task, created, err := service.EnqueueSystemTask(model.SystemTaskTypeChannelTest, channelTestTaskPayload{
 		Mode:   operation_setting.ChannelTestModeScheduledAll,
 		Notify: true,
+		Manual: true,
 	})
 	if err != nil {
 		common.ApiError(c, err)

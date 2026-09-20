@@ -67,7 +67,11 @@ const PageLayout = () => {
     location.pathname !== '/playground';
 
   const showSider = isWorkbenchRoute && (!isMobile || drawerOpen);
-  const hideHeader = location.pathname === '/' || isWorkbenchRoute || location.pathname === '/login' || location.pathname === '/register';
+  const hideHeader =
+    location.pathname === '/' ||
+    isWorkbenchRoute ||
+    location.pathname === '/login' ||
+    location.pathname === '/register';
 
   useEffect(() => {
     if (isMobile && drawerOpen && collapsed) {
@@ -140,6 +144,42 @@ const PageLayout = () => {
       }
     }
   }, [i18n, userState?.user?.setting]);
+
+  // 管理员可在设置里配置控制台背景图 URL(ConsoleBackgroundURL),
+  // 非空时覆盖默认的打包背景;CSS 中 ::before 使用固定 layered 背景,
+  // 这里通过 CSS 变量把自定义 URL 传入,优先级高于默认图层。
+  const consoleBackgroundURL =
+    statusState?.status?.ConsoleBackgroundURL &&
+    typeof statusState.status.ConsoleBackgroundURL === 'string'
+      ? statusState.status.ConsoleBackgroundURL.trim()
+      : '';
+
+  useEffect(() => {
+    const styleId = 'console-custom-background';
+    let styleEl = document.getElementById(styleId);
+    if (consoleBackgroundURL) {
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        document.head.appendChild(styleEl);
+      }
+      styleEl.textContent = `.console-bg-shell::before {
+  background-image:
+    linear-gradient(90deg, rgba(255,255,255,0.34), rgba(255,255,255,0.16) 22%, rgba(255,255,255,0.08)),
+    url('${consoleBackgroundURL.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: var(--semi-color-bg-0);
+}`;
+    } else if (styleEl) {
+      styleEl.remove();
+    }
+    return () => {
+      const existing = document.getElementById(styleId);
+      if (existing && !consoleBackgroundURL) existing.remove();
+    };
+  }, [consoleBackgroundURL]);
 
   return (
     <Layout

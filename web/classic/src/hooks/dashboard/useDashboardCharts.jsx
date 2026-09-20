@@ -26,6 +26,7 @@ import {
   modelToColor,
   getQuotaWithUnit,
 } from '../../helpers';
+import { formatTokens } from '../../components/rankings/format';
 import {
   processRawData,
   calculateTrendData,
@@ -38,8 +39,16 @@ import {
 } from '../../helpers/dashboard';
 
 const USER_COLORS = [
-  '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
-  '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6',
+  '#3b82f6',
+  '#ef4444',
+  '#10b981',
+  '#f59e0b',
+  '#8b5cf6',
+  '#ec4899',
+  '#06b6d4',
+  '#f97316',
+  '#6366f1',
+  '#14b8a6',
 ];
 
 const DASHBOARD_CHART_BACKGROUND = 'transparent';
@@ -292,6 +301,152 @@ export const useDashboardCharts = (
     },
   });
 
+  // ===== 消耗量(按时间段的模型 token 用量,堆叠柱状图,单位 K/M/B) =====
+  const [spec_tokens_bar, setSpecTokensBar] = useState({
+    type: 'bar',
+    background: DASHBOARD_CHART_BACKGROUND,
+    data: [
+      {
+        id: 'tokensBarData',
+        values: [],
+      },
+    ],
+    xField: 'Time',
+    yField: 'Tokens',
+    seriesField: 'Model',
+    stack: true,
+    legends: {
+      visible: true,
+      selectMode: 'single',
+    },
+    title: {
+      visible: true,
+      text: t('模型消耗量分布'),
+      subtext: '',
+    },
+    bar: {
+      state: {
+        hover: {
+          stroke: '#000',
+          lineWidth: 1,
+        },
+      },
+    },
+    // 原生 axes 数组配置(该版本不认 valueAxis 速记);左轴标题由
+    // updateChartData 按本次数据的统一单位动态填写(如 M tokens)
+    axes: [
+      {
+        orient: 'bottom',
+        label: { style: { fontSize: 10 } },
+      },
+      {
+        orient: 'left',
+        grid: { visible: true, style: { lineDash: [3, 3] } },
+        label: { style: { fontSize: 10 } },
+        title: { visible: false, text: '' },
+      },
+    ],
+    tooltip: {
+      mark: {
+        content: [
+          {
+            key: (datum) => datum['Model'],
+            value: (datum) => formatTokens(datum['rawTokens'] || 0),
+          },
+        ],
+      },
+      dimension: {
+        content: [
+          {
+            key: (datum) => datum['Model'],
+            value: (datum) => datum['rawTokens'] || 0,
+          },
+        ],
+        updateContent: (array) => {
+          array.sort((a, b) => b.value - a.value);
+          let sum = 0;
+          for (let i = 0; i < array.length; i++) {
+            let value = parseFloat(array[i].value);
+            if (isNaN(value)) {
+              value = 0;
+            }
+            if (array[i].datum && array[i].datum.TimeSum) {
+              sum = array[i].datum.TimeSum;
+            }
+            array[i].value = formatTokens(value);
+          }
+          array.unshift({
+            key: t('总计'),
+            value: formatTokens(sum),
+          });
+          return array;
+        },
+      },
+    },
+    color: {
+      specified: modelColorMap,
+    },
+  });
+
+  // ===== 消耗量占比(各模型 token 用量占比,饼图,与调用次数分布同款) =====
+  const [spec_tokens_pie, setSpecTokensPie] = useState({
+    type: 'pie',
+    background: DASHBOARD_CHART_BACKGROUND,
+    data: [
+      {
+        id: 'tokensPieData',
+        values: [{ type: 'null', value: '0' }],
+      },
+    ],
+    outerRadius: 0.8,
+    innerRadius: 0.5,
+    padAngle: 0.6,
+    valueField: 'value',
+    categoryField: 'type',
+    pie: {
+      style: {
+        cornerRadius: 10,
+      },
+      state: {
+        hover: {
+          outerRadius: 0.85,
+          stroke: '#000',
+          lineWidth: 1,
+        },
+        selected: {
+          outerRadius: 0.85,
+          stroke: '#000',
+          lineWidth: 1,
+        },
+      },
+    },
+    title: {
+      visible: true,
+      text: t('模型消耗量占比'),
+      subtext: `${t('总计')}：${formatTokens(0)}`,
+    },
+    legends: {
+      visible: true,
+      orient: 'left',
+    },
+    label: {
+      visible: true,
+    },
+    tooltip: {
+      mark: {
+        content: [
+          {
+            key: (datum) => datum['type'],
+            value: (datum) => formatTokens(datum['rawValue'] || 0),
+          },
+        ],
+      },
+    },
+    color: {
+      specified: modelColorMap,
+    },
+  });
+
   // ========== Admin: 用户消耗排行 ==========
   const [spec_user_rank, setSpecUserRank] = useState({
     type: 'bar',
@@ -315,21 +470,26 @@ export const useDashboardCharts = (
       position: 'outside',
       formatMethod: (value, datum) => renderQuota(datum['rawQuota'] || 0, 2),
     },
-    axes: [{
-      orient: 'left',
-      type: 'band',
-      label: { visible: true },
-    }, {
-      orient: 'bottom',
-      type: 'linear',
-      visible: false,
-    }],
+    axes: [
+      {
+        orient: 'left',
+        type: 'band',
+        label: { visible: true },
+      },
+      {
+        orient: 'bottom',
+        type: 'linear',
+        visible: false,
+      },
+    ],
     tooltip: {
       mark: {
-        content: [{
-          key: (datum) => datum['User'],
-          value: (datum) => renderQuota(datum['rawQuota'] || 0, 4),
-        }],
+        content: [
+          {
+            key: (datum) => datum['User'],
+            value: (datum) => renderQuota(datum['rawQuota'] || 0, 4),
+          },
+        ],
       },
     },
     color: { type: 'ordinal', range: USER_COLORS },
@@ -350,27 +510,33 @@ export const useDashboardCharts = (
       text: t('用户消耗趋势'),
       subtext: '',
     },
-    axes: [{
-      orient: 'left',
-      label: {
-        formatMethod: (value) => renderQuota(value, 2),
+    axes: [
+      {
+        orient: 'left',
+        label: {
+          formatMethod: (value) => renderQuota(value, 2),
+        },
       },
-    }],
+    ],
     area: { style: { fillOpacity: 0.15 } },
     line: { style: { lineWidth: 2 } },
     point: { visible: false },
     tooltip: {
       mark: {
-        content: [{
-          key: (datum) => datum['User'],
-          value: (datum) => renderQuota(datum['rawQuota'] || 0, 4),
-        }],
+        content: [
+          {
+            key: (datum) => datum['User'],
+            value: (datum) => renderQuota(datum['rawQuota'] || 0, 4),
+          },
+        ],
       },
       dimension: {
-        content: [{
-          key: (datum) => datum['User'],
-          value: (datum) => datum['rawQuota'] || 0,
-        }],
+        content: [
+          {
+            key: (datum) => datum['User'],
+            value: (datum) => datum['rawQuota'] || 0,
+          },
+        ],
         updateContent: (array) => {
           array.sort((a, b) => b.value - a.value);
           let sum = 0;
@@ -498,6 +664,122 @@ export const useDashboardCharts = (
         'barData',
       );
 
+      // ===== 消耗量堆叠柱状图:与消耗分布同构,数据换成 token 用量 =====
+      // 全图统一一个换算单位(按所有柱子的最大原始值选择 M 或 B),
+      // 保证柱子高度与真实用量成比例;刻度标注统一换算后的数值
+      const tokensBarMax = (() => {
+        let max = 0;
+        for (let [, value] of aggregatedData) {
+          if ((value.tokens || 0) > max) max = value.tokens || 0;
+        }
+        return max;
+      })();
+      const tokensUnitDivisor =
+        tokensBarMax >= 1e9
+          ? 1e9
+          : tokensBarMax >= 1e6
+            ? 1e6
+            : tokensBarMax >= 1e3
+              ? 1e3
+              : 1;
+      const tokensUnitLabel =
+        tokensUnitDivisor === 1e9
+          ? 'B tokens'
+          : tokensUnitDivisor === 1e6
+            ? 'M tokens'
+            : tokensUnitDivisor === 1e3
+              ? 'K tokens'
+              : 'tokens';
+      const scaleTokens = (value) => {
+        if (!value) return 0;
+        return Number(
+          (value / tokensUnitDivisor).toFixed(
+            tokensUnitDivisor === 1e3 ? 1 : 2,
+          ),
+        );
+      };
+      let tokensBarData = [];
+      chartTimePoints.forEach((time) => {
+        let timeData = Array.from(uniqueModels).map((model) => {
+          const key = `${time}-${model}`;
+          const aggregated = aggregatedData.get(key);
+          return {
+            Time: time,
+            Model: model,
+            rawTokens: aggregated?.tokens || 0,
+            Tokens: scaleTokens(aggregated?.tokens || 0),
+          };
+        });
+
+        const timeTokensSum = timeData.reduce(
+          (sum, item) => sum + item.rawTokens,
+          0,
+        );
+        timeData.sort((a, b) => b.rawTokens - a.rawTokens);
+        timeData = timeData.map((item) => ({
+          ...item,
+          TimeSum: timeTokensSum,
+        }));
+        tokensBarData.push(...timeData);
+      });
+
+      tokensBarData.sort((a, b) => a.Time.localeCompare(b.Time));
+
+      updateChartSpec(
+        setSpecTokensBar,
+        tokensBarData,
+        `${t('总计')}：${formatTokens(totalTokens)}`,
+        newModelColors,
+        'tokensBarData',
+      );
+      // 轴标题标注本次数据的实际单位(全图统一,如 M tokens)
+      setSpecTokensBar((prev) => ({
+        ...prev,
+        axes: prev.axes
+          ? prev.axes.map((axis) =>
+              axis.orient === 'left'
+                ? {
+                    ...axis,
+                    title: {
+                      visible: tokensUnitDivisor !== 1,
+                      text: tokensUnitLabel,
+                      style: { fontSize: 10, fontWeight: 'normal' },
+                    },
+                  }
+                : axis,
+            )
+          : prev.axes,
+      }));
+
+      // ===== 消耗量占比饼图:每模型的 token 用量合计 =====
+      const tokensPieData = Array.from(
+        (() => {
+          const totals = new Map();
+          for (let [, value] of aggregatedData) {
+            updateMapValue(totals, value.model, value.tokens || 0);
+          }
+          return totals;
+        })(),
+      )
+        .map(([model, tokens]) => ({
+          type: model,
+          value: scaleTokens(tokens),
+          rawValue: tokens,
+        }))
+        .sort((a, b) => b.rawValue - a.rawValue);
+
+      setSpecTokensPie((prev) => ({
+        ...prev,
+        data: [{ id: 'tokensPieData', values: tokensPieData }],
+        title: {
+          ...prev.title,
+          subtext: `${t('总计')}：${formatTokens(totalTokens)}`,
+        },
+        color: {
+          specified: newModelColors,
+        },
+      }));
+
       // ===== 模型调用次数折线图 =====
       let modelLineData = [];
       chartTimePoints.forEach((time) => {
@@ -579,11 +861,13 @@ export const useDashboardCharts = (
         10,
       );
 
-      const userRankValues = rankingData.map((item) => ({
-        User: item.User,
-        rawQuota: item.Quota,
-        Quota: getQuotaWithUnit(item.Quota, 4),
-      })).sort((a, b) => b.rawQuota - a.rawQuota);
+      const userRankValues = rankingData
+        .map((item) => ({
+          User: item.User,
+          rawQuota: item.Quota,
+          Quota: getQuotaWithUnit(item.Quota, 4),
+        }))
+        .sort((a, b) => b.rawQuota - a.rawQuota);
 
       const totalUserQuota = rankingData.reduce((s, i) => s + i.Quota, 0);
 
@@ -625,6 +909,8 @@ export const useDashboardCharts = (
   return {
     spec_pie,
     spec_line,
+    spec_tokens_bar,
+    spec_tokens_pie,
     spec_model_line,
     spec_rank_bar,
     spec_user_rank,

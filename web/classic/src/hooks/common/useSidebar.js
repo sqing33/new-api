@@ -34,6 +34,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     'video-studio': true,
     tools: true,
     pricing: true,
+    rankings: true,
     chat: true,
   },
   console: {
@@ -59,6 +60,8 @@ export const DEFAULT_ADMIN_CONFIG = {
     user: true,
     subscription: true,
     'tool-install-setting': true,
+    'system-info': true,
+    'task-plugins': true,
     setting: true,
   },
 };

@@ -32,6 +32,8 @@ import {
   Col,
   Row,
   Checkbox,
+  Select,
+  Tooltip,
 } from '@douyinfe/semi-ui';
 import { Save, X, FileText } from 'lucide-react';
 import {
@@ -127,6 +129,7 @@ const qingyingSettingToFormValues = (setting) => {
       (normalized?.modes || []).length > 0
         ? normalized.modes
         : DEFAULT_QINGYING_IMAGE_MODES,
+    qingying_image_single_endpoint: normalized?.single_endpoint === true,
     qingying_video_enabled: (normalized?.video_modes || []).includes(
       'text_to_video',
     ),
@@ -317,6 +320,7 @@ const EditModelModal = (props) => {
       model: modelName,
       modes,
       max_n: 1,
+      single_endpoint: values.qingying_image_single_endpoint === true,
     };
 
     if (values.qingying_video_enabled) {
@@ -366,6 +370,7 @@ const EditModelModal = (props) => {
       };
       delete submitData.qingying_image_enabled;
       delete submitData.qingying_image_modes;
+      delete submitData.qingying_image_single_endpoint;
       delete submitData.qingying_video_enabled;
       delete submitData.qingying_video_durations;
       delete submitData.qingying_video_default_seconds;
@@ -602,6 +607,50 @@ const EditModelModal = (props) => {
                                 }}
                               />
                             </div>
+                            {values.qingying_image_enabled && (
+                              <Tooltip
+                                content={t(
+                                  '单接口：图生图请求将合并到文生图端点发送；双接口：文生图与图生图分别使用独立端点',
+                                )}
+                              >
+                                <div className='flex items-center gap-2'>
+                                  <Text
+                                    type='tertiary'
+                                    style={{
+                                      fontSize: 13,
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {t('接口模式')}
+                                  </Text>
+                                  <Select
+                                    value={
+                                      values.qingying_image_single_endpoint
+                                        ? 'single'
+                                        : 'dual'
+                                    }
+                                    size='small'
+                                    style={{ width: 120 }}
+                                    onChange={(value) =>
+                                      formApiRef.current?.setValue(
+                                        'qingying_image_single_endpoint',
+                                        value === 'single',
+                                      )
+                                    }
+                                    optionList={[
+                                      {
+                                        value: 'dual',
+                                        label: t('双接口'),
+                                      },
+                                      {
+                                        value: 'single',
+                                        label: t('单接口'),
+                                      },
+                                    ]}
+                                  />
+                                </div>
+                              </Tooltip>
+                            )}
                             {values.qingying_image_enabled && (
                               <Checkbox.Group
                                 onChange={(value) =>

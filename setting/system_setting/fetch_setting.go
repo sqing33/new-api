@@ -1,6 +1,9 @@
 package system_setting
 
-import "github.com/QuantumNous/new-api/setting/config"
+import (
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/config"
+)
 
 type FetchSetting struct {
 	EnableSSRFProtection   bool     `json:"enable_ssrf_protection"` // 是否启用SSRF防护
@@ -31,4 +34,24 @@ func init() {
 
 func GetFetchSetting() *FetchSetting {
 	return &defaultFetchSetting
+}
+
+// ValidateUpstreamURLForSSRF 走 system FetchSetting 的 SSRF 校验,供 ratio_sync 等
+// admin 端点验证 baseURL 使用。如果 SSRF 防护未启用,直接返回 nil(放行)。
+func ValidateUpstreamURLForSSRF(urlStr string) error {
+	fs := GetFetchSetting()
+	if fs == nil || !fs.EnableSSRFProtection {
+		return nil
+	}
+	return common.ValidateURLWithFetchSetting(
+		urlStr,
+		fs.EnableSSRFProtection,
+		fs.AllowPrivateIp,
+		fs.DomainFilterMode,
+		fs.IpFilterMode,
+		fs.DomainList,
+		fs.IpList,
+		fs.AllowedPorts,
+		fs.ApplyIPFilterForDomain,
+	)
 }

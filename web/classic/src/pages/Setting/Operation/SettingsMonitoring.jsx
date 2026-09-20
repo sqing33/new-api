@@ -153,7 +153,7 @@ export default function SettingsMonitoring(props) {
                   step={1}
                   min={1}
                   suffix={t('分钟')}
-                  extraText={t('每隔多少分钟测试一次所有通道')}
+                  extraText={t('monitor_auto_test_channels_description')}
                   placeholder={''}
                   field={'monitor_setting.auto_test_channel_minutes'}
                   onChange={(value) =>

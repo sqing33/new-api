@@ -24,6 +24,10 @@ const (
 )
 
 type ChannelOtherSettings struct {
+	QuotaQueryPresetID                    string                            `json:"quota_query_preset_id,omitempty"`
+	QuotaQueryCredentialMode              string                            `json:"quota_query_credential_mode,omitempty"`
+	QuotaQueryKeyIndex                    *int                              `json:"quota_query_key_index,omitempty"`
+	QuotaQueryExtra                       map[string]string                 `json:"quota_query_extra,omitempty"`
 	AzureResponsesVersion                 string                            `json:"azure_responses_version,omitempty"`
 	ResponsesCompatMode                   string                            `json:"responses_compat_mode,omitempty"`
 	ResponsesCompatToolMode               string                            `json:"responses_compat_tool_mode,omitempty"`
@@ -47,26 +51,6 @@ type ChannelOtherSettings struct {
 	UpstreamPricingEndpoint               string                            `json:"upstream_pricing_endpoint,omitempty"`                  // 自定义定价接口路径（默认 /api/pricing）
 	UpstreamPricingLastCheckTime          int64                             `json:"upstream_pricing_last_check_time,omitempty"`           // 上次检测时间戳
 	UpstreamPricingLastSnapshot           map[string]map[string]interface{} `json:"upstream_pricing_last_snapshot,omitempty"`             // 上次上游定价快照
-}
-
-const (
-	ResponsesCompatModeNative          = "native"
-	ResponsesCompatModeChatCompletions = "chat_completions"
-)
-
-const (
-	ResponsesCompatToolModeFunctionOnly        = "function_only"
-	ResponsesCompatToolModeWrapNonFunction     = "wrap_non_function_tools"
-	ResponsesCompatToolModeStrictError         = "strict_error"
-	ContextKeyResponsesCompatToolMappings      = "responses_compat_tool_mappings"
-	ContextKeyResponsesCompatToolReverseLookup = "responses_compat_tool_reverse_lookup"
-)
-
-type ResponsesCompatToolMapping struct {
-	SafeName     string `json:"safe_name"`
-	OriginalName string `json:"original_name"`
-	OriginalType string `json:"original_type"`
-	Wrapped      bool   `json:"wrapped"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {

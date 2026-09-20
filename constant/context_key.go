@@ -39,6 +39,10 @@ const (
 	ContextKeyChannelIsMultiKey        ContextKey = "channel_is_multi_key"
 	ContextKeyChannelMultiKeyIndex     ContextKey = "channel_multi_key_index"
 	ContextKeyChannelKey               ContextKey = "channel_key"
+	// ContextKeyChannelForceKeyIndex pins one key of a multi-key channel for the
+	// current request. Only channel tests set it, to probe an auto-disabled key
+	// for recovery; production traffic never pins a key.
+	ContextKeyChannelForceKeyIndex ContextKey = "channel_force_key_index"
 
 	ContextKeyAutoGroup           ContextKey = "auto_group"
 	ContextKeyAutoGroupIndex      ContextKey = "auto_group_index"

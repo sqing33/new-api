@@ -612,6 +612,10 @@ func saveAdminToolInstallTool(c *gin.Context, tool *model.ToolInstallTool) {
 		common.ApiErrorMsg(c, "tool name is required")
 		return
 	}
+	if err := validateToolInstallSafety(req.VerifyCommand, req.ConfigFiles); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
 	if tool == nil {
 		tool = &model.ToolInstallTool{}
 	}
@@ -630,4 +634,63 @@ func saveAdminToolInstallTool(c *gin.Context, tool *model.ToolInstallTool) {
 		return
 	}
 	common.ApiSuccess(c, tool)
+}
+
+// validateToolInstallSafety 限制 admin 保存的 tool install 配置不能做 RCE-as-a-service。
+//   - VerifyCommand: 拒绝明显危险模式(curl/wget | sh、> /etc/、rm -rf /
+//     等),但允许常见的安全命令(`tool --version`、`--help`)。
+//   - ConfigFiles.path: 必须在用户家目录下(以 ~/ 或 ${HOME} 开头),
+//     且不能含 `..` 路径穿越。
+//
+// 这是 best-effort 防护,真正的根本修复是给管理员在 UI 上显著风险提示,
+// 并把此功能限定在受信管理员范围。
+func validateToolInstallSafety(verifyCommand string, files []model.ToolInstallConfigFile) error {
+	vc := strings.TrimSpace(verifyCommand)
+	if vc != "" {
+		// 拒绝远程代码执行模式
+		lower := strings.ToLower(vc)
+		for _, danger := range []string{
+			"| sh",
+			"| bash",
+			"| zsh",
+			"$(curl",
+			"$(wget",
+			"> /etc/",
+			"> /var/",
+			"> /usr/",
+			"> /bin/",
+			"> /sbin/",
+			"rm -rf /",
+		} {
+			if strings.Contains(lower, danger) {
+				return fmt.Errorf("verify_command 包含危险的模式 %q。请改用受信任的本地可执行文件加白名单参数", danger)
+			}
+		}
+	}
+	for i, file := range files {
+		path := strings.TrimSpace(file.Path)
+		if path == "" {
+			continue
+		}
+		// 必须以 ~/ 或 ${HOME} 或 $HOME 开头
+		if !(strings.HasPrefix(path, "~/") ||
+			strings.HasPrefix(path, "$HOME/") ||
+			strings.HasPrefix(path, "${HOME}/") ||
+			strings.HasPrefix(path, "$HOME=") ||
+			strings.HasPrefix(path, "${HOME}=")) {
+			return fmt.Errorf("config_files[%d].path 必须以 ~/ 或 $HOME/ 开头(用户家目录下),不能写系统路径", i)
+		}
+		// 拒绝 `..` 路径穿越
+		if strings.Contains(path, "..") {
+			return fmt.Errorf("config_files[%d].path 含 '..' 路径穿越,拒绝", i)
+		}
+		// 拒绝绝对系统路径(已由前缀判断,再 belt-and-suspenders)
+		if strings.HasPrefix(path, "/etc/") || strings.HasPrefix(path, "/var/") ||
+			strings.HasPrefix(path, "/usr/") || strings.HasPrefix(path, "/bin/") ||
+			strings.HasPrefix(path, "/sbin/") || strings.HasPrefix(path, "/proc/") ||
+			strings.HasPrefix(path, "/sys/") || strings.HasPrefix(path, "/dev/") {
+			return fmt.Errorf("config_files[%d].path 指向系统目录,拒绝", i)
+		}
+	}
+	return nil
 }

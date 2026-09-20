@@ -22,6 +22,8 @@ export const WORKBENCH_PATHS = new Set([
   '/deployment',
   '/subscription',
   '/tool-install-setting',
+  '/system-info',
+  '/rankings',
   '/chat',
 ]);
 

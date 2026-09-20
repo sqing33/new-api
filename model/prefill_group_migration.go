@@ -3,6 +3,8 @@ package model
 import (
 	"fmt"
 
+	"github.com/QuantumNous/new-api/common"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -132,7 +134,8 @@ func migratePrefillGroupUniqueness(db *gorm.DB) error {
 		return fmt.Errorf("migrate prefill group uniqueness: database is nil")
 	}
 	if db.Dialector.Name() != "postgres" {
-		return nil
+		// MySQL/SQLite 由 dropLegacyPrefillGroupIndexesIfPresent 走"只删已知 legacy 名"语义
+		return dropLegacyPrefillGroupIndexesIfPresent(db)
 	}
 
 	statement := &gorm.Statement{DB: db}
@@ -157,6 +160,10 @@ func migratePrefillGroupUniqueness(db *gorm.DB) error {
 			return nil
 		}
 
+		common.SysLog(fmt.Sprintf(
+			"prefill_groups uniqueness migration: acquiring ACCESS EXCLUSIVE lock on %s (this can take a while on a hot DB; all reads/writes will block until done)",
+			tableName,
+		))
 		if err := tx.Exec(
 			"LOCK TABLE ? IN ACCESS EXCLUSIVE MODE",
 			clause.Table{Name: tableName},
@@ -211,4 +218,62 @@ func migratePrefillGroupUniqueness(db *gorm.DB) error {
 
 		return nil
 	})
+}
+
+// dropLegacyPrefillGroupIndexesIfPresent 在 MySQL/SQLite 上把可能遗留的
+// legacy 全局唯一索引/约束删掉(只动已知 legacy 名,不误删用户自建)。
+// PostgreSQL 路径由 migratePrefillGroupUniqueness 主分支处理。
+func dropLegacyPrefillGroupIndexesIfPresent(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("drop legacy prefill group indexes: database is nil")
+	}
+	if !db.Migrator().HasTable(&PrefillGroup{}) {
+		return nil
+	}
+	migrator := db.Migrator()
+	hasIndex, err := hasLegacyPrefillGroupIndex(db, migrator)
+	if err != nil {
+		return err
+	}
+	if !hasIndex {
+		return nil
+	}
+	common.SysLog(fmt.Sprintf("dropping legacy prefill_groups index %q (%s)",
+		legacyPrefillGroupNameUnique, db.Dialector.Name()))
+	if err := migrator.DropIndex(&PrefillGroup{}, legacyPrefillGroupNameUnique); err != nil {
+		return fmt.Errorf("drop legacy prefill_groups index: %w", err)
+	}
+	return nil
+}
+
+// hasLegacyPrefillGroupIndex 用方言元数据判断 legacy 全局唯一索引是否还在。
+// MySQL 走 information_schema.statistics,SQLite 走 pragma index_list/index_info。
+func hasLegacyPrefillGroupIndex(db *gorm.DB, migrator gorm.Migrator) (bool, error) {
+	switch db.Dialector.Name() {
+	case "mysql":
+		var count int64
+		if err := db.Raw(
+			`SELECT COUNT(*) FROM information_schema.statistics
+			 WHERE table_schema = DATABASE() AND table_name = 'prefill_groups' AND index_name = ?`,
+			legacyPrefillGroupNameUnique,
+		).Scan(&count).Error; err != nil {
+			return false, fmt.Errorf("inspect prefill_groups index: %w", err)
+		}
+		return count > 0, nil
+	case "sqlite":
+		var rows []struct {
+			Name string `gorm:"column:name"`
+		}
+		if err := db.Raw(`PRAGMA index_list(prefill_groups)`).Scan(&rows).Error; err != nil {
+			return false, fmt.Errorf("inspect prefill_groups index: %w", err)
+		}
+		for _, r := range rows {
+			if r.Name == legacyPrefillGroupNameUnique {
+				return true, nil
+			}
+		}
+		return false, nil
+	default:
+		return false, nil
+	}
 }

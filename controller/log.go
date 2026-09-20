@@ -201,3 +201,32 @@ func GetLogsSelfStat(c *gin.Context) {
 	})
 	return
 }
+
+func DeleteHistoryLogs(c *gin.Context) {
+	targetTimestamp, _ := strconv.ParseInt(c.Query("target_timestamp"), 10, 64)
+	if targetTimestamp == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "target timestamp is required",
+		})
+		return
+	}
+	var count int64
+	for {
+		n, err := model.DeleteOldLogBatch(c.Request.Context(), targetTimestamp, 1000)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		count += n
+		if n < 1000 {
+			break
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    count,
+	})
+	return
+}

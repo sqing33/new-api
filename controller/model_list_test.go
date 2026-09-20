@@ -16,6 +16,8 @@ import (
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -509,6 +511,15 @@ func TestSetupLoginDoesNotTouchPasswordWhenPasswordFieldOmitted(t *testing.T) {
 	require.NoError(t, db.Create(user).Error)
 
 	router := gin.New()
+	sessionStore := cookie.NewStore([]byte(common.SessionSecret))
+	sessionStore.Options(sessions.Options{
+		Path:     "/",
+		MaxAge:   2592000,
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteStrictMode,
+	})
+	router.Use(sessions.Sessions("session", sessionStore))
 	router.GET("/", func(c *gin.Context) {
 		setupLogin(&model.User{
 			Id:          user.Id,

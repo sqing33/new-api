@@ -38,6 +38,11 @@ import { useTableCompactMode } from '../common/useTableCompactMode';
 import { useChannelUpstreamUpdates } from './useChannelUpstreamUpdates';
 import { useChannelUpstreamPricing } from './useChannelUpstreamPricing';
 import { parseUpstreamUpdateMeta } from './upstreamUpdateUtils';
+import {
+  getChannelSortValue,
+  getPlanQuotaRegistryVersion,
+  subscribePlanQuotaRegistry,
+} from './planQuotaRegistry';
 import { Modal, Button } from '@douyinfe/semi-ui';
 import { openCodexUsageModal } from '../../components/table/channels/modals/CodexUsageModal';
 
@@ -79,6 +84,20 @@ export const useChannelsData = () => {
   // Type tabs states
   const [activeTypeKey, setActiveTypeKey] = useState('all');
   const [typeCounts, setTypeCounts] = useState({});
+
+  // Client-side "sort by plan usage" toggle; persisted alongside the other
+  // toolbar switches (id-sort, batch ops) in localStorage.
+  const [planUsageSort, setPlanUsageSort] = useState(false);
+  const [planQuotaRegistryVersion, setPlanQuotaRegistryVersion] = useState(
+    getPlanQuotaRegistryVersion(),
+  );
+  useEffect(() => {
+    // The registry notifies without arguments; passing setState directly
+    // would set the version state to undefined, so re-read it explicitly.
+    return subscribePlanQuotaRegistry(() =>
+      setPlanQuotaRegistryVersion(getPlanQuotaRegistryVersion()),
+    );
+  }, []);
 
   // Model test states
   const [showModelTestModal, setShowModelTestModal] = useState(false);
@@ -139,6 +158,7 @@ export const useChannelsData = () => {
     STATUS: 'status',
     RESPONSE_TIME: 'response_time',
     BALANCE: 'balance',
+    PLAN_QUOTA: 'plan_quota',
     PRIORITY: 'priority',
     WEIGHT: 'weight',
     OPERATE: 'operate',
@@ -153,11 +173,14 @@ export const useChannelsData = () => {
       localStorage.getItem('enable-tag-mode') === 'true';
     const localEnableBatchDelete =
       localStorage.getItem('enable-batch-delete') === 'true';
+    const localPlanUsageSort =
+      localStorage.getItem('plan-usage-sort') === 'true';
 
     setIdSort(localIdSort);
     setPageSize(localPageSize);
     setEnableTagMode(localEnableTagMode);
     setEnableBatchDelete(localEnableBatchDelete);
+    setPlanUsageSort(localPlanUsageSort);
 
     loadChannels(1, localPageSize, localIdSort, localEnableTagMode)
       .then()
@@ -179,6 +202,7 @@ export const useChannelsData = () => {
       [COLUMN_KEYS.STATUS]: true,
       [COLUMN_KEYS.RESPONSE_TIME]: true,
       [COLUMN_KEYS.BALANCE]: true,
+      [COLUMN_KEYS.PLAN_QUOTA]: true,
       [COLUMN_KEYS.PRIORITY]: true,
       [COLUMN_KEYS.WEIGHT]: true,
       [COLUMN_KEYS.OPERATE]: true,
@@ -450,12 +474,10 @@ export const useChannelsData = () => {
         res = await API.delete(`/api/channel/${id}/`);
         break;
       case 'enable':
-        data.status = 1;
-        res = await API.put('/api/channel/', data);
+        res = await API.post(`/api/channel/${id}/status`, { status: 1 });
         break;
       case 'disable':
-        data.status = 2;
-        res = await API.put('/api/channel/', data);
+        res = await API.post(`/api/channel/${id}/status`, { status: 2 });
         break;
       case 'priority':
         if (value === '') return;
@@ -479,7 +501,10 @@ export const useChannelsData = () => {
       showSuccess(t('操作成功完成！'));
       let channel = res.data.data;
       let newChannels = [...channels];
-      if (action !== 'delete') {
+      if (action === 'enable' || action === 'disable') {
+        // 状态接口只返回是否发生变更,不回传渠道对象,直接更新本地状态。
+        record.status = action === 'enable' ? 1 : 2;
+      } else if (action !== 'delete') {
         record.status = channel.status;
       }
       setChannels(newChannels);
@@ -1135,9 +1160,33 @@ export const useChannelsData = () => {
     return keys;
   }, [channelTypeCounts]);
 
+  // Client-side reorder of the displayed channels by plan usage remaining
+  // (five-hour window, most remaining first). The channels list is the
+  // server-paginated current page, so this sort never reorders beyond it —
+  // rows without a reported value keep their relative order at the end.
+  // Values arrive asynchronously from the plan quota cells; the registry
+  // version bumps on every report and re-triggers the sort.
+  const sortedChannels = useMemo(() => {
+    if (!planUsageSort) {
+      return channels;
+    }
+    const withValue = [];
+    const withoutValue = [];
+    channels.forEach((channel) => {
+      const value = getChannelSortValue(channel?.id);
+      if (value == null) {
+        withoutValue.push(channel);
+      } else {
+        withValue.push([value, channel]);
+      }
+    });
+    withValue.sort((a, b) => b[0] - a[0]);
+    return [...withValue.map(([, channel]) => channel), ...withoutValue];
+  }, [channels, planUsageSort, planQuotaRegistryVersion]);
+
   return {
     // Basic states
-    channels,
+    channels: sortedChannels,
     loading,
     searching,
     activePage,
@@ -1145,6 +1194,8 @@ export const useChannelsData = () => {
     channelCount,
     groupOptions,
     idSort,
+    planUsageSort,
+    setPlanUsageSort,
     enableTagMode,
     enableBatchDelete,
     statusFilter,

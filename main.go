@@ -34,16 +34,18 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/bytedance/gopkg/util/gopool"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
 	_ "net/http/pprof"
 )
 
-//go:embed web/dist
+//go:embed web/classic/dist
 var buildFS embed.FS
 
-//go:embed web/dist/index.html
+//go:embed web/classic/dist/index.html
 var indexPage []byte
 
 func main() {
@@ -156,6 +158,17 @@ func main() {
 	controller.RegisterScheduledSystemTasks()
 	service.StartSystemTaskRunner()
 
+	// Channel upstream pricing monitor task
+	controller.StartUpstreamPricingMonitorTask()
+
+	if common.IsMasterNode && constant.UpdateTask {
+		gopool.Go(func() {
+			controller.UpdateMidjourneyTaskBulk()
+		})
+		gopool.Go(func() {
+			controller.UpdateTaskBulk()
+		})
+	}
 	if os.Getenv("BATCH_UPDATE_ENABLED") == "true" {
 		common.BatchUpdateEnabled = true
 		common.SysLog("batch update enabled with interval " + strconv.Itoa(common.BatchUpdateInterval) + "s")
@@ -196,6 +209,16 @@ func main() {
 	server.Use(middleware.Version())
 	server.Use(middleware.I18n())
 	middleware.SetUpLogger(server)
+	// Initialize session store (classic 前端的 cookie 登录依赖它)
+	store := cookie.NewStore([]byte(common.SessionSecret))
+	store.Options(sessions.Options{
+		Path:     "/",
+		MaxAge:   2592000, // 30 days
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteStrictMode,
+	})
+	server.Use(sessions.Sessions("session", store))
 	InjectUmamiAnalytics()
 	InjectGoogleAnalytics()
 
@@ -298,6 +321,13 @@ func InitResources() error {
 
 	// 加载环境变量
 	common.InitEnv()
+
+	// 配置 http.DefaultClient / http.DefaultTransport / websocket.DefaultDialer
+	// 的安全默认值(ResponseHeaderTimeout / HandshakeTimeout),
+	// 覆盖使用 DefaultClient 而不走 newRelayHTTPTransport 的代码路径
+	// (video_proxy / ratio_sync / channel_upstream_pricing / codex_oauth 等)。
+	// 见 common/http_safety.go 与 b518d0033 / #6949。
+	common.InitDefaultSafeHTTPClient()
 
 	logger.SetupLogger()
 

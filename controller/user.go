@@ -22,6 +22,7 @@ import (
 
 	"github.com/QuantumNous/new-api/constant"
 
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -197,12 +198,39 @@ func writeLoginResponse(c *gin.Context, user *model.User, bundle *service.AuthBu
 	c.Set("login_method", bundle.Session.LoginMethod)
 	model.UpdateUserLastLoginAt(user.Id)
 	service.WriteRefreshCookie(c, bundle.RefreshToken)
+	// Legacy cookie session, kept for the classic dashboard whose requests
+	// carry no Authorization header and for old OAuth-bind code paths that
+	// read sessions.Default(c).Get("id"). See legacySessionCredential.
+	// Skipped when the sessions middleware is not installed (tests, relays).
+	if _, hasSessionStore := c.Get(sessions.DefaultKey); hasSessionStore {
+		session := sessions.Default(c)
+		session.Set("id", user.Id)
+		session.Set("username", user.Username)
+		session.Set("role", user.Role)
+		session.Set("status", user.Status)
+		session.Set("group", user.Group)
+		if err := session.Save(); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+	}
 	setAuthNoStore(c)
 	recordLoginAudit(user, c)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "",
 		"success": true,
 		"data": gin.H{
+			// The classic dashboard persists this payload as-is and derives the
+			// New-Api-User header from data.id, which legacySessionCredential
+			// requires. Moving the identity into data.user alone made every
+			// post-login dashboard request fail with 401, so the flat fields
+			// stay alongside the nested user object.
+			"id":                user.Id,
+			"username":          user.Username,
+			"display_name":      user.DisplayName,
+			"role":              user.Role,
+			"status":            user.Status,
+			"group":             user.Group,
 			"access_token":      bundle.AccessToken,
 			"token_type":        bundle.TokenType,
 			"access_expires_at": bundle.AccessExpiresAt,
@@ -210,6 +238,19 @@ func writeLoginResponse(c *gin.Context, user *model.User, bundle *service.AuthBu
 			"user":              buildSelfUserData(user),
 		},
 	})
+}
+
+// Logout is the legacy GET /api/user/logout endpoint used by the classic
+// dashboard. It clears the legacy cookie session and reuses AuthLogout to
+// revoke the stateless session and refresh cookie.
+func Logout(c *gin.Context) {
+	session := sessions.Default(c)
+	session.Clear()
+	if err := session.Save(); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+		return
+	}
+	AuthLogout(c)
 }
 
 func Register(c *gin.Context) {
@@ -1266,19 +1307,18 @@ func TopUp(c *gin.Context) {
 }
 
 type UpdateUserSettingRequest struct {
-	QuotaWarningType                   string  `json:"notify_type"`
-	QuotaWarningThreshold              float64 `json:"quota_warning_threshold"`
-	WebhookUrl                         string  `json:"webhook_url,omitempty"`
-	WebhookSecret                      string  `json:"webhook_secret,omitempty"`
-	NotificationEmail                  string  `json:"notification_email,omitempty"`
-	BarkUrl                            string  `json:"bark_url,omitempty"`
-	GotifyUrl                          string  `json:"gotify_url,omitempty"`
-	GotifyToken                        string  `json:"gotify_token,omitempty"`
-	GotifyPriority                     int     `json:"gotify_priority,omitempty"`
-	UpstreamModelUpdateNotifyEnabled   *bool   `json:"upstream_model_update_notify_enabled,omitempty"`
-	UpstreamPricingChangeNotifyEnabled *bool   `json:"upstream_pricing_change_notify_enabled,omitempty"`
-	AcceptUnsetModelRatioModel         bool    `json:"accept_unset_model_ratio_model"`
-	RecordIpLog                        bool    `json:"record_ip_log"`
+	QuotaWarningType                 string  `json:"notify_type"`
+	QuotaWarningThreshold            float64 `json:"quota_warning_threshold"`
+	WebhookUrl                       string  `json:"webhook_url,omitempty"`
+	WebhookSecret                    string  `json:"webhook_secret,omitempty"`
+	NotificationEmail                string  `json:"notification_email,omitempty"`
+	BarkUrl                          string  `json:"bark_url,omitempty"`
+	GotifyUrl                        string  `json:"gotify_url,omitempty"`
+	GotifyToken                      string  `json:"gotify_token,omitempty"`
+	GotifyPriority                   int     `json:"gotify_priority,omitempty"`
+	UpstreamModelUpdateNotifyEnabled *bool   `json:"upstream_model_update_notify_enabled,omitempty"`
+	AcceptUnsetModelRatioModel       bool    `json:"accept_unset_model_ratio_model"`
+	RecordIpLog                      bool    `json:"record_ip_log"`
 }
 
 func UpdateUserSetting(c *gin.Context) {
@@ -1370,22 +1410,17 @@ func UpdateUserSetting(c *gin.Context) {
 	}
 	existingSettings := user.GetSetting()
 	upstreamModelUpdateNotifyEnabled := existingSettings.UpstreamModelUpdateNotifyEnabled
-	upstreamPricingChangeNotifyEnabled := existingSettings.UpstreamPricingChangeNotifyEnabled
 	if user.Role >= common.RoleAdminUser && req.UpstreamModelUpdateNotifyEnabled != nil {
 		upstreamModelUpdateNotifyEnabled = *req.UpstreamModelUpdateNotifyEnabled
-	}
-	if user.Role >= common.RoleAdminUser && req.UpstreamPricingChangeNotifyEnabled != nil {
-		upstreamPricingChangeNotifyEnabled = *req.UpstreamPricingChangeNotifyEnabled
 	}
 
 	// 构建设置
 	settings := dto.UserSetting{
-		NotifyType:                         req.QuotaWarningType,
-		QuotaWarningThreshold:              req.QuotaWarningThreshold,
-		UpstreamModelUpdateNotifyEnabled:   upstreamModelUpdateNotifyEnabled,
-		UpstreamPricingChangeNotifyEnabled: upstreamPricingChangeNotifyEnabled,
-		AcceptUnsetRatioModel:              req.AcceptUnsetModelRatioModel,
-		RecordIpLog:                        req.RecordIpLog,
+		NotifyType:                       req.QuotaWarningType,
+		QuotaWarningThreshold:            req.QuotaWarningThreshold,
+		UpstreamModelUpdateNotifyEnabled: upstreamModelUpdateNotifyEnabled,
+		AcceptUnsetRatioModel:            req.AcceptUnsetModelRatioModel,
+		RecordIpLog:                      req.RecordIpLog,
 	}
 
 	// 如果是webhook类型,添加webhook相关设置

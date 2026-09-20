@@ -44,6 +44,7 @@ import {
   MODEL_FETCHABLE_CHANNEL_TYPES,
 } from '../../../constants';
 import { parseUpstreamUpdateMeta } from '../../../hooks/channels/upstreamUpdateUtils';
+import { PlanQuotaCell } from './PlanQuotaCell';
 import {
   IconTreeTriangleDown,
   IconMore,
@@ -308,6 +309,7 @@ export const getChannelsColumns = ({
   t,
   COLUMN_KEYS,
   updateChannelBalance,
+  planQuotaVisible,
   manageChannel,
   manageTag,
   submitTagEdit,
@@ -571,6 +573,22 @@ export const getChannelsColumns = ({
             </Tooltip>
           );
         }
+      },
+    },
+    {
+      key: COLUMN_KEYS.PLAN_QUOTA,
+      title: t('Plan Usage'),
+      dataIndex: 'plan_quota',
+      render: (text, record, index) => {
+        // Tag-parent aggregate rows never carry a single upstream plan; the
+        // per-child rows below them render their own cells. No query is
+        // issued for the parent.
+        if (record.children !== undefined) {
+          return <span className='text-semi-color-text-2'>-</span>;
+        }
+        return (
+          <PlanQuotaCell t={t} record={record} visible={planQuotaVisible} />
+        );
       },
     },
     {

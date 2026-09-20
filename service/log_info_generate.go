@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/base64"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -10,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
+	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -160,6 +162,21 @@ func appendStreamStatus(relayInfo *relaycommon.RelayInfo, other *model.LogOther)
 		streamInfo["errors"] = messages
 	}
 	other.SetPublic("stream_status", streamInfo)
+}
+
+// appendOutputSpeed records this request's generation throughput on the consume
+// log, using the same definition as the dashboard performance metrics so the
+// usage log can show the matching figure. Older logs have no tps field, and the
+// frontend falls back to a coarse estimate for them.
+func appendOutputSpeed(relayInfo *relaycommon.RelayInfo, other *model.LogOther, outputTokens int) {
+	if other == nil || outputTokens <= 0 {
+		return
+	}
+	tps := perfmetrics.OutputTokensPerSecond(relayInfo, int64(outputTokens))
+	if tps <= 0 {
+		return
+	}
+	other.SetPublic("tps", math.Round(tps*100)/100)
 }
 
 func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther) {

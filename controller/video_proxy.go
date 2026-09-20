@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relaychannel "github.com/QuantumNous/new-api/relay/channel"
@@ -28,6 +29,9 @@ import (
 var errTaskMediaRequestRejected = errors.New("task media request rejected")
 
 var taskMediaResponseHeaderTimeout = 60 * time.Second
+// taskMediaBodyWriteTimeout 限定 proxy 写回 client 的整段 body 传输时长。
+// 慢客户端会让 io.Copy 永久挂起,需要 ResponseController.SetWriteDeadline 强制中断。
+var taskMediaBodyWriteTimeout = 30 * time.Minute
 var taskMediaDataURLMaxEncodedBytes = 64 << 20
 
 type taskMediaProxyError struct {
@@ -288,7 +292,17 @@ func proxyTaskMedia(c *gin.Context, task *model.Task, descriptor *relaychannel.T
 		if c.Request.Method == http.MethodHead || resp.StatusCode == http.StatusNotModified {
 			return nil
 		}
-		if _, err := io.Copy(c.Writer, resp.Body); err != nil {
+		// 与 b518d0033 OOM 修复保持一致:body 阶段必须限定大小,慢上游 + 慢客户端
+		// 也不能让 goroutine 永久挂起。MaxBytesReader 给 body 阶段加 size 保护,
+		// ResponseController 给 write 阶段加 deadline 保护。
+		bodyLimit := int64(constant.MaxRequestBodyMB) << 20
+		if bodyLimit <= 0 {
+			bodyLimit = 128 << 20
+		}
+		limitedBody := http.MaxBytesReader(c.Writer, resp.Body, bodyLimit)
+		defer limitedBody.Close()
+		_ = http.NewResponseController(c.Writer).SetWriteDeadline(time.Now().Add(taskMediaBodyWriteTimeout))
+		if _, err := io.Copy(c.Writer, limitedBody); err != nil {
 			logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to stream task media: %v", err))
 		}
 		return nil

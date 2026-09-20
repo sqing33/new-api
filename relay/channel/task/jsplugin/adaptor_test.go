@@ -25,10 +25,22 @@ import (
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// allowLoopbackTestServers 在测试期间关闭全局 SSRF 防护，让 httptest 的
+// loopback 随机端口可以被用作 jsplugin task URL（与 ali 适配器的测试同款做法）。
+func allowLoopbackTestServers(t *testing.T) {
+	t.Helper()
+	fetchSetting := system_setting.GetFetchSetting()
+	require.NotNil(t, fetchSetting)
+	originalFetchSetting := *fetchSetting
+	fetchSetting.EnableSSRFProtection = false
+	t.Cleanup(func() { *fetchSetting = originalFetchSetting })
+}
 
 const mockPlugin = `
 export const meta = {
@@ -448,6 +460,7 @@ export function buildContentRequest(ctx) { return {url:"https://cdn.example/vide
 }
 
 func TestTaskAdaptorMapsJSContract(t *testing.T) {
+	allowLoopbackTestServers(t)
 	gin.SetMode(gin.TestMode)
 	service.InitHttpClient()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1134,6 +1147,7 @@ export function extractUsageOnComplete(task, result, body) { return {upstreamUni
 // results by taskId, preserve the explicit result URL, and skip entries without
 // a task id.
 func TestTaskAdaptorBatchBridge(t *testing.T) {
+	allowLoopbackTestServers(t)
 	service.InitHttpClient()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/batch", r.URL.Path)
@@ -1243,6 +1257,7 @@ func TestTaskAdaptorBuildSubmitReceivesMappedUpstreamModel(t *testing.T) {
 // Polling has no relay info, so query hooks can only branch on the model when
 // the host forwards the persisted task identities from the fetch body.
 func TestTaskAdaptorFetchTaskExposesModelIdentities(t *testing.T) {
+	allowLoopbackTestServers(t)
 	service.InitHttpClient()
 	var requested string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1295,6 +1310,7 @@ export function parseTaskResult(){return {status:"SUCCESS"}}
 }
 
 func TestTaskAdaptorQueryContextOmitsRequestBody(t *testing.T) {
+	allowLoopbackTestServers(t)
 	service.InitHttpClient()
 	var captured map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1400,6 +1416,7 @@ export function parseTaskResult(){return {status:"SUCCESS"}}
 }
 
 func TestTaskAdaptorBatchQueryReceivesTaskObjects(t *testing.T) {
+	allowLoopbackTestServers(t)
 	service.InitHttpClient()
 	var captured map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

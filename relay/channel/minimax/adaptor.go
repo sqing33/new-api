@@ -78,10 +78,14 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
-	if info.RelayMode != constant.RelayModeImagesGenerations {
+	switch info.RelayMode {
+	case constant.RelayModeImagesGenerations:
+		return oaiImage2MiniMaxImageRequest(request), nil
+	case constant.RelayModeImagesEdits:
+		return oaiImageEdit2MiniMaxImageRequest(c, request)
+	default:
 		return nil, fmt.Errorf("unsupported image relay mode: %d", info.RelayMode)
 	}
-	return oaiImage2MiniMaxImageRequest(request), nil
 }
 
 func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
@@ -94,6 +98,11 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
 	channel.SetupApiRequestHeader(info, c, req)
 	req.Set("Authorization", "Bearer "+info.ApiKey)
+	if info.RelayMode == constant.RelayModeImagesGenerations || info.RelayMode == constant.RelayModeImagesEdits {
+		// Image requests are always re-marshalled to JSON by this adapter,
+		// including edits where the inbound request is multipart/form-data.
+		req.Set("Content-Type", "application/json")
+	}
 	return nil
 }
 
@@ -124,8 +133,11 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	if info.RelayMode == constant.RelayModeAudioSpeech {
 		return handleTTSResponse(c, resp, info)
 	}
-	if info.RelayMode == constant.RelayModeImagesGenerations {
+	if info.RelayMode == constant.RelayModeImagesGenerations || info.RelayMode == constant.RelayModeImagesEdits {
 		return miniMaxImageHandler(c, resp, info)
+	}
+	if newAPIError := inspectChatBusinessError(resp, info); newAPIError != nil {
+		return nil, newAPIError
 	}
 
 	switch info.RelayFormat {

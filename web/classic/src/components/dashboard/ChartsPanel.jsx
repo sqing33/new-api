@@ -26,6 +26,8 @@ const ChartsPanel = ({
   activeChartTab,
   setActiveChartTab,
   spec_line,
+  spec_tokens_bar,
+  spec_tokens_pie,
   spec_model_line,
   spec_pie,
   spec_rank_bar,
@@ -35,13 +37,12 @@ const ChartsPanel = ({
   CARD_PROPS,
   CHART_CONFIG,
   FLEX_CENTER_GAP2,
-  hasApiInfoPanel,
   t,
 }) => {
   return (
     <Card
       {...CARD_PROPS}
-      className={`!rounded-2xl ${hasApiInfoPanel ? 'lg:col-span-3' : ''}`}
+      className='!rounded-2xl lg:col-span-5'
       title={
         <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between w-full gap-3'>
           <div className={FLEX_CENTER_GAP2}>
@@ -54,6 +55,8 @@ const ChartsPanel = ({
             activeKey={activeChartTab}
             onChange={setActiveChartTab}
           >
+            <TabPane tab={<span>{t('消耗量')}</span>} itemKey='7' />
+            <TabPane tab={<span>{t('消耗量占比')}</span>} itemKey='8' />
             <TabPane tab={<span>{t('消耗分布')}</span>} itemKey='1' />
             <TabPane tab={<span>{t('调用趋势')}</span>} itemKey='2' />
             <TabPane tab={<span>{t('调用次数分布')}</span>} itemKey='3' />
@@ -75,6 +78,22 @@ const ChartsPanel = ({
             className='dashboard-vchart'
             style={{ background: 'transparent' }}
             spec={spec_line}
+            option={CHART_CONFIG}
+          />
+        )}
+        {activeChartTab === '7' && (
+          <VChart
+            className='dashboard-vchart'
+            style={{ background: 'transparent' }}
+            spec={spec_tokens_bar}
+            option={CHART_CONFIG}
+          />
+        )}
+        {activeChartTab === '8' && (
+          <VChart
+            className='dashboard-vchart'
+            style={{ background: 'transparent' }}
+            spec={spec_tokens_pie}
             option={CHART_CONFIG}
           />
         )}

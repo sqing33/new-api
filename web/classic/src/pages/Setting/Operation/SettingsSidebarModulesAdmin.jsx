@@ -42,6 +42,7 @@ const buildDefaultSidebarModules = () => ({
     'video-studio': true,
     tools: true,
     pricing: true,
+    rankings: true,
     chat: true,
   },
   console: {
@@ -66,6 +67,9 @@ const buildDefaultSidebarModules = () => ({
     redemption: true,
     user: true,
     subscription: true,
+    'tool-install-setting': true,
+    'system-info': true,
+    'task-plugins': true,
     setting: true,
   },
 });
@@ -211,6 +215,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           title: t('清荫模型馆'),
           description: t('模型列表与价格入口'),
         },
+        {
+          key: 'rankings',
+          title: t('清荫排行榜'),
+          description: t('模型用量与厂商份额排名'),
+        },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
       ],
     },
@@ -275,6 +284,16 @@ export default function SettingsSidebarModulesAdmin(props) {
           key: 'tool-install-setting',
           title: t('工具管理'),
           description: t('工具安装脚本管理'),
+        },
+        {
+          key: 'system-info',
+          title: t('系统信息'),
+          description: t('实例心跳与系统任务'),
+        },
+        {
+          key: 'task-plugins',
+          title: t('任务插件'),
+          description: t('内置与自定义任务插件'),
         },
         {
           key: 'setting',

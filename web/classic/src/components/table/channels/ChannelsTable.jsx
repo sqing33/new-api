@@ -65,6 +65,7 @@ const ChannelsTable = (channelsData) => {
     detectChannelUpstreamUpdates,
     detectChannelUpstreamPricing,
   } = channelsData;
+  const planQuotaVisible = visibleColumns[COLUMN_KEYS.PLAN_QUOTA] === true;
 
   // Get all columns
   const allColumns = useMemo(() => {
@@ -72,6 +73,7 @@ const ChannelsTable = (channelsData) => {
       t,
       COLUMN_KEYS,
       updateChannelBalance,
+      planQuotaVisible,
       manageChannel,
       manageTag,
       submitTagEdit,
@@ -97,6 +99,7 @@ const ChannelsTable = (channelsData) => {
     t,
     COLUMN_KEYS,
     updateChannelBalance,
+    planQuotaVisible,
     manageChannel,
     manageTag,
     submitTagEdit,

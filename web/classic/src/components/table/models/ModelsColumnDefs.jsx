@@ -320,6 +320,7 @@ export const getModelsColumns = ({
   vendorMap,
   imageModelSettingsMap,
   MODEL_COLUMN_KEYS,
+  onModelNameClick,
 }) => {
   return [
     {
@@ -334,8 +335,17 @@ export const getModelsColumns = ({
       key: MODEL_COLUMN_KEYS.MODEL_NAME,
       title: t('模型名称'),
       dataIndex: 'model_name',
-      render: (text) => (
-        <Text copyable onClick={(e) => e.stopPropagation()}>
+      render: (text, record) => (
+        <Text
+          copyable
+          className='cursor-pointer'
+          style={{ color: 'var(--semi-color-primary)' }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (e.target.closest('.semi-typography-copy')) return;
+            onModelNameClick?.(record);
+          }}
+        >
           {text}
         </Text>
       ),

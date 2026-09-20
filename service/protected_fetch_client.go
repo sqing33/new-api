@@ -2,10 +2,14 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
+	"sync/atomic"
 	"strconv"
 	"sync"
 	"time"
@@ -34,10 +38,26 @@ type ssrfProtectedRoundTripper struct {
 	transports map[string]*http.Transport
 }
 
+// cachedFetchProtection 用 atomic.Value 缓存构造好的 *common.SSRFProtection。
+// key 是当前 FetchSetting 的内容 hash(无关字段如未来扩展的 Metadata 不参与),hash
+// 变就 rebuild。覆盖 service.(*ssrfProtectedRoundTripper) 在每次 RoundTrip 与
+// protectedFetchDialer.DialContext 重复调用的双倍开销。
+type cachedFetchProtectionEntry struct {
+	hash       string
+	protection *common.SSRFProtection
+}
+
+var cachedFetchProtection atomic.Pointer[cachedFetchProtectionEntry]
+
 func currentFetchProtection() (*common.SSRFProtection, bool, error) {
 	fetchSetting := system_setting.GetFetchSetting()
 	if !fetchSetting.EnableSSRFProtection {
 		return nil, false, nil
+	}
+
+	hash := hashFetchSetting(fetchSetting)
+	if cached := cachedFetchProtection.Load(); cached != nil && cached.hash == hash {
+		return cached.protection, true, nil
 	}
 
 	protection, err := common.NewSSRFProtectionFromFetchSetting(
@@ -52,7 +72,38 @@ func currentFetchProtection() (*common.SSRFProtection, bool, error) {
 	if err != nil {
 		return nil, true, err
 	}
+	cachedFetchProtection.Store(&cachedFetchProtectionEntry{hash: hash, protection: protection})
 	return protection, true, nil
+}
+
+// hashFetchSetting 对构造 *common.SSRFProtection 用到的所有字段做 SHA-256,
+// 返回 hex 前 32 字符(足够防碰撞,缩短 cache key 内存)。
+func hashFetchSetting(s *system_setting.FetchSetting) string {
+	h := sha256.New()
+	fmt.Fprintf(h, "priv=%v|domMode=%v|ipMode=%v|applyIP=%v|",
+		s.AllowPrivateIp, s.DomainFilterMode, s.IpFilterMode, s.ApplyIPFilterForDomain)
+	if s.DomainList != nil {
+		dom := append([]string(nil), s.DomainList...)
+		sort.Strings(dom)
+		for _, d := range dom {
+			h.Write([]byte("d:" + d + ";"))
+		}
+	}
+	if s.IpList != nil {
+		ip := append([]string(nil), s.IpList...)
+		sort.Strings(ip)
+		for _, i := range ip {
+			h.Write([]byte("i:" + i + ";"))
+		}
+	}
+	if s.AllowedPorts != nil {
+		ports := append([]string(nil), s.AllowedPorts...)
+		sort.Strings(ports)
+		for _, p := range ports {
+			h.Write([]byte("p:" + p + ";"))
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)[:16])
 }
 
 func newProtectedFetchHTTPClient() *http.Client {

@@ -30,6 +30,21 @@ func applyExplicitLogTextFilter(tx *gorm.DB, column string, value string) (*gorm
 	return tx.Where(column+" = ?", value), nil
 }
 
+// applyLogModelFilter 支持多模型精确过滤（modelNames）与单模型模糊过滤（modelName）。
+func applyLogModelFilter(tx *gorm.DB, column string, modelName string, modelNames []string) (*gorm.DB, error) {
+	if len(modelNames) > 0 {
+		return tx.Where(column+" IN ?", modelNames), nil
+	}
+	if modelName != "" {
+		modelNamePattern, err := sanitizeLikePattern(modelName)
+		if err != nil {
+			return nil, err
+		}
+		return tx.Where(column+" LIKE ? ESCAPE '!'", modelNamePattern), nil
+	}
+	return tx, nil
+}
+
 func buildLogLikeCondition(column string, value string) (string, string, error) {
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		pattern, err := sanitizeClickHouseLikePattern(value)
@@ -461,7 +476,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, modelNames []string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -469,7 +484,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		tx = LOG_DB.Where("logs.type = ?", logType)
 	}
 
-	if tx, err = applyExplicitLogTextFilter(tx, "logs.model_name", modelName); err != nil {
+	if tx, err = applyLogModelFilter(tx, "logs.model_name", modelName, modelNames); err != nil {
 		return nil, 0, err
 	}
 	if tx, err = applyExplicitLogTextFilter(tx, "logs.username", username); err != nil {
@@ -557,7 +572,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 
 const logSearchCountLimit = 10000
 
-func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, modelNames []string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
@@ -565,7 +580,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 		tx = LOG_DB.Where("logs.user_id = ? and logs.type = ?", userId, logType)
 	}
 
-	if tx, err = applyExplicitLogTextFilter(tx, "logs.model_name", modelName); err != nil {
+	if tx, err = applyLogModelFilter(tx, "logs.model_name", modelName, modelNames); err != nil {
 		return nil, 0, err
 	}
 	if tokenName != "" {
@@ -606,13 +621,15 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 }
 
 type Stat struct {
-	Quota int `json:"quota"`
-	Rpm   int `json:"rpm"`
-	Tpm   int `json:"tpm"`
+	Quota            int `json:"quota"`
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	Rpm              int `json:"rpm"`
+	Tpm              int `json:"tpm"`
 }
 
-func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
-	tx := LOG_DB.Table("logs").Select("COALESCE(sum(quota), 0) quota")
+func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, modelNames []string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
+	tx := LOG_DB.Table("logs").Select("COALESCE(sum(quota), 0) quota, COALESCE(sum(prompt_tokens), 0) prompt_tokens, COALESCE(sum(completion_tokens), 0) completion_tokens")
 
 	// 为rpm和tpm创建单独的查询
 	rpmTpmQuery := LOG_DB.Table("logs").Select("count(*) rpm, COALESCE(sum(prompt_tokens), 0) + COALESCE(sum(completion_tokens), 0) tpm")
@@ -633,10 +650,10 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	if endTimestamp != 0 {
 		tx = tx.Where("created_at <= ?", endTimestamp)
 	}
-	if tx, err = applyExplicitLogTextFilter(tx, "model_name", modelName); err != nil {
+	if tx, err = applyLogModelFilter(tx, "model_name", modelName, modelNames); err != nil {
 		return stat, err
 	}
-	if rpmTpmQuery, err = applyExplicitLogTextFilter(rpmTpmQuery, "model_name", modelName); err != nil {
+	if rpmTpmQuery, err = applyLogModelFilter(rpmTpmQuery, "model_name", modelName, modelNames); err != nil {
 		return stat, err
 	}
 	if channel != 0 {

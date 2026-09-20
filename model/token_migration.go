@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -131,7 +133,8 @@ func migrateTokenKeyUniqueness(db *gorm.DB) error {
 		return fmt.Errorf("migrate token key uniqueness: database is nil")
 	}
 	if db.Dialector.Name() != "postgres" {
-		return nil
+		// MySQL/SQLite 由 dropLegacyTokenKeyIndexesIfPresent 走"只删已知 legacy 名"语义
+		return dropLegacyTokenKeyIndexesIfPresent(db)
 	}
 
 	statement := &gorm.Statement{DB: db}
@@ -214,4 +217,71 @@ func migrateTokenKeyUniqueness(db *gorm.DB) error {
 		}
 		return nil
 	})
+}
+
+// legacyTokenKeyConstraintCandidates 是 token_migration.go 已知的所有
+// pre-merge 唯一约束 / 唯一索引名。MySQL/SQLite 路径只动这些,绝不误删
+// 业务自建 unique 约束。
+var legacyTokenKeyConstraintCandidates = []string{
+	tokenKeyIndex,             // idx_tokens_key
+	gormTokenKeyConstraint,    // uni_tokens_key
+	postgresTokenKeyConstraint, // tokens_key_key(不应在 MySQL/SQLite 出现,但 drop 容错)
+}
+
+// dropLegacyTokenKeyIndexesIfPresent 在 MySQL/SQLite 上对 known legacy 名做
+// best-effort drop(已存在就 drop,不存在就跳过,任何错误都返回,留给 AutoMigrate
+// 接管新 uniqueIndex 重建)。
+func dropLegacyTokenKeyIndexesIfPresent(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("drop legacy token key indexes: database is nil")
+	}
+	if !db.Migrator().HasTable(&Token{}) {
+		return nil
+	}
+	migrator := db.Migrator()
+	for _, name := range legacyTokenKeyConstraintCandidates {
+		exists, err := hasIndexByName(db, "tokens", name)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		common.SysLog(fmt.Sprintf("dropping legacy tokens key index %q (%s)", name, db.Dialector.Name()))
+		if err := migrator.DropIndex(&Token{}, name); err != nil {
+			return fmt.Errorf("drop legacy tokens key index %q: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// hasIndexByName 方言元数据查表上是否存在某索引名。
+func hasIndexByName(db *gorm.DB, table, indexName string) (bool, error) {
+	switch db.Dialector.Name() {
+	case "mysql":
+		var count int64
+		if err := db.Raw(
+			`SELECT COUNT(*) FROM information_schema.statistics
+			 WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`,
+			table, indexName,
+		).Scan(&count).Error; err != nil {
+			return false, fmt.Errorf("inspect %s index: %w", table, err)
+		}
+		return count > 0, nil
+	case "sqlite":
+		var rows []struct {
+			Name string `gorm:"column:name"`
+		}
+		if err := db.Raw("PRAGMA index_list(\"" + table + "\")").Scan(&rows).Error; err != nil {
+			return false, fmt.Errorf("inspect %s index: %w", table, err)
+		}
+		for _, r := range rows {
+			if r.Name == indexName {
+				return true, nil
+			}
+		}
+		return false, nil
+	default:
+		return false, nil
+	}
 }

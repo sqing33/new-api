@@ -27,16 +27,20 @@ import ModelsFilters from './ModelsFilters';
 import ModelsTabs from './ModelsTabs';
 import EditModelModal from './modals/EditModelModal';
 import EditVendorModal from './modals/EditVendorModal';
+import VendorOperationsModal from './modals/VendorOperationsModal';
 import ColumnSelectorModal from './modals/ColumnSelectorModal';
 import { useModelsData } from '../../../hooks/models/useModelsData';
+import { useModelPricingDrawer } from '../../../hooks/models/useModelPricingDrawer';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
+import ModelDetailSideSheet from '../model-pricing/modal/ModelDetailSideSheet';
 
 const MARKETPLACE_DISPLAY_NOTICE_STORAGE_KEY =
   'models_marketplace_display_notice_dismissed';
 
 const ModelsPage = () => {
   const modelsData = useModelsData();
+  const pricingDrawer = useModelPricingDrawer();
   const isMobile = useIsMobile();
 
   const {
@@ -76,10 +80,14 @@ const ModelsPage = () => {
     saveImageModelSettings,
     showColumnSelector,
     setShowColumnSelector,
+    vendors,
+    models,
 
     // Translation
     t,
   } = modelsData;
+
+  const [showVendorOps, setShowVendorOps] = useState(false);
 
   const [showMarketplaceDisplayNotice, setShowMarketplaceDisplayNotice] =
     useState(() => {
@@ -126,6 +134,17 @@ const ModelsPage = () => {
 
       <ColumnSelectorModal {...modelsData} />
 
+      <VendorOperationsModal
+        visible={showVendorOps}
+        onClose={() => setShowVendorOps(false)}
+        vendors={modelsData.vendors || []}
+        models={modelsData.models || []}
+        onApplied={() => {
+          loadVendors();
+          refresh();
+        }}
+      />
+
       <EditVendorModal
         visible={showAddVendor || showEditVendor}
         handleClose={() => {
@@ -169,7 +188,9 @@ const ModelsPage = () => {
       ) : null}
       <CardPro
         type='type3'
-        tabsArea={<ModelsTabs {...modelsData} />}
+        tabsArea={
+          <ModelsTabs {...modelsData} setShowVendorOps={setShowVendorOps} />
+        }
         actionsArea={
           <div className='flex flex-col md:flex-row justify-between items-center gap-2 w-full'>
             <ModelsActions
@@ -212,8 +233,28 @@ const ModelsPage = () => {
         })}
         t={modelsData.t}
       >
-        <ModelsTable {...modelsData} />
+        <ModelsTable
+          {...modelsData}
+          onModelNameClick={pricingDrawer.openForModel}
+        />
       </CardPro>
+      <ModelDetailSideSheet
+        visible={pricingDrawer.visible}
+        onClose={pricingDrawer.close}
+        modelData={pricingDrawer.modelData}
+        notFound={pricingDrawer.notFound}
+        groupRatio={pricingDrawer.groupRatio}
+        currency={pricingDrawer.currency}
+        siteDisplayType={pricingDrawer.siteDisplayType}
+        tokenUnit='M'
+        displayPrice={pricingDrawer.displayPrice}
+        showRatio={true}
+        usableGroup={pricingDrawer.usableGroup}
+        vendorsMap={pricingDrawer.vendorsMap}
+        endpointMap={pricingDrawer.endpointMap}
+        autoGroups={pricingDrawer.autoGroups}
+        t={pricingDrawer.t}
+      />
     </>
   );
 };

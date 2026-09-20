@@ -85,6 +85,10 @@ import {
   Wrench,
   Compass,
   BookOpen,
+  MonitorCog,
+  PlugZap,
+  Trophy,
+  Activity,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -128,6 +132,8 @@ export function getLucideIcon(key, selected = false) {
   switch (key) {
     case 'detail':
       return <LayoutDashboard {...commonProps} color={iconColor} />;
+    case 'performance':
+      return <Activity {...commonProps} color={iconColor} />;
     case 'playground':
       return <TerminalSquare {...commonProps} color={iconColor} />;
     case 'image-studio':
@@ -140,8 +146,14 @@ export function getLucideIcon(key, selected = false) {
       return <BookOpen {...commonProps} color={iconColor} />;
     case 'tool-install-setting':
       return <Wrench {...commonProps} color={iconColor} />;
+    case 'system-info':
+      return <MonitorCog {...commonProps} color={iconColor} />;
+    case 'task-plugins':
+      return <PlugZap {...commonProps} color={iconColor} />;
     case 'pricing':
       return <Compass {...commonProps} color={iconColor} />;
+    case 'rankings':
+      return <Trophy {...commonProps} color={iconColor} />;
     case 'chat':
       return <MessageSquare {...commonProps} color={iconColor} />;
     case 'token':

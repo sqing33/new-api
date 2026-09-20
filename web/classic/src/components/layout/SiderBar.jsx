@@ -66,10 +66,13 @@ const routerMap = {
   about: '/about',
   detail: '/dashboard',
   pricing: '/pricing',
+  rankings: '/rankings',
   task: '/task',
   models: '/models',
   deployment: '/deployment',
   'tool-install-setting': '/tool-install-setting',
+  'system-info': '/system-info',
+  'task-plugins': '/task-plugins',
   playground: '/playground',
   'image-studio': '/image-studio',
   'image-presets': '/image-presets',
@@ -308,6 +311,24 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className: isRoot() ? '' : 'tableHiddle',
       },
       {
+        text: t('系统信息'),
+        itemKey: 'system-info',
+        to: '/system-info',
+        className: isRoot() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('审计日志'),
+        itemKey: 'audit',
+        to: '/audit',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('任务插件'),
+        itemKey: 'task-plugins',
+        to: '/task-plugins',
+        className: isRoot() ? '' : 'tableHiddle',
+      },
+      {
         text: t('系统设置'),
         itemKey: 'setting',
         to: '/setting',
@@ -350,6 +371,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('清荫模型馆'),
         itemKey: 'pricing',
         to: '/pricing',
+      },
+      {
+        text: t('清荫排行榜'),
+        itemKey: 'rankings',
+        to: '/rankings',
       },
       {
         text: t('清荫手册'),
@@ -532,7 +558,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
                 ellipsis
                 className='!text-[11px] !text-semi-color-text-2'
               >
-                {t('当前余额')}：{balance}
+                {t('余额')}：{balance}
               </Typography.Text>
             </span>
           )}

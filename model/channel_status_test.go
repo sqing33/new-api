@@ -51,6 +51,97 @@ func TestUpdateChannelStatusPersistsMultiKeyState(t *testing.T) {
 	assert.Equal(t, 1, stored.ChannelInfo.MultiKeyPollingIndex)
 }
 
+func TestUpdateChannelStatusEnablesSingleKeyOfMultiKeyChannel(t *testing.T) {
+	setupChannelStatusTest(t)
+
+	channel := Channel{
+		Name:   "multi-key-recovery",
+		Key:    "key-a\nkey-b",
+		Status: common.ChannelStatusEnabled,
+		ChannelInfo: ChannelInfo{
+			IsMultiKey:             true,
+			MultiKeySize:           2,
+			MultiKeyMode:           constant.MultiKeyModeRandom,
+			MultiKeyStatusList:     map[int]int{0: common.ChannelStatusAutoDisabled},
+			MultiKeyDisabledReason: map[int]string{0: "provider rejected key"},
+			MultiKeyDisabledTime:   map[int]int64{0: 111},
+		},
+	}
+	require.NoError(t, DB.Create(&channel).Error)
+
+	// The channel status is already Enabled, so only the per-key list can tell
+	// this transition happened. It still has to reach the database.
+	changed := UpdateChannelStatus(channel.Id, "key-a", common.ChannelStatusEnabled, "")
+	require.True(t, changed)
+
+	var stored Channel
+	require.NoError(t, DB.First(&stored, channel.Id).Error)
+	assert.Equal(t, common.ChannelStatusEnabled, stored.Status)
+	_, stillDisabled := stored.ChannelInfo.MultiKeyStatusList[0]
+	assert.False(t, stillDisabled, "recovered key must stay enabled after a cache rebuild")
+	assert.Empty(t, stored.ChannelInfo.MultiKeyDisabledReason)
+	assert.Empty(t, stored.ChannelInfo.MultiKeyDisabledTime)
+}
+
+func TestUpdateChannelStatusSkipsUnchangedMultiKeyKey(t *testing.T) {
+	setupChannelStatusTest(t)
+
+	channel := Channel{
+		Name:   "multi-key-repeat-disable",
+		Key:    "key-a\nkey-b",
+		Status: common.ChannelStatusEnabled,
+		ChannelInfo: ChannelInfo{
+			IsMultiKey:             true,
+			MultiKeySize:           2,
+			MultiKeyMode:           constant.MultiKeyModeRandom,
+			MultiKeyStatusList:     map[int]int{0: common.ChannelStatusAutoDisabled},
+			MultiKeyDisabledReason: map[int]string{0: "first failure"},
+			MultiKeyDisabledTime:   map[int]int64{0: 111},
+		},
+	}
+	require.NoError(t, DB.Create(&channel).Error)
+
+	// A key that is already auto-disabled must not report a change, otherwise
+	// every failing request re-notifies the root user about the same state.
+	changed := UpdateChannelStatus(channel.Id, "key-a", common.ChannelStatusAutoDisabled, "second failure")
+	require.False(t, changed)
+
+	var stored Channel
+	require.NoError(t, DB.First(&stored, channel.Id).Error)
+	assert.Equal(t, "first failure", stored.ChannelInfo.MultiKeyDisabledReason[0])
+	assert.Equal(t, int64(111), stored.ChannelInfo.MultiKeyDisabledTime[0])
+}
+
+func TestUpdateChannelStatusRestoresChannelStatusWhenKeyRecovers(t *testing.T) {
+	setupChannelStatusTest(t)
+
+	channel := Channel{
+		Name:   "multi-key-all-disabled",
+		Key:    "key-a\nkey-b",
+		Status: common.ChannelStatusAutoDisabled,
+		ChannelInfo: ChannelInfo{
+			IsMultiKey:             true,
+			MultiKeySize:           2,
+			MultiKeyMode:           constant.MultiKeyModeRandom,
+			MultiKeyStatusList:     map[int]int{0: common.ChannelStatusAutoDisabled, 1: common.ChannelStatusAutoDisabled},
+			MultiKeyDisabledReason: map[int]string{0: "key a failed", 1: "key b failed"},
+			MultiKeyDisabledTime:   map[int]int64{0: 111, 1: 222},
+		},
+	}
+	require.NoError(t, DB.Create(&channel).Error)
+
+	changed := UpdateChannelStatus(channel.Id, "key-b", common.ChannelStatusEnabled, "")
+	require.True(t, changed)
+
+	var stored Channel
+	require.NoError(t, DB.First(&stored, channel.Id).Error)
+	assert.Equal(t, common.ChannelStatusEnabled, stored.Status)
+	assert.Equal(t, map[int]int{0: common.ChannelStatusAutoDisabled}, stored.ChannelInfo.MultiKeyStatusList)
+	assert.Equal(t, "key a failed", stored.ChannelInfo.MultiKeyDisabledReason[0])
+	_, recoveredReasonKept := stored.ChannelInfo.MultiKeyDisabledReason[1]
+	assert.False(t, recoveredReasonKept)
+}
+
 func TestSaveStatusStateFromSingleKeySnapshotPreservesUnownedColumns(t *testing.T) {
 	setupChannelStatusTest(t)
 

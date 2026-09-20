@@ -703,6 +703,13 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
+	// Validate the quota query binding against the assembled channel before
+	// inserting (settings, preset, key index bounds, credential reference).
+	if err := service.ValidateQuotaQueryBinding(addChannelRequest.Channel); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
 	channels := make([]model.Channel, 0, len(keys))
 	for _, key := range keys {
 		if key == "" {
@@ -958,6 +965,9 @@ type PatchChannel struct {
 	model.Channel
 	MultiKeyMode *string `json:"multi_key_mode"`
 	KeyMode      *string `json:"key_mode"` // 多key模式下密钥覆盖或者追加
+	// Edit-time one-way upgrade request (single→multi key); the controller
+	// only honors it when the submitted key holds more than one line.
+	IsMultiKeyRequest *bool `json:"is_multi_key_request"`
 }
 
 type ChannelStatusRequest struct {
@@ -1000,6 +1010,8 @@ func UpdateChannel(c *gin.Context) {
 		return
 	}
 
+	// Full quota query binding validation happens after the final channel
+	// state (keys/base_url) is assembled, right before channel.Update().
 	baseURLFromPluginDefault := channel.Type == constant.ChannelTypeTaskPlugin &&
 		(channel.BaseURL == nil || strings.TrimSpace(*channel.BaseURL) == "")
 	// 使用统一的校验函数
@@ -1030,10 +1042,59 @@ func UpdateChannel(c *gin.Context) {
 	// Always copy the original ChannelInfo so that fields like IsMultiKey and MultiKeySize are retained.
 	channel.ChannelInfo = originChannel.ChannelInfo
 
+	// One-way upgrade: an explicit is_multi_key_request=true on a
+	// single-key channel with a multi-line key converts it to multi-key
+	// (initializes empty per-key metadata). Downgrading multi-key back to
+	// single is never allowed here — per-key state maps (disabled status,
+	// reasons, times) are index-keyed and would silently misalign.
+	if !channel.ChannelInfo.IsMultiKey && channel.IsMultiKeyRequest != nil && *channel.IsMultiKeyRequest {
+		if keys := channel.GetKeys(); len(keys) > 1 {
+			// 单→多升级时把原单密钥合并进新列表（原密钥在前、去重）：
+			// 编辑态下前端拿不到已保存密钥，若不合并用户提交的多行密钥会
+			// 整体覆盖 Key，导致原有单密钥丢失。
+			merged := make([]string, 0, len(keys)+1)
+			seen := make(map[string]struct{}, len(keys)+1)
+			for _, key := range append(originChannel.GetKeys(), keys...) {
+				key = strings.TrimSpace(key)
+				if key == "" {
+					continue
+				}
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+				merged = append(merged, key)
+			}
+			channel.Key = strings.Join(merged, "\n")
+			channel.ChannelInfo.IsMultiKey = true
+			channel.ChannelInfo.MultiKeySize = len(merged)
+			channel.ChannelInfo.MultiKeyStatusList = map[int]int{}
+			channel.ChannelInfo.MultiKeyDisabledReason = map[int]string{}
+			channel.ChannelInfo.MultiKeyDisabledTime = map[int]int64{}
+			channel.ChannelInfo.MultiKeyPriority = nil // 全部从默认优先级 0 开始
+		}
+	}
+
 	if channelHasSensitiveChanges(&channel, originChannel, requestData) &&
 		!authz.Can(c.GetInt("id"), c.GetInt("role"), authz.ChannelSensitiveWrite) {
 		common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
 		return
+	}
+
+	// Changing the quota-query credential reference grants query access to
+	// another channel's dedicated secret, so it always requires
+	// ChannelSensitiveWrite even when the rest of the settings payload is
+	// unchanged (defense in depth on top of the settings diff above).
+	if settingsTouched, hasSettings := requestData["settings"]; hasSettings && settingsTouched != nil && !authz.Can(c.GetInt("id"), c.GetInt("role"), authz.ChannelSensitiveWrite) {
+		newSettings := channel.GetOtherSettings()
+		originSettings := originChannel.GetOtherSettings()
+		credChanged := newSettings.QuotaQueryCredentialChannelID != originSettings.QuotaQueryCredentialChannelID &&
+			(newSettings.QuotaQueryCredentialChannelID == nil || originSettings.QuotaQueryCredentialChannelID == nil ||
+				*newSettings.QuotaQueryCredentialChannelID != *originSettings.QuotaQueryCredentialChannelID)
+		if credChanged {
+			common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
+			return
+		}
 	}
 
 	// If the request explicitly specifies a new MultiKeyMode, apply it on top of the original info.
@@ -1120,6 +1181,17 @@ func UpdateChannel(c *gin.Context) {
 		case "replace":
 			// 覆盖模式：直接使用新密钥（默认行为，不需要特殊处理）
 		}
+	}
+	// Validate the quota query binding against the final channel state
+	// before persisting. When the patch does not carry "settings", validate
+	// against the stored settings so the effective binding stays consistent.
+	validateTarget := channel.Channel
+	if _, settingProvided := requestData["settings"]; !settingProvided {
+		validateTarget.OtherSettings = originChannel.OtherSettings
+	}
+	if err := service.ValidateQuotaQueryBinding(&validateTarget); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
 	}
 	err = channel.Update()
 	if err != nil {
@@ -1509,11 +1581,12 @@ func CopyChannel(c *gin.Context) {
 // MultiKeyManageRequest represents the request for multi-key management operations
 type MultiKeyManageRequest struct {
 	ChannelId int    `json:"channel_id"`
-	Action    string `json:"action"`              // "disable_key", "enable_key", "delete_key", "delete_disabled_keys", "get_key_status"
-	KeyIndex  *int   `json:"key_index,omitempty"` // for disable_key, enable_key, and delete_key actions
+	Action    string `json:"action"`              // "disable_key", "enable_key", "delete_key", "delete_disabled_keys", "get_key_status", "set_key_priority"
+	KeyIndex  *int   `json:"key_index,omitempty"` // for disable_key, enable_key, delete_key and set_key_priority actions
 	Page      int    `json:"page,omitempty"`      // for get_key_status pagination
 	PageSize  int    `json:"page_size,omitempty"` // for get_key_status pagination
 	Status    *int   `json:"status,omitempty"`    // for get_key_status filtering: 1=enabled, 2=manual_disabled, 3=auto_disabled, nil=all
+	Priority  *int   `json:"priority,omitempty"`  // for set_key_priority; 0 removes the entry (default tier)
 }
 
 // MultiKeyStatusResponse represents the response for key status query
@@ -1535,6 +1608,7 @@ type KeyStatus struct {
 	DisabledTime int64  `json:"disabled_time,omitempty"`
 	Reason       string `json:"reason,omitempty"`
 	KeyPreview   string `json:"key_preview"` // first 10 chars of key for identification
+	Priority     int    `json:"priority"`    // strict key priority; 0 = default tier
 }
 
 // ManageMultiKeys handles multi-key management operations
@@ -1643,6 +1717,7 @@ func ManageMultiKeys(c *gin.Context) {
 				DisabledTime: disabledTime,
 				Reason:       reason,
 				KeyPreview:   keyPreview,
+				Priority:     channel.ChannelInfo.MultiKeyPriority[i],
 			})
 		}
 
@@ -1873,6 +1948,7 @@ func ManageMultiKeys(c *gin.Context) {
 		var newStatusList = make(map[int]int)
 		var newDisabledTime = make(map[int]int64)
 		var newDisabledReason = make(map[int]string)
+		var newPriority = make(map[int]int)
 
 		newIndex := 0
 		for i, key := range keys {
@@ -1899,6 +1975,12 @@ func ManageMultiKeys(c *gin.Context) {
 					newDisabledReason[newIndex] = r
 				}
 			}
+			// 优先级同样重索引；仅非零值保留，保持 map 稀疏
+			if channel.ChannelInfo.MultiKeyPriority != nil {
+				if p, exists := channel.ChannelInfo.MultiKeyPriority[i]; exists && p != 0 {
+					newPriority[newIndex] = p
+				}
+			}
 			newIndex++
 		}
 
@@ -1916,6 +1998,11 @@ func ManageMultiKeys(c *gin.Context) {
 		channel.ChannelInfo.MultiKeyStatusList = newStatusList
 		channel.ChannelInfo.MultiKeyDisabledTime = newDisabledTime
 		channel.ChannelInfo.MultiKeyDisabledReason = newDisabledReason
+		if len(newPriority) > 0 {
+			channel.ChannelInfo.MultiKeyPriority = newPriority
+		} else {
+			channel.ChannelInfo.MultiKeyPriority = nil
+		}
 
 		err = channel.Update()
 		if err != nil {
@@ -1937,6 +2024,7 @@ func ManageMultiKeys(c *gin.Context) {
 		var newStatusList = make(map[int]int)
 		var newDisabledTime = make(map[int]int64)
 		var newDisabledReason = make(map[int]string)
+		var newPriority = make(map[int]int)
 
 		newIndex := 0
 		for i, key := range keys {
@@ -1966,6 +2054,12 @@ func ManageMultiKeys(c *gin.Context) {
 						}
 					}
 				}
+				// 优先级同样重索引；仅非零值保留，保持 map 稀疏
+				if channel.ChannelInfo.MultiKeyPriority != nil {
+					if p, exists := channel.ChannelInfo.MultiKeyPriority[i]; exists && p != 0 {
+						newPriority[newIndex] = p
+					}
+				}
 				newIndex++
 			}
 		}
@@ -1984,6 +2078,11 @@ func ManageMultiKeys(c *gin.Context) {
 		channel.ChannelInfo.MultiKeyStatusList = newStatusList
 		channel.ChannelInfo.MultiKeyDisabledTime = newDisabledTime
 		channel.ChannelInfo.MultiKeyDisabledReason = newDisabledReason
+		if len(newPriority) > 0 {
+			channel.ChannelInfo.MultiKeyPriority = newPriority
+		} else {
+			channel.ChannelInfo.MultiKeyPriority = nil
+		}
 
 		err = channel.Update()
 		if err != nil {
@@ -1996,6 +2095,64 @@ func ManageMultiKeys(c *gin.Context) {
 			"success": true,
 			"message": fmt.Sprintf("已删除 %d 个自动禁用的密钥", deletedCount),
 			"data":    deletedCount,
+		})
+		return
+
+	case "set_key_priority":
+		if request.KeyIndex == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "缺少密钥索引",
+			})
+			return
+		}
+		if request.Priority == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "缺少优先级参数",
+			})
+			return
+		}
+		keyIndex := *request.KeyIndex
+		keys := channel.GetKeys()
+		if keyIndex < 0 || keyIndex >= len(keys) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "密钥索引超出范围",
+			})
+			return
+		}
+		priority := *request.Priority
+		if priority < 0 || priority > 100 {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "优先级必须在 0-100 之间",
+			})
+			return
+		}
+		if priority == 0 {
+			// 0 = default tier: drop the entry so the map stays sparse
+			if channel.ChannelInfo.MultiKeyPriority != nil {
+				delete(channel.ChannelInfo.MultiKeyPriority, keyIndex)
+				if len(channel.ChannelInfo.MultiKeyPriority) == 0 {
+					channel.ChannelInfo.MultiKeyPriority = nil
+				}
+			}
+		} else {
+			if channel.ChannelInfo.MultiKeyPriority == nil {
+				channel.ChannelInfo.MultiKeyPriority = make(map[int]int)
+			}
+			channel.ChannelInfo.MultiKeyPriority[keyIndex] = priority
+		}
+		err = channel.Update()
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		model.InitChannelCache()
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "密钥优先级已更新",
 		})
 		return
 

@@ -1,4 +1,4 @@
-WEB_DIR = ./web
+WEB_DIR = ./web/classic
 API_DIR = .
 DEV_WEB_PORT ?= 5173
 DEV_COMPOSE_FILE = docker-compose.dev.yml
@@ -39,7 +39,7 @@ dev-web:
 
 dev: dev-api dev-web
 
-# The main package embeds the ignored web/dist output and is covered after build-web.
+# The main package embeds the ignored web/classic/dist output and is covered after build-web.
 test:
 	@echo "Testing root Go module..."
 	@root_module=$$(GOWORK=off go list -m); \
