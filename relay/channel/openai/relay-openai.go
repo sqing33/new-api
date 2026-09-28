@@ -142,6 +142,17 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 		}
 	})
 
+	// 上游返回 200 且流正常结束，但没有转发任何内容帧（如高负载下静默断流）：
+	// 客户端还没有收到任何字节，此时把空成功转换成可重试错误，避免空回复被计费。
+	if info.SendResponseCount == 0 && lastStreamData == "" && info.StreamStatus.EndReason != relaycommon.StreamEndReasonClientGone {
+		logger.LogError(c, fmt.Sprintf("upstream returned 200 but the stream carried no output, received=%d, end=%s", info.ReceivedResponseCount, info.StreamStatus.Summary()))
+		return nil, types.NewErrorWithStatusCode(
+			fmt.Errorf("upstream returned 200 but the stream had no output content"),
+			types.ErrorCodeBadResponse,
+			http.StatusServiceUnavailable,
+		)
+	}
+
 	// 处理最后的响应
 	shouldSendLastResp := true
 	if err := handleLastResponse(lastStreamData, &responseId, &createAt, &systemFingerprint, &model, &usage,
@@ -192,6 +203,24 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	HandleFinalResponse(c, info, lastStreamData, responseId, createAt, model, systemFingerprint, usage, containStreamUsage)
 
 	return usage, nil
+}
+
+// hasNonEmptyChoiceOutput reports whether any choice carries actual model output
+// (content, reasoning, tool or function call). Empty choices with a bare finish
+// reason are treated as no output.
+func hasNonEmptyChoiceOutput(choices []dto.OpenAITextResponseChoice) bool {
+	for _, choice := range choices {
+		if strings.TrimSpace(choice.Message.StringContent()) != "" {
+			return true
+		}
+		if strings.TrimSpace(choice.Message.GetReasoningContent()) != "" {
+			return true
+		}
+		if len(choice.Message.ParseToolCalls()) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func collectStreamFunctionCallNames(data string, seen map[string]struct{}, names *[]string) {
@@ -270,6 +299,17 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 
 	if oaiError := simpleResponse.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
+	}
+
+	// 上游返回 200 但没有任何输出内容（如高负载下静默失败）：客户端还没收到字节，
+	// 把空成功转换成可重试错误，避免空回复被计费。
+	if simpleResponse.Usage.CompletionTokens == 0 && !hasNonEmptyChoiceOutput(simpleResponse.Choices) {
+		logger.LogError(c, fmt.Sprintf("upstream returned 200 but the response had no output content, choices=%d", len(simpleResponse.Choices)))
+		return nil, types.NewErrorWithStatusCode(
+			fmt.Errorf("upstream returned 200 but the response had no output content"),
+			types.ErrorCodeBadResponse,
+			http.StatusServiceUnavailable,
+		)
 	}
 
 	for _, choice := range simpleResponse.Choices {
