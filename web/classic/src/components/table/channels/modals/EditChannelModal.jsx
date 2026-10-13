@@ -263,8 +263,6 @@ const EditChannelModal = (props) => {
     disable_store: false, // false = 允许透传（默认开启）
     allow_safety_identifier: false,
     allow_include_obfuscation: false,
-    responses_compat_mode: 'native',
-    responses_compat_tool_mode: 'wrap_non_function_tools',
     allow_inference_geo: false,
     allow_speed: false,
     claude_beta_query: false,
@@ -1010,13 +1008,6 @@ const EditChannelModal = (props) => {
             parsedSettings.allow_safety_identifier || false;
           data.allow_include_obfuscation =
             parsedSettings.allow_include_obfuscation || false;
-          data.responses_compat_mode =
-            parsedSettings.responses_compat_mode === 'chat_completions'
-              ? 'chat_completions'
-              : 'native';
-          data.responses_compat_tool_mode =
-            parsedSettings.responses_compat_tool_mode ||
-            'wrap_non_function_tools';
           data.allow_inference_geo =
             parsedSettings.allow_inference_geo || false;
           data.allow_speed = parsedSettings.allow_speed || false;
@@ -1059,8 +1050,6 @@ const EditChannelModal = (props) => {
           data.disable_store = false;
           data.allow_safety_identifier = false;
           data.allow_include_obfuscation = false;
-          data.responses_compat_mode = 'native';
-          data.responses_compat_tool_mode = 'wrap_non_function_tools';
           data.allow_inference_geo = false;
           data.allow_speed = false;
           data.claude_beta_query = false;
@@ -1079,8 +1068,6 @@ const EditChannelModal = (props) => {
         data.disable_store = false;
         data.allow_safety_identifier = false;
         data.allow_include_obfuscation = false;
-        data.responses_compat_mode = 'native';
-        data.responses_compat_tool_mode = 'wrap_non_function_tools';
         data.allow_inference_geo = false;
         data.allow_speed = false;
         data.claude_beta_query = false;
@@ -1929,17 +1916,6 @@ const EditChannelModal = (props) => {
       delete settings.vertex_key_type;
     }
 
-    if (localInputs.responses_compat_mode === 'chat_completions') {
-      settings.responses_compat_mode = 'chat_completions';
-      settings.responses_compat_tool_mode =
-        localInputs.responses_compat_tool_mode || 'wrap_non_function_tools';
-    } else if ('responses_compat_mode' in settings) {
-      delete settings.responses_compat_mode;
-      delete settings.responses_compat_tool_mode;
-    } else if ('responses_compat_tool_mode' in settings) {
-      delete settings.responses_compat_tool_mode;
-    }
-
     // type === 1 (OpenAI) 或 type === 14 (Claude): 设置字段透传控制（显式保存布尔值）
     if (localInputs.type === 1 || localInputs.type === 14) {
       settings.allow_service_tier = localInputs.allow_service_tier === true;
@@ -2068,8 +2044,6 @@ const EditChannelModal = (props) => {
     delete localInputs.disable_store;
     delete localInputs.allow_safety_identifier;
     delete localInputs.allow_include_obfuscation;
-    delete localInputs.responses_compat_mode;
-    delete localInputs.responses_compat_tool_mode;
     delete localInputs.allow_inference_geo;
     delete localInputs.allow_speed;
     delete localInputs.claude_beta_query;
@@ -3153,63 +3127,6 @@ const EditChannelModal = (props) => {
                       }
                       extraText={t(
                         '强制将响应格式化为 OpenAI 标准格式（只适用于OpenAI渠道类型）',
-                      )}
-                    />
-                  )}
-
-                  <Form.Select
-                    field='responses_compat_mode'
-                    label={t('Responses 兼容模式')}
-                    placeholder={t('请选择 Responses 兼容模式')}
-                    optionList={[
-                      { label: t('原生 Responses'), value: 'native' },
-                      {
-                        label: t('转换为 Chat Completions'),
-                        value: 'chat_completions',
-                      },
-                    ]}
-                    style={{ width: '100%' }}
-                    value={inputs.responses_compat_mode || 'native'}
-                    onChange={(value) =>
-                      handleChannelOtherSettingsChange(
-                        'responses_compat_mode',
-                        value,
-                      )
-                    }
-                    extraText={t(
-                      '将客户端 Responses 请求转换为上游 Chat Completions，以适配兼容渠道',
-                    )}
-                  />
-
-                  {inputs.responses_compat_mode === 'chat_completions' && (
-                    <Form.Select
-                      field='responses_compat_tool_mode'
-                      label={t('Responses 工具兼容策略')}
-                      placeholder={t('请选择 Responses 工具兼容策略')}
-                      optionList={[
-                        {
-                          label: t('包装非 function 工具'),
-                          value: 'wrap_non_function_tools',
-                        },
-                        {
-                          label: t('仅保留 function 工具'),
-                          value: 'function_only',
-                        },
-                        { label: t('不可转换时报错'), value: 'strict_error' },
-                      ]}
-                      style={{ width: '100%' }}
-                      value={
-                        inputs.responses_compat_tool_mode ||
-                        'wrap_non_function_tools'
-                      }
-                      onChange={(value) =>
-                        handleChannelOtherSettingsChange(
-                          'responses_compat_tool_mode',
-                          value,
-                        )
-                      }
-                      extraText={t(
-                        '将 Responses 非 function 工具包装为 Chat function tools，并在返回时还原工具名',
                       )}
                     />
                   )}

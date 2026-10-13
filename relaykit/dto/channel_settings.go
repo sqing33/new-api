@@ -99,8 +99,6 @@ type ChannelOtherSettings struct {
 	UpstreamPricingEndpoint               string                            `json:"upstream_pricing_endpoint,omitempty"`                  // 上游定价 API 端点
 	UpstreamPricingLastCheckTime          int64                             `json:"upstream_pricing_last_check_time,omitempty"`           // 上次检测时间
 	UpstreamPricingLastSnapshot           map[string]map[string]interface{} `json:"upstream_pricing_last_snapshot,omitempty"`             // 上次定价快照
-	ResponsesCompatMode                   string                            `json:"responses_compat_mode,omitempty"`                      // Responses 协议兼容模式: native | chat_completions
-	ResponsesCompatToolMode               string                            `json:"responses_compat_tool_mode,omitempty"`                 // 工具处理模式: function_only | wrap_non_function_tools | strict_error
 	AdvancedCustom                        *AdvancedCustomConfig             `json:"advanced_custom,omitempty"`
 	// ToolLossPolicy is a channel-level opt-in for request-phase conversion
 	// rejection. Empty follows the default allow policy. Accepted values:
@@ -626,24 +624,4 @@ func validateAdvancedCustomRouteAuth(index int, auth *AdvancedCustomRouteAuth) e
 	default:
 		return fmt.Errorf("advanced_custom.advanced_routes[%d].auth.type is invalid: %s", index, auth.Type)
 	}
-}
-
-const (
-	ResponsesCompatModeNative          = "native"
-	ResponsesCompatModeChatCompletions = "chat_completions"
-)
-
-const (
-	ResponsesCompatToolModeFunctionOnly        = "function_only"
-	ResponsesCompatToolModeWrapNonFunction     = "wrap_non_function_tools"
-	ResponsesCompatToolModeStrictError         = "strict_error"
-	ContextKeyResponsesCompatToolMappings      = "responses_compat_tool_mappings"
-	ContextKeyResponsesCompatToolReverseLookup = "responses_compat_tool_reverse_lookup"
-)
-
-type ResponsesCompatToolMapping struct {
-	SafeName     string `json:"safe_name"`
-	OriginalName string `json:"original_name"`
-	OriginalType string `json:"original_type"`
-	Wrapped      bool   `json:"wrapped"`
 }

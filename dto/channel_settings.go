@@ -29,8 +29,6 @@ type ChannelOtherSettings struct {
 	QuotaQueryKeyIndex                    *int                              `json:"quota_query_key_index,omitempty"`
 	QuotaQueryExtra                       map[string]string                 `json:"quota_query_extra,omitempty"`
 	AzureResponsesVersion                 string                            `json:"azure_responses_version,omitempty"`
-	ResponsesCompatMode                   string                            `json:"responses_compat_mode,omitempty"`
-	ResponsesCompatToolMode               string                            `json:"responses_compat_tool_mode,omitempty"`
 	VertexKeyType                         VertexKeyType                     `json:"vertex_key_type,omitempty"` // "json" or "api_key"
 	OpenRouterEnterprise                  *bool                             `json:"openrouter_enterprise,omitempty"`
 	ClaudeBetaQuery                       bool                              `json:"claude_beta_query,omitempty"`         // Claude 渠道是否强制追加 ?beta=true

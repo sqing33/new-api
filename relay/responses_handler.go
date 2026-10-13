@@ -80,23 +80,6 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 	}
 	adaptor.Init(info)
 	passThroughEnabled := model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled
-	if info.RelayMode == relayconstant.RelayModeResponses &&
-		!passThroughEnabled &&
-		info.ChannelOtherSettings.ResponsesCompatMode == dto.ResponsesCompatModeChatCompletions {
-		usage, newAPIError := responsesViaChatCompletions(c, info, adaptor, request)
-		if newAPIError != nil {
-			return newAPIError
-		}
-		if usage == nil {
-			usage = &dto.Usage{}
-		}
-		if strings.HasPrefix(info.OriginModelName, "gpt-4o-audio") {
-			service.PostAudioConsumeQuota(c, info, usage, "")
-		} else {
-			service.PostTextConsumeQuota(c, info, usage, nil)
-		}
-		return nil
-	}
 
 	var requestBody io.Reader
 	if passThroughEnabled {
