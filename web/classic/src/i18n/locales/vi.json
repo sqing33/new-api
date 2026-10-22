@@ -2483,7 +2483,7 @@
     "核心概念": "Key Concepts",
     "核心配置": "Cấu hình cốt lõi",
     "核采样，控制词汇选择的多样性": "Lấy mẫu hạt nhân, kiểm soát sự đa dạng của lựa chọn từ vựng",
-    "根据 Anthropic 协定，/v1/messages 的输入 tokens 仅统计非缓存输入，不包含缓存读取与缓存写入 tokens。": "Theo quy ước của Anthropic, input tokens của /v1/messages chỉ tính phần đầu vào không dùng cache và không bao gồm tokens đọc/ghi cache.",
+    "Input tokens are the total input, including cached input. The smaller line below shows the cache read and cache write portions of it.": "Input tokens là tổng số token đầu vào, đã bao gồm đầu vào từ cache. Dòng nhỏ bên dưới hiển thị phần đọc và ghi cache.",
     "根据模型名称和匹配规则查找模型元数据，优先级：精确 > 前缀 > 后缀 > 包含": "Tìm siêu dữ liệu mô hình dựa trên tên mô hình và quy tắc khớp, ưu tiên: chính xác > tiền tố > hậu tố > chứa",
     "格式": "",
     "格式化": "Định dạng",

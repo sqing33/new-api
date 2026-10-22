@@ -2482,7 +2482,7 @@
     "核心概念": "基本概念",
     "核心配置": "基本設定",
     "核采样，控制词汇选择的多样性": "ニュークリアスサンプリング、語彙選択の多様性を制御",
-    "根据 Anthropic 协定，/v1/messages 的输入 tokens 仅统计非缓存输入，不包含缓存读取与缓存写入 tokens。": "Anthropic の仕様により、/v1/messages の入力 tokens は非キャッシュ入力のみを集計し、キャッシュ読み取り/書き込み tokens は含みません。",
+    "Input tokens are the total input, including cached input. The smaller line below shows the cache read and cache write portions of it.": "入力 tokens はキャッシュ入力を含む総入力量です。下の小さい行に、その中のキャッシュ読み取り・書き込みの分を表示します。",
     "根据模型名称和匹配规则查找模型元数据，优先级：精确 > 前缀 > 后缀 > 包含": "モデル名とマッチングルールに基づきモデルメタデータを検索します。優先度：完全一致 > プレフィックス > サフィックス > 部分一致",
     "格式": "",
     "格式化": "フォーマット",

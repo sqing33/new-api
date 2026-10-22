@@ -88,6 +88,25 @@ func cacheWriteTokensTotal(summary textQuotaSummary) int {
 	return summary.CacheCreationTokens
 }
 
+// totalInputTokens returns the total input token count to persist in the
+// consume log, normalized to the OpenAI semantics where prompt_tokens already
+// include cached input.
+//
+// Anthropic reports input_tokens as the non-cached portion only; cache reads
+// and cache writes arrive as separate fields. Persisting that value as-is
+// makes downstream aggregations (dashboard totals, trends, rankings) miss
+// almost the entire input volume of Anthropic-semantic channels.
+//
+// Only Anthropic semantics need the correction: OpenAI and Gemini usage
+// already report a prompt token count that contains cached input, so adding
+// the cache fields there would double-count them.
+func totalInputTokens(summary textQuotaSummary) int {
+	if !summary.IsClaudeUsageSemantic {
+		return summary.PromptTokens
+	}
+	return summary.PromptTokens + summary.CacheTokens + cacheWriteTokensTotal(summary)
+}
+
 func isLegacyClaudeDerivedOpenAIUsage(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) bool {
 	if relayInfo == nil || usage == nil {
 		return false
@@ -537,8 +556,12 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	appendOutputSpeed(relayInfo, other, summary.CompletionTokens)
 
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
-		ChannelId:        relayInfo.ChannelId,
-		PromptTokens:     summary.PromptTokens,
+		ChannelId: relayInfo.ChannelId,
+		// Persist the normalized total input count so dashboard aggregations
+		// see the same volume across Anthropic- and OpenAI-semantic channels.
+		// Billing still uses summary.PromptTokens, which keeps the upstream
+		// semantics intact.
+		PromptTokens:     totalInputTokens(summary),
 		CompletionTokens: summary.CompletionTokens,
 		ModelName:        logModel,
 		TokenName:        summary.TokenName,

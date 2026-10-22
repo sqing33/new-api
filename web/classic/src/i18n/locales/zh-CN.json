@@ -2481,7 +2481,7 @@
     "核心概念": "核心概念",
     "核心配置": "核心配置",
     "核采样，控制词汇选择的多样性": "核采样，控制词汇选择的多样性",
-    "根据 Anthropic 协定，/v1/messages 的输入 tokens 仅统计非缓存输入，不包含缓存读取与缓存写入 tokens。": "根据 Anthropic 协定，/v1/messages 的输入 tokens 仅统计非缓存输入，不包含缓存读取与缓存写入 tokens。",
+    "Input tokens are the total input, including cached input. The smaller line below shows the cache read and cache write portions of it.": "输入 tokens 为总输入量，已包含缓存输入。下方小字显示其中的缓存读与缓存写部分。",
     "根据哪个维度的 Token 数量决定落在哪一档": "根据哪个维度的 Token 数量决定落在哪一档",
     "根据总用量落在哪个档位，所有 Token 都按该档价格计费": "根据总用量落在哪个档位，所有 Token 都按该档价格计费",
     "根据模型名称和匹配规则查找模型元数据，优先级：精确 > 前缀 > 后缀 > 包含": "根据模型名称和匹配规则查找模型元数据，优先级：精确 > 前缀 > 后缀 > 包含",

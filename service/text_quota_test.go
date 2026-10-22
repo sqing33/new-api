@@ -760,6 +760,163 @@ func TestCacheWriteTokensTotal(t *testing.T) {
 	})
 }
 
+func TestTotalInputTokensNormalizesAnthropicSemanticsOnly(t *testing.T) {
+	t.Run("anthropic adds cache read and cache write", func(t *testing.T) {
+		summary := textQuotaSummary{
+			IsClaudeUsageSemantic: true,
+			PromptTokens:          100,
+			CacheTokens:           2000,
+			CacheCreationTokens:   50,
+		}
+		require.Equal(t, 2150, totalInputTokens(summary))
+	})
+
+	t.Run("openai keeps prompt tokens unchanged", func(t *testing.T) {
+		summary := textQuotaSummary{
+			PromptTokens: 75931,
+			CacheTokens:  70528,
+		}
+		require.Equal(t, 75931, totalInputTokens(summary))
+	})
+
+	t.Run("anthropic without cache keeps prompt tokens", func(t *testing.T) {
+		summary := textQuotaSummary{
+			IsClaudeUsageSemantic: true,
+			PromptTokens:          500,
+		}
+		require.Equal(t, 500, totalInputTokens(summary))
+	})
+
+	t.Run("anthropic with cache write only", func(t *testing.T) {
+		summary := textQuotaSummary{
+			IsClaudeUsageSemantic: true,
+			PromptTokens:          200,
+			CacheCreationTokens:   100,
+		}
+		require.Equal(t, 300, totalInputTokens(summary))
+	})
+
+	t.Run("anthropic with split cache creation", func(t *testing.T) {
+		summary := textQuotaSummary{
+			IsClaudeUsageSemantic: true,
+			PromptTokens:          200,
+			CacheCreationTokens:   50,
+			CacheCreationTokens5m: 10,
+			CacheCreationTokens1h: 20,
+		}
+		// cacheWriteTokensTotal prefers the larger of the aggregate and the split sum.
+		require.Equal(t, 50, cacheWriteTokensTotal(summary))
+		require.Equal(t, 250, totalInputTokens(summary))
+	})
+
+	t.Run("anthropic with split cache creation without aggregate", func(t *testing.T) {
+		summary := textQuotaSummary{
+			IsClaudeUsageSemantic: true,
+			PromptTokens:          200,
+			CacheCreationTokens5m: 10,
+			CacheCreationTokens1h: 20,
+		}
+		require.Equal(t, 230, totalInputTokens(summary))
+	})
+}
+
+// TestPostTextConsumeQuotaBillingUnaffectedByTotalInputTokens locks the
+// invariant that normalizing the logged prompt token count must not change
+// the billed quota.
+func TestPostTextConsumeQuotaBillingUnaffectedByTotalInputTokens(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	priceData := hosttypes.PriceData{
+		ModelRatio:           1,
+		CompletionRatio:      4,
+		CacheRatio:           0.1,
+		CacheCreationRatio:   1.25,
+		CacheCreation5mRatio: 1.25,
+		CacheCreation1hRatio: 2,
+		GroupRatioInfo:       hosttypes.GroupRatioInfo{GroupRatio: 1},
+	}
+
+	anthropicUsage := &dto.Usage{
+		PromptTokens:     100,
+		CompletionTokens: 200,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens:         2000,
+			CachedCreationTokens: 50,
+		},
+		ClaudeCacheCreation5mTokens: 10,
+		ClaudeCacheCreation1hTokens: 20,
+	}
+
+	openaiUsage := &dto.Usage{
+		PromptTokens:     75931,
+		CompletionTokens: 4917,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens: 70528,
+		},
+	}
+
+	tests := []struct {
+		name             string
+		usage            *dto.Usage
+		finalRelayFormat types.RelayFormat
+		expectedQuota    int
+	}{
+		{
+			// Anthropic semantics: prompt tokens are the non-cached part, so the
+			// base is not reduced by the cache tokens.
+			//   base 100 + cache read 2000*0.1=200 + cache creation
+			//   (remaining 20*1.25=25, 5m 10*1.25=12.5, 1h 20*2=40 => 77.5)
+			//   = 377.5 prompt, completion 200*4=800, total 1177.5 -> 1178.
+			name:             "anthropic semantics",
+			usage:            anthropicUsage,
+			finalRelayFormat: types.RelayFormatClaude,
+			expectedQuota:    1178,
+		},
+		{
+			// OpenAI semantics: prompt tokens already contain the cached input,
+			// so the base is reduced by the cache tokens before billing.
+			//   base 75931-70528=5403 + cache read 70528*0.1=7052.8
+			//   = 12455.8 prompt, completion 4917*4=19668, total 32123.8 -> 32124.
+			name:             "openai semantics",
+			usage:            openaiUsage,
+			finalRelayFormat: types.RelayFormatOpenAI,
+			expectedQuota:    32124,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(w)
+			ctx.Set("token_name", "test")
+
+			relayInfo := &relaycommon.RelayInfo{
+				RelayFormat:             tt.finalRelayFormat,
+				FinalRequestRelayFormat: tt.finalRelayFormat,
+				OriginModelName:         "test-model",
+				UserId:                  1,
+				TokenId:                 1,
+				PriceData:               priceData,
+				StartTime:               time.Now(),
+			}
+
+			summary := calculateTextQuotaSummary(ctx, relayInfo, tt.usage)
+
+			// Billing must stay on the upstream semantics.
+			require.Equal(t, tt.expectedQuota, summary.Quota)
+
+			// The logged prompt token count is the normalized total input.
+			if tt.finalRelayFormat == types.RelayFormatClaude {
+				require.True(t, summary.IsClaudeUsageSemantic)
+				require.Equal(t, 2150, totalInputTokens(summary))
+			} else {
+				require.False(t, summary.IsClaudeUsageSemantic)
+				require.Equal(t, 75931, totalInputTokens(summary))
+			}
+		})
+	}
+}
+
 func TestCalculateTextQuotaSummaryHandlesLegacyClaudeDerivedOpenAIUsage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

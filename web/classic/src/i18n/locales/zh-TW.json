@@ -2488,7 +2488,7 @@
     "核心概念": "核心概念",
     "核心配置": "核心設定",
     "核采样，控制词汇选择的多样性": "核採樣，控制詞彙選擇的多樣性",
-    "根据 Anthropic 协定，/v1/messages 的输入 tokens 仅统计非缓存输入，不包含缓存读取与缓存写入 tokens。": "根據 Anthropic 協定，/v1/messages 的輸入 tokens 僅統計非快取輸入，不包含快取讀取與快取寫入 tokens。",
+    "Input tokens are the total input, including cached input. The smaller line below shows the cache read and cache write portions of it.": "輸入 tokens 為總輸入量，已包含快取輸入。下方小字顯示其中的快取讀取與快取寫入部分。",
     "根据模型名称和匹配规则查找模型元数据，优先级：精确 > 前缀 > 后缀 > 包含": "根據模型名稱和匹配規則查找模型元數據，優先級：精確 > 前綴 > 後綴 > 包含",
     "格式": "",
     "格式化": "格式化",

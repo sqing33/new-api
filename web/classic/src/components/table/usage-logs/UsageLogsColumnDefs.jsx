@@ -779,7 +779,7 @@ export const getLogsColumns = ({
           {t('输入')}
           <Tooltip
             content={t(
-              '根据 Anthropic 协定，/v1/messages 的输入 tokens 仅统计非缓存输入，不包含缓存读取与缓存写入 tokens。',
+              'Input tokens are the total input, including cached input. The smaller line below shows the cache read and cache write portions of it.',
             )}
           >
             <IconHelpCircle className='text-gray-400 cursor-help' />
