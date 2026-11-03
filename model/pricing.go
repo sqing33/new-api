@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
@@ -26,29 +27,32 @@ type PricingPluginVariant struct {
 }
 
 type Pricing struct {
-	BillingPluginVariants  []PricingPluginVariant               `json:"billing_plugin_variants,omitempty"`
-	ModelName              string                               `json:"model_name"`
-	Description            string                               `json:"description,omitempty"`
-	Icon                   string                               `json:"icon,omitempty"`
-	Tags                   string                               `json:"tags,omitempty"`
-	VendorID               int                                  `json:"vendor_id,omitempty"`
-	QuotaType              int                                  `json:"quota_type"`
-	ModelRatio             float64                              `json:"model_ratio"`
-	ModelPrice             float64                              `json:"model_price"`
-	OwnerBy                string                               `json:"owner_by"`
-	CompletionRatio        float64                              `json:"completion_ratio"`
-	CacheRatio             *float64                             `json:"cache_ratio,omitempty"`
-	CreateCacheRatio       *float64                             `json:"create_cache_ratio,omitempty"`
-	ImageRatio             *float64                             `json:"image_ratio,omitempty"`
-	AudioRatio             *float64                             `json:"audio_ratio,omitempty"`
-	AudioCompletionRatio   *float64                             `json:"audio_completion_ratio,omitempty"`
-	EnableGroup            []string                             `json:"enable_groups"`
-	SupportedEndpointTypes []constant.EndpointType              `json:"supported_endpoint_types"`
-	BillingMode            string                               `json:"billing_mode,omitempty"`
-	BillingExpr            string                               `json:"billing_expr,omitempty"`
-	BillingUsageSchema     map[string]jsplugin.UsageFieldSchema `json:"billing_usage_schema,omitempty"`
-	BillingUsageExamples   []jsplugin.UsageExample              `json:"billing_usage_examples,omitempty"`
-	PricingVersion         string                               `json:"pricing_version,omitempty"`
+	BillingPluginVariants  []PricingPluginVariant  `json:"billing_plugin_variants,omitempty"`
+	ModelName              string                  `json:"model_name"`
+	Description            string                  `json:"description,omitempty"`
+	Icon                   string                  `json:"icon,omitempty"`
+	Tags                   string                  `json:"tags,omitempty"`
+	VendorID               int                     `json:"vendor_id,omitempty"`
+	QuotaType              int                     `json:"quota_type"`
+	ModelRatio             float64                 `json:"model_ratio"`
+	ModelPrice             float64                 `json:"model_price"`
+	OwnerBy                string                  `json:"owner_by"`
+	CompletionRatio        float64                 `json:"completion_ratio"`
+	CacheRatio             *float64                `json:"cache_ratio,omitempty"`
+	CreateCacheRatio       *float64                `json:"create_cache_ratio,omitempty"`
+	ImageRatio             *float64                `json:"image_ratio,omitempty"`
+	AudioRatio             *float64                `json:"audio_ratio,omitempty"`
+	AudioCompletionRatio   *float64                `json:"audio_completion_ratio,omitempty"`
+	EnableGroup            []string                `json:"enable_groups"`
+	SupportedEndpointTypes []constant.EndpointType `json:"supported_endpoint_types"`
+	// SupportsTTS / SupportsASR 来自模型能力配置，供定价页按语音能力筛选。
+	SupportsTTS          bool                                 `json:"supports_tts,omitempty"`
+	SupportsASR          bool                                 `json:"supports_asr,omitempty"`
+	BillingMode          string                               `json:"billing_mode,omitempty"`
+	BillingExpr          string                               `json:"billing_expr,omitempty"`
+	BillingUsageSchema   map[string]jsplugin.UsageFieldSchema `json:"billing_usage_schema,omitempty"`
+	BillingUsageExamples []jsplugin.UsageExample              `json:"billing_usage_examples,omitempty"`
+	PricingVersion       string                               `json:"pricing_version,omitempty"`
 }
 
 type PricingVendor struct {
@@ -331,6 +335,8 @@ func updatePricing() {
 			ModelName:              model,
 			EnableGroup:            groups.Items(),
 			SupportedEndpointTypes: modelSupportEndpointTypes[model],
+			SupportsTTS:            setting.ImageModelSupportsTTS(model),
+			SupportsASR:            setting.ImageModelSupportsASR(model),
 		}
 
 		// 补充模型元数据（描述、标签、供应商、状态）

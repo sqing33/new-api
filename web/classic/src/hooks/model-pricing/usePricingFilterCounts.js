@@ -18,6 +18,10 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import { useMemo } from 'react';
+import {
+  modelMatchesCapability,
+  PRICING_CAPABILITY_ALL,
+} from '../../components/table/model-pricing/filter/pricingCapability';
 
 // 工具函数：将 tags 字符串转为小写去重数组
 const normalizeTags = (tags = '') =>
@@ -26,11 +30,6 @@ const normalizeTags = (tags = '') =>
     .split(/[,;|]+/)
     .map((t) => t.trim())
     .filter(Boolean);
-
-const hasImageCapability = (model, imageModelSettingsMap) => {
-  const setting = imageModelSettingsMap?.[model?.model_name];
-  return Array.isArray(setting?.modes) && setting.modes.length > 0;
-};
 
 /**
  * 统一计算模型筛选后的各种集合与动态计数，供多个组件复用
@@ -92,10 +91,12 @@ export const usePricingFilterCounts = ({
     }
 
     // 能力
-    if (!ignore.includes('capability') && filterCapability !== 'all') {
-      const isImageModel = hasImageCapability(model, imageModelSettingsMap);
-      if (filterCapability === 'image' && !isImageModel) return false;
-      if (filterCapability === 'chat' && isImageModel) return false;
+    if (
+      !ignore.includes('capability') &&
+      filterCapability !== PRICING_CAPABILITY_ALL &&
+      !modelMatchesCapability(model, filterCapability, imageModelSettingsMap)
+    ) {
+      return false;
     }
 
     // 搜索

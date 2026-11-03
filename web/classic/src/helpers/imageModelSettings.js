@@ -26,6 +26,14 @@ export const VIDEO_MODEL_MODE_OPTIONS = [
   { value: 'text_to_video', label: '文生视频' },
 ];
 
+export const TTS_MODEL_MODE_OPTIONS = [
+  { value: 'speech', label: '语音合成' },
+];
+
+export const ASR_MODEL_MODE_OPTIONS = [
+  { value: 'transcription', label: '语音识别' },
+];
+
 export const DEFAULT_VIDEO_MODEL_CONFIG = {
   default_seconds: '4',
   durations: ['4'],
@@ -86,6 +94,12 @@ export const normalizeImageModelSetting = (setting) => {
   const videoModes = normalizeStringArray(setting?.video_modes).filter((mode) =>
     VIDEO_MODEL_MODE_OPTIONS.some((item) => item.value === mode),
   );
+  const ttsModes = normalizeStringArray(setting?.tts_modes).filter((mode) =>
+    TTS_MODEL_MODE_OPTIONS.some((item) => item.value === mode),
+  );
+  const asrModes = normalizeStringArray(setting?.asr_modes).filter((mode) =>
+    ASR_MODEL_MODE_OPTIONS.some((item) => item.value === mode),
+  );
   const normalized = {
     model: typeof setting?.model === 'string' ? setting.model.trim() : '',
     modes,
@@ -97,6 +111,14 @@ export const normalizeImageModelSetting = (setting) => {
   if (videoModes.length > 0 || setting?.video) {
     normalized.video_modes = videoModes;
     normalized.video = normalizeVideoModelConfig(setting?.video);
+  }
+
+  if (ttsModes.length > 0) {
+    normalized.tts_modes = ttsModes;
+  }
+
+  if (asrModes.length > 0) {
+    normalized.asr_modes = asrModes;
   }
 
   return normalized;

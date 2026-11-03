@@ -45,9 +45,11 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
+  ASR_MODEL_MODE_OPTIONS,
   IMAGE_MODEL_MODE_OPTIONS,
   normalizeImageModelSetting,
   normalizeVideoModelConfig,
+  TTS_MODEL_MODE_OPTIONS,
 } from '../../../../helpers/imageModelSettings';
 
 const { Text, Title } = Typography;
@@ -137,6 +139,8 @@ const qingyingSettingToFormValues = (setting) => {
     qingying_video_default_seconds: video.default_seconds,
     qingying_video_sizes: video.sizes.join(', '),
     qingying_video_default_size: video.default_size,
+    qingying_tts_enabled: (normalized?.tts_modes || []).length > 0,
+    qingying_asr_enabled: (normalized?.asr_modes || []).length > 0,
   };
 };
 
@@ -333,6 +337,14 @@ const EditModelModal = (props) => {
       });
     }
 
+    if (values.qingying_tts_enabled) {
+      setting.tts_modes = [TTS_MODEL_MODE_OPTIONS[0].value];
+    }
+
+    if (values.qingying_asr_enabled) {
+      setting.asr_modes = [ASR_MODEL_MODE_OPTIONS[0].value];
+    }
+
     return normalizeImageModelSetting(setting);
   };
 
@@ -340,7 +352,9 @@ const EditModelModal = (props) => {
     const nextSetting = buildQingyingSettingFromValues(values, nextModelName);
     const shouldKeep =
       nextSetting.modes.length > 0 ||
-      (nextSetting.video_modes || []).length > 0;
+      (nextSetting.video_modes || []).length > 0 ||
+      (nextSetting.tts_modes || []).length > 0 ||
+      (nextSetting.asr_modes || []).length > 0;
     const nextSettings = imageModelSettings.filter(
       (setting) =>
         setting.model !== oldModelName && setting.model !== nextModelName,
@@ -376,6 +390,8 @@ const EditModelModal = (props) => {
       delete submitData.qingying_video_default_seconds;
       delete submitData.qingying_video_sizes;
       delete submitData.qingying_video_default_size;
+      delete submitData.qingying_tts_enabled;
+      delete submitData.qingying_asr_enabled;
 
       if (isEdit) {
         submitData.id = props.editingModel.id;
@@ -726,6 +742,22 @@ const EditModelModal = (props) => {
                             </Col>
                           </>
                         )}
+                        <Col span={24}>
+                          <Form.Switch
+                            field='qingying_tts_enabled'
+                            label={t('启用TTS')}
+                            fieldStyle={{ marginBottom: 0 }}
+                            extraText={t('标记该模型支持语音合成，可在定价页按能力筛选')}
+                          />
+                        </Col>
+                        <Col span={24}>
+                          <Form.Switch
+                            field='qingying_asr_enabled'
+                            label={t('启用ASR')}
+                            fieldStyle={{ marginBottom: 0 }}
+                            extraText={t('标记该模型支持语音识别，可在定价页按能力筛选')}
+                          />
+                        </Col>
                       </Row>
                     </Card>
                   </Col>

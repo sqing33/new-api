@@ -19,11 +19,14 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React from 'react';
 import SelectableButtonGroup from '../../../common/ui/SelectableButtonGroup';
-
-const hasImageCapability = (model, imageModelSettingsMap) => {
-  const setting = imageModelSettingsMap?.[model?.model_name];
-  return Array.isArray(setting?.modes) && setting.modes.length > 0;
-};
+import {
+  modelMatchesCapability,
+  PRICING_CAPABILITY_ALL,
+  PRICING_CAPABILITY_ASR,
+  PRICING_CAPABILITY_CHAT,
+  PRICING_CAPABILITY_IMAGE,
+  PRICING_CAPABILITY_TTS,
+} from './pricingCapability';
 
 const PricingCapabilities = ({
   filterCapability,
@@ -33,30 +36,36 @@ const PricingCapabilities = ({
   loading = false,
   t,
 }) => {
-  const getCapabilityCount = (capability) => {
-    if (capability === 'all') return models.length;
-
-    return models.filter((model) => {
-      const isImageModel = hasImageCapability(model, imageModelSettingsMap);
-      return capability === 'image' ? isImageModel : !isImageModel;
-    }).length;
-  };
+  const getCapabilityCount = (capability) =>
+    models.filter((model) =>
+      modelMatchesCapability(model, capability, imageModelSettingsMap),
+    ).length;
 
   const items = [
     {
-      value: 'all',
+      value: PRICING_CAPABILITY_ALL,
       label: t('全部能力'),
-      tagCount: getCapabilityCount('all'),
+      tagCount: getCapabilityCount(PRICING_CAPABILITY_ALL),
     },
     {
-      value: 'image',
+      value: PRICING_CAPABILITY_IMAGE,
       label: t('生图'),
-      tagCount: getCapabilityCount('image'),
+      tagCount: getCapabilityCount(PRICING_CAPABILITY_IMAGE),
     },
     {
-      value: 'chat',
+      value: PRICING_CAPABILITY_CHAT,
       label: t('对话'),
-      tagCount: getCapabilityCount('chat'),
+      tagCount: getCapabilityCount(PRICING_CAPABILITY_CHAT),
+    },
+    {
+      value: PRICING_CAPABILITY_TTS,
+      label: t('TTS'),
+      tagCount: getCapabilityCount(PRICING_CAPABILITY_TTS),
+    },
+    {
+      value: PRICING_CAPABILITY_ASR,
+      label: t('ASR'),
+      tagCount: getCapabilityCount(PRICING_CAPABILITY_ASR),
     },
   ];
 

@@ -5002,5 +5002,11 @@
     "序列化旧定价失败": "Chuẩn hóa giá cũ thất bại",
     "该模型已使用表达式计费": "Mô hình này đã dùng biểu thức",
     "确认后将切换到表达式/阶梯计费，保存后生效；取消不影响当前草稿。": "Xác nhận sẽ chuyển sang biểu thức/bậc thang, hiệu lực sau khi lưu; hủy không ảnh hưởng bản nháp."
-  }
+  },
+  "启用TTS": "Bật TTS",
+  "启用ASR": "Bật ASR",
+  "标记该模型支持语音合成，可在定价页按能力筛选": "Đánh dấu mô hình này hỗ trợ tổng hợp giọng nói để lọc trên trang định giá",
+  "标记该模型支持语音识别，可在定价页按能力筛选": "Đánh dấu mô hình này hỗ trợ nhận dạng giọng nói để lọc trên trang định giá",
+  "TTS": "TTS",
+  "ASR": "ASR"
 }

@@ -2,18 +2,33 @@ package minimax
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
+)
+
+const (
+	// defaultTTSAudioFormat 对应 MiniMax audio_setting.format 的默认值。
+	defaultTTSAudioFormat = "mp3"
+	// ttsOutputFormatHex 是 MiniMax output_format 的合法取值之一，表示音频以 hex 内联返回。
+	ttsOutputFormatHex = "hex"
+	// ttsRequestedFormatKey 在请求阶段记录客户端期望的音频编码格式，
+	// 供响应阶段在 upstream 未回传 audio_format 时回退使用。
+	ttsRequestedFormatKey = "minimax_tts_audio_format"
+
+	// asrRequestedFormatKey 在请求阶段记录客户端期望的转写响应格式。
+	asrRequestedFormatKey = "minimax_asr_response_format"
+	asrFormatSRT          = "srt"
+	asrFormatVTT          = "vtt"
 )
 
 type MiniMaxTTSRequest struct {
@@ -83,7 +98,8 @@ type MiniMaxTTSData struct {
 }
 
 type MiniMaxExtraInfo struct {
-	UsageCharacters int64 `json:"usage_characters"`
+	UsageCharacters int64  `json:"usage_characters"`
+	AudioFormat     string `json:"audio_format"`
 }
 
 type MiniMaxBaseResp struct {
@@ -118,7 +134,7 @@ func handleTTSResponse(c *gin.Context, resp *http.Response, info *relaycommon.Re
 
 	// Parse response
 	var minimaxResp MiniMaxTTSResponse
-	if unmarshalErr := json.Unmarshal(body, &minimaxResp); unmarshalErr != nil {
+	if unmarshalErr := common.Unmarshal(body, &minimaxResp); unmarshalErr != nil {
 		return nil, types.NewErrorWithStatusCode(
 			fmt.Errorf("failed to unmarshal minimax TTS response: %w", unmarshalErr),
 			types.ErrorCodeBadResponseBody,
@@ -157,10 +173,12 @@ func handleTTSResponse(c *gin.Context, resp *http.Response, info *relaycommon.Re
 			)
 		}
 
-		// Determine content type - default to mp3
-		contentType := "audio/mpeg"
-
-		c.Data(http.StatusOK, contentType, audioData)
+		// 以上游实际返回的音频格式决定 Content-Type，回退到客户端请求的格式。
+		audioFormat := minimaxResp.ExtraInfo.AudioFormat
+		if audioFormat == "" {
+			audioFormat = c.GetString(ttsRequestedFormatKey)
+		}
+		c.Data(http.StatusOK, getContentTypeByFormat(audioFormat), audioData)
 	}
 
 	usage = &dto.Usage{

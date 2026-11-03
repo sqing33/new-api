@@ -4619,5 +4619,11 @@
     "序列化旧定价失败": "Failed to serialize legacy pricing",
     "该模型已使用表达式计费": "This model already uses expression billing",
     "确认后将切换到表达式/阶梯计费，保存后生效；取消不影响当前草稿。": "Confirming switches this model to expression/tiered billing. Takes effect after saving; cancelling leaves the draft unchanged."
-  }
+  },
+  "启用TTS": "Enable TTS",
+  "启用ASR": "Enable ASR",
+  "标记该模型支持语音合成，可在定价页按能力筛选": "Mark this model as speech synthesis capable so it can be filtered on the pricing page",
+  "标记该模型支持语音识别，可在定价页按能力筛选": "Mark this model as speech recognition capable so it can be filtered on the pricing page",
+  "TTS": "TTS",
+  "ASR": "ASR"
 }

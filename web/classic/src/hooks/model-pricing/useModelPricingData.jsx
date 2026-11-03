@@ -24,17 +24,16 @@ import { Modal } from '@douyinfe/semi-ui';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 import { parseImageModelSettings } from '../../helpers/imageModelSettings';
+import {
+  modelMatchesCapability,
+  PRICING_CAPABILITY_ALL,
+} from '../../components/table/model-pricing/filter/pricingCapability';
 
 const buildImageModelSettingsMap = (settings = []) =>
   settings.reduce((map, setting) => {
     if (setting?.model) map[setting.model] = setting;
     return map;
   }, {});
-
-const hasImageCapability = (model, imageModelSettingsMap) => {
-  const setting = imageModelSettingsMap?.[model?.model_name];
-  return Array.isArray(setting?.modes) && setting.modes.length > 0;
-};
 
 export const useModelPricingData = () => {
   const { t } = useTranslation();
@@ -179,11 +178,10 @@ export const useModelPricingData = () => {
     }
 
     // 能力筛选
-    if (filterCapability !== 'all') {
-      result = result.filter((model) => {
-        const isImageModel = hasImageCapability(model, imageModelSettingsMap);
-        return filterCapability === 'image' ? isImageModel : !isImageModel;
-      });
+    if (filterCapability !== PRICING_CAPABILITY_ALL) {
+      result = result.filter((model) =>
+        modelMatchesCapability(model, filterCapability, imageModelSettingsMap),
+      );
     }
 
     return result;
