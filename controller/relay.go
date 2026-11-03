@@ -71,6 +71,10 @@ func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewA
 }
 
 func Relay(c *gin.Context, relayFormat types.RelayFormat) {
+	// 并发计数的释放必须挂在请求真正结束处。Relay 是同步的：内部的
+	// StreamScannerHandler 用 wg.Wait() 等流式 goroutine 结束，因此本函数
+	// 返回时响应已写完，defer 能覆盖函数内全部 return 分支。
+	defer middleware.ReleaseChannelConcurrency(c)
 
 	requestId := c.GetString(common.RequestIdKey)
 	//group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
@@ -431,6 +435,8 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 }
 
 func RelayMidjourney(c *gin.Context) {
+	defer middleware.ReleaseChannelConcurrency(c)
+
 	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatMjProxy, nil, nil)
 
 	if err != nil {
@@ -551,6 +557,8 @@ type taskSubmissionOutcome struct {
 }
 
 func RelayTask(c *gin.Context) {
+	defer middleware.ReleaseChannelConcurrency(c)
+
 	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatTask, nil, nil)
 	if err != nil {
 		respondTaskSubmissionError(c, &taskdto.TaskError{

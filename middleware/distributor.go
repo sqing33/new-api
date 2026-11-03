@@ -32,6 +32,9 @@ type ModelRequest struct {
 	Group string `json:"group,omitempty"`
 }
 
+// concurrencyReleaseKey 暂存并发计数的释放函数，由 controller.Relay 取出调用。
+const concurrencyReleaseKey = "channel_concurrency_release"
+
 func Distribute() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var channel *model.Channel
@@ -213,24 +216,40 @@ func Distribute() func(c *gin.Context) {
 // single call covers every dimension. Release runs on a detached context so a
 // client disconnect cannot cancel the cleanup.
 func trackChannelConcurrency(c *gin.Context) {
-	channelID := common.GetContextKeyInt(c, constant.ContextKeyChannelId)
-	userID := common.GetContextKeyInt(c, constant.ContextKeyUserId)
-	tokenID := common.GetContextKeyInt(c, constant.ContextKeyTokenId)
-	// TODO: 临时诊断日志，用于定位并发统计恒为 0 的断点，定位后移除
-	common.SysError(fmt.Sprintf(
-		"concurrency-diag: redisEnabled=%v rdbNil=%v ch=%d user=%d token=%d",
-		common.RedisEnabled, common.RDB == nil, channelID, userID, tokenID))
 	if !common.RedisEnabled {
 		return
 	}
 	dims := concurrency.Dimensions{
-		ChannelID: channelID,
-		UserID:    userID,
-		TokenID:   tokenID,
+		ChannelID: common.GetContextKeyInt(c, constant.ContextKeyChannelId),
+		UserID:    common.GetContextKeyInt(c, constant.ContextKeyUserId),
+		TokenID:   common.GetContextKeyInt(c, constant.ContextKeyTokenId),
 	}
 	requestID := concurrency.NewRequestID()
 	concurrency.Track(c.Request.Context(), dims, requestID)
-	defer concurrency.Release(dims, requestID)()
+	// 释放必须挂到请求真正结束处，不能在这里 defer：本中间件的 c.Next()
+	// 只把控制权交给下一个 handler 就立即返回，流式请求此时仍在写，
+	// 在此释放会把并发窗口压缩到毫秒级。改由 controller.Relay 负责。
+	setConcurrencyRelease(c, concurrency.Release(dims, requestID))
+}
+
+// setConcurrencyRelease 把并发计数的释放函数暂存到请求上下文，
+// 供 controller.Relay 在请求真正结束时调用。
+func setConcurrencyRelease(c *gin.Context, release func()) {
+	c.Set(concurrencyReleaseKey, release)
+}
+
+// ReleaseChannelConcurrency 释放本请求占用的并发槽位。由 relay 控制器在
+// 请求处理完成（含流式输出结束）后调用；释放函数本身幂等，重复调用安全。
+func ReleaseChannelConcurrency(c *gin.Context) {
+	value, ok := c.Get(concurrencyReleaseKey)
+	if !ok {
+		return
+	}
+	release, ok := value.(func())
+	if !ok {
+		return
+	}
+	release()
 }
 
 // noAvailableChannelMessage explains a 503 for a task-plugin-claimed model.
