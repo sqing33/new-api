@@ -113,13 +113,13 @@ const PluginDetailSheet = ({
       placement='right'
       title={
         <div>
-          <Text strong className='text-base'>
+          <Typography.Text strong className='text-base'>
             {detail?.meta?.name ?? plugin?.meta?.name}
-          </Text>
+          </Typography.Text>
           <div>
-            <Text type='tertiary' className='font-mono text-xs'>
+            <Typography.Text type='tertiary' className='font-mono text-xs'>
               {key}
-            </Text>
+            </Typography.Text>
             {description ? (
               <div className='mt-1 text-xs text-gray-500'>{description}</div>
             ) : null}
