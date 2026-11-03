@@ -436,6 +436,7 @@ func migrateDB() error {
 		&ToolInstallToken{},
 		&ToolInstallTool{},
 		&PerfMetric{},
+		&PerfConcurrency{},
 		&SystemInstance{},
 		&SystemTask{},
 		&SystemTaskLock{},

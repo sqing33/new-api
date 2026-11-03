@@ -31,6 +31,7 @@ import {
   PERFORMANCE_HOURS_OPTIONS,
   usePerformanceData,
 } from '../../hooks/performance/usePerformanceData';
+import { renderConcurrency } from '../../helpers';
 
 const { Text } = Typography;
 
@@ -56,6 +57,68 @@ const SuccessRateDot = ({ value }) => (
 
 // 近 N 个时间桶的成功率迷你趋势线(与完整页同款 SVG 折线);
 // 数据不足两个点时显示单个状态点,保证该列视觉上不空缺
+
+// ConcurrencySparkline 画并发的迷你趋势线。与成功率不同，这里的 x 坐标
+// 按 point.ts 定位而不是数组索引——并发采样可能缺桶，按索引会把不规则
+// 间隔画成等距，趋势会失真。
+const ConcurrencySparkline = ({ points }) => {
+  const width = 64;
+  const height = 20;
+  const series = Array.isArray(points) ? points : [];
+  if (series.length === 0) {
+    return (
+      <svg width={width} height={height} aria-hidden='true' className='shrink-0'>
+        <line
+          x1='1'
+          y1={height - 1}
+          x2={width - 1}
+          y2={height - 1}
+          stroke='var(--semi-color-border)'
+          strokeWidth='1'
+          strokeDasharray='3 3'
+        />
+      </svg>
+    );
+  }
+  const maxValue = Math.max(1, ...series.map((p) => Number(p.max_concurrency) || 0));
+  const firstTs = series[0].ts;
+  const spanTs = Math.max(1, series[series.length - 1].ts - firstTs);
+  const coords = series.map((point) => {
+    const x = 1 + ((point.ts - firstTs) / spanTs) * (width - 2);
+    const ratio = (Number(point.max_concurrency) || 0) / maxValue;
+    const y = height - 1 - ratio * (height - 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const lastValue = Number(series[series.length - 1].max_concurrency) || 0;
+  const hue = Math.max(0, 120 - (Math.min(lastValue, 40) / 40) * 120);
+  const color = lastValue <= 0 ? 'var(--semi-color-text-2)' : `hsl(${hue}, 70%, 45%)`;
+  if (series.length === 1) {
+    return (
+      <svg width={width} height={height} aria-hidden='true' className='shrink-0'>
+        <circle cx={width / 2} cy={height - 1 - ((lastValue / maxValue) * (height - 2))} r='3' fill={color} />
+      </svg>
+    );
+  }
+  return (
+    <svg width={width} height={height} aria-hidden='true' className='shrink-0'>
+      <polyline
+        points={coords.join(' ')}
+        fill='none'
+        stroke={color}
+        strokeWidth='1.5'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+      />
+      <circle
+        cx={coords[coords.length - 1].split(',')[0]}
+        cy={coords[coords.length - 1].split(',')[1]}
+        r='2.5'
+        fill={color}
+      />
+    </svg>
+  );
+};
+
 const SuccessRateSparkline = ({ values }) => {
   if (!Array.isArray(values) || values.length === 0) {
     return (
@@ -168,6 +231,28 @@ const PerformancePanel = ({ CARD_PROPS, t }) => {
             <Tooltip content={recentRates.map((v) => `${v}%`).join(' → ')} showArrow>
               <span className='inline-flex'>
                 <SuccessRateSparkline values={recentRates} />
+              </span>
+            </Tooltip>
+          </div>
+        );
+      },
+    },
+    {
+      title: t('并发'),
+      dataIndex: 'max_concurrency',
+      render: (value, record) => {
+        const series = record.recent_concurrency_series || [];
+        return (
+          <div className='flex items-center gap-2'>
+            {renderConcurrency(value ?? record.max_concurrency ?? 0)}
+            <Tooltip
+              content={series
+                .map((p) => String(p.max_concurrency ?? 0))
+                .join(' → ')}
+              showArrow
+            >
+              <span className='inline-flex'>
+                <ConcurrencySparkline points={series} />
               </span>
             </Tooltip>
           </div>

@@ -12,11 +12,15 @@ import (
 
 // PerfMetric stores aggregated relay performance metrics for the model square.
 type PerfMetric struct {
-	Id             int    `json:"id" gorm:"primaryKey"`
-	ModelName      string `json:"model_name" gorm:"size:128;uniqueIndex:idx_perf_model_group_channel_bucket,priority:1"`
-	Group          string `json:"group" gorm:"column:group;size:64;uniqueIndex:idx_perf_model_group_channel_bucket,priority:2"`
-	ChannelName    string `json:"channel_name" gorm:"column:channel_name;size:255;uniqueIndex:idx_perf_model_group_channel_bucket,priority:3"`
-	BucketTs       int64  `json:"bucket_ts" gorm:"uniqueIndex:idx_perf_model_group_channel_bucket,priority:4;index:idx_perf_bucket_ts"`
+	Id          int    `json:"id" gorm:"primaryKey"`
+	ModelName   string `json:"model_name" gorm:"size:128;uniqueIndex:idx_perf_model_group_channel_bucket,priority:1"`
+	Group       string `json:"group" gorm:"column:group;size:64;uniqueIndex:idx_perf_model_group_channel_bucket,priority:2"`
+	ChannelName string `json:"channel_name" gorm:"column:channel_name;size:255;uniqueIndex:idx_perf_model_group_channel_bucket,priority:3"`
+	BucketTs    int64  `json:"bucket_ts" gorm:"uniqueIndex:idx_perf_model_group_channel_bucket,priority:4;index:idx_perf_bucket_ts"`
+	// TokenId/TokenName 把指标细化到令牌维度。历史行 token_id 为 0，
+	// 查询时归入「未知令牌」，不影响新数据。
+	TokenId        int    `json:"token_id" gorm:"default:0;uniqueIndex:idx_perf_model_group_channel_bucket,priority:5"`
+	TokenName      string `json:"token_name" gorm:"size:128;default:''"`
 	RequestCount   int64  `json:"-" gorm:"default:0"`
 	SuccessCount   int64  `json:"-" gorm:"default:0"`
 	TotalLatencyMs int64  `json:"-" gorm:"default:0"`
@@ -34,6 +38,12 @@ func (PerfMetric) TableName() string {
 // versions. They must be dropped before AutoMigrate creates the new four-column
 // unique index, otherwise (model_name, group, bucket_ts) still collides and
 // channel-level upserts would fail.
+// perfMetricLegacyUniqueIndexes 只列出「列集与当前定义不同」的旧索引名。
+//
+// 注意：不能把当前索引名 idx_perf_model_group_channel_bucket 也列进来——
+// 该名字对应的列集已随 token 维度扩展，AutoMigrate 建的正是新版本；
+// 把它当成 legacy 删掉会让唯一约束彻底失效。当前索引名相同但列集不同的
+// 情况由 GORM AutoMigrate 自行处理（SQLite 重建表、MySQL/PG 调整索引）。
 var perfMetricLegacyUniqueIndexes = []string{"idx_perf_model_group_bucket"}
 
 func migratePerfMetricUniqueIndex(db *gorm.DB) error {
@@ -66,6 +76,7 @@ func UpsertPerfMetric(metric *PerfMetric) error {
 			{Name: "group"},
 			{Name: "channel_name"},
 			{Name: "bucket_ts"},
+			{Name: "token_id"},
 		},
 		DoUpdates: clause.Assignments(map[string]any{
 			"request_count":    gorm.Expr("perf_metrics.request_count + ?", metric.RequestCount),

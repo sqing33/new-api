@@ -858,25 +858,22 @@ export function renderGroup(group) {
   );
 }
 
+// renderConcurrency 渲染实时并发数：前置圆点 + 数字。
+// 圆点颜色按并发量在 HSL 色环上从绿(120°)连续过渡到红(0°)，40 及以上保持红色，
+// 这样相邻量级之间也有可见差异，而不是几档离散跳变。
 export function renderConcurrency(count) {
   const value = Number(count) || 0;
-  if (value <= 0) {
-    return (
-      <Tag color='grey' shape='circle'>
-        0
-      </Tag>
-    );
-  }
-  let color = 'green';
-  if (value >= 50) {
-    color = 'red';
-  } else if (value >= 10) {
-    color = 'orange';
-  }
+  const hue = Math.max(0, 120 - (Math.min(value, 40) / 40) * 120);
+  const color =
+    value <= 0 ? 'var(--semi-color-text-2)' : `hsl(${hue}, 70%, 45%)`;
   return (
-    <Tag color={color} shape='circle'>
-      {value}
-    </Tag>
+    <span className='inline-flex items-center gap-1.5'>
+      <span
+        className={`inline-block shrink-0 rounded-full ${value > 0 ? 'animate-pulse' : ''}`}
+        style={{ width: 8, height: 8, background: color }}
+      />
+      <span className='font-mono tabular-nums'>{value}</span>
+    </span>
   );
 }
 

@@ -48,6 +48,8 @@ const ChannelsActions = ({
   setIdSort,
   nameSort,
   setNameSort,
+  concurrencySort,
+  setConcurrencySort,
   planUsageSort,
   setPlanUsageSort,
   setEnableBatchDelete,
@@ -270,9 +272,10 @@ const ChannelsActions = ({
               onChange={(v) => {
                 localStorage.setItem('id-sort', v + '');
                 setIdSort(v);
-                // 与名称排序互斥
+                // 与名称排序、并发排序互斥
                 if (v) {
                   setNameSort(false);
+                  setConcurrencySort(false);
                 }
                 const { searchKeyword, searchGroup, searchModel } =
                   getFormValues();
@@ -293,6 +296,17 @@ const ChannelsActions = ({
                   );
                 }
               }}
+            />
+          </div>
+
+          <div className='flex items-center justify-between w-full md:w-auto'>
+            <Typography.Text strong className='mr-2'>
+              {t('按并发排序')}
+            </Typography.Text>
+            <Switch
+              size='small'
+              checked={concurrencySort}
+              onChange={(v) => setConcurrencySort(v)}
             />
           </div>
 

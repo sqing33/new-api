@@ -170,7 +170,9 @@ func GetAllUserTokens(userId int, startIdx int, num int, sortOptions ...TokenSor
 			return nil, err
 		}
 		return SortByConcurrencyDesc(all, concurrency.DimensionToken,
-			func(t *Token) int { return t.Id }, startIdx, num), nil
+			func(t *Token) int { return t.Id },
+			func(t *Token) int64 { return t.AccessedTime },
+			startIdx, num), nil
 	}
 	err = DB.Where("user_id = ?", userId).Order(order.Order()).Limit(num).Offset(startIdx).Find(&tokens).Error
 	return tokens, err
@@ -286,7 +288,9 @@ func SearchUserTokens(userId int, keyword string, token string, offset int, limi
 			return nil, 0, errors.New("搜索令牌失败")
 		}
 		tokens = SortByConcurrencyDesc(all, concurrency.DimensionToken,
-			func(t *Token) int { return t.Id }, offset, limit)
+			func(t *Token) int { return t.Id },
+			func(t *Token) int64 { return t.AccessedTime },
+			offset, limit)
 		return tokens, total, nil
 	}
 	err = baseQuery.Order(order.Order()).Offset(offset).Limit(limit).Find(&tokens).Error

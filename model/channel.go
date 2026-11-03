@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/concurrency"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -81,6 +82,10 @@ type ChannelSortOptions struct {
 	IDSort    bool
 }
 
+// ChannelSortByConcurrency 是虚拟排序列：并发数存在 Redis 而非数据库，
+// 命中它时改走内存排序，见 SortByConcurrencyDesc。
+const ChannelSortByConcurrency = "concurrency"
+
 var channelSortColumns = map[string]string{
 	"id":            "id",
 	"name":          "name",
@@ -93,10 +98,13 @@ var channelSortColumns = map[string]string{
 func NewChannelSortOptions(sortBy string, sortOrder string, idSort bool) ChannelSortOptions {
 	normalizedSortBy := strings.ToLower(strings.TrimSpace(sortBy))
 	normalizedSortOrder := strings.ToLower(strings.TrimSpace(sortOrder))
-	if _, ok := channelSortColumns[normalizedSortBy]; !ok {
-		normalizedSortBy = ""
-		normalizedSortOrder = ""
-	} else if normalizedSortOrder != "asc" {
+	if normalizedSortBy != ChannelSortByConcurrency {
+		if _, ok := channelSortColumns[normalizedSortBy]; !ok {
+			normalizedSortBy = ""
+			normalizedSortOrder = ""
+		}
+	}
+	if normalizedSortOrder != "asc" {
 		normalizedSortOrder = "desc"
 	}
 
@@ -444,6 +452,25 @@ func GetAllChannels(startIdx int, num int, selectAll bool, idSort bool, sortOpti
 	var channels []*Channel
 	var err error
 	order := resolveChannelSortOptions(idSort, sortOptions)
+	if order.SortBy == ChannelSortByConcurrency {
+		// 并发数在 Redis 里，先取全量再内存排序分页
+		query := DB
+		if !selectAll {
+			query = query.Omit("key")
+		}
+		var all []*Channel
+		if err = order.Apply(query).Find(&all).Error; err != nil {
+			return nil, err
+		}
+		if selectAll {
+			return SortByConcurrencyDesc(all, concurrency.DimensionChannel,
+				func(c *Channel) int { return c.Id },
+				func(c *Channel) int64 { return int64(c.Id) }, 0, -1), nil
+		}
+		return SortByConcurrencyDesc(all, concurrency.DimensionChannel,
+			func(c *Channel) int { return c.Id },
+			func(c *Channel) int64 { return int64(c.Id) }, startIdx, num), nil
+	}
 	if selectAll {
 		err = order.Apply(DB).Find(&channels).Error
 	} else {
@@ -458,6 +485,15 @@ func GetChannelsByTag(tag string, idSort bool, selectAll bool, sortOptions ...Ch
 	query := order.Apply(DB.Where("tag = ?", tag))
 	if !selectAll {
 		query = query.Omit("key")
+	}
+	if order.SortBy == ChannelSortByConcurrency {
+		var all []*Channel
+		if err := query.Find(&all).Error; err != nil {
+			return nil, err
+		}
+		return SortByConcurrencyDesc(all, concurrency.DimensionChannel,
+			func(c *Channel) int { return c.Id },
+			func(c *Channel) int64 { return int64(c.Id) }, 0, -1), nil
 	}
 	err := query.Find(&channels).Error
 	return channels, err
@@ -489,6 +525,15 @@ func SearchChannels(keyword string, group string, model string, idSort bool, sor
 	baseQuery = ApplyChannelGroupFilter(baseQuery.Where(whereClause, args...), group)
 
 	// 执行查询
+	if order.SortBy == ChannelSortByConcurrency {
+		var all []*Channel
+		if err := order.Apply(baseQuery).Find(&all).Error; err != nil {
+			return nil, err
+		}
+		return SortByConcurrencyDesc(all, concurrency.DimensionChannel,
+			func(c *Channel) int { return c.Id },
+			func(c *Channel) int64 { return int64(c.Id) }, 0, -1), nil
+	}
 	err := order.Apply(baseQuery).Find(&channels).Error
 	if err != nil {
 		return nil, err

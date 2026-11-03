@@ -75,10 +75,31 @@ var trackScript = redis.NewScript(trackScriptSrc)
 
 // Dimensions carries the entity ids a single request belongs to. A zero or
 // negative id means "not applicable" and that dimension is skipped.
+//
+// Model and Group are not entity ids: they are carried inside the sorted-set
+// member so that concurrency can be broken down per model/group later, which
+// the performance dashboard needs. They are optional.
 type Dimensions struct {
 	ChannelID int
 	UserID    int
 	TokenID   int
+	Model     string
+	Group     string
+}
+
+// memberSeparator joins the request id with the model/group breakdown inside a
+// sorted-set member. It must not appear in any of the joined values; model and
+// group names come from admin configuration and are validated elsewhere.
+const memberSeparator = "\x1f"
+
+// member builds the sorted-set member for one in-flight request. Track and
+// Release MUST both go through this function: Release removes by exact member
+// value, so any divergence here would leak slots until the TTL expires.
+func (d Dimensions) member(requestID string) string {
+	if d.Model == "" && d.Group == "" {
+		return requestID
+	}
+	return requestID + memberSeparator + d.Model + memberSeparator + d.Group
 }
 
 // keys returns the Redis keys for every populated dimension.
@@ -149,7 +170,7 @@ func Track(ctx context.Context, dims Dimensions, requestID string) {
 	trackCtx, cancel := context.WithTimeout(baseCtx, trackTimeout)
 	defer cancel()
 
-	if err := runTrackPipeline(trackCtx, keys, requestID); err != nil {
+	if err := runTrackPipeline(trackCtx, keys, requestID, dims.member(requestID)); err != nil {
 		common.SysError(fmt.Sprintf("concurrency: track failed (req=%s): %v", requestID, err))
 	}
 }
@@ -160,24 +181,24 @@ func Track(ctx context.Context, dims Dimensions, requestID string) {
 // error until Exec, so Run's NOSCRIPT fallback to EVAL would never fire. The
 // script SHA is therefore loaded up front and the whole pipeline is retried once
 // with EVAL after a NOSCRIPT, which happens when Redis was flushed or restarted.
-func runTrackPipeline(ctx context.Context, keys []string, requestID string) error {
-	err := execTrackPipeline(ctx, keys, requestID, false)
+func runTrackPipeline(ctx context.Context, keys []string, requestID string, member string) error {
+	err := execTrackPipeline(ctx, keys, requestID, member, false)
 	if err == nil || !isNoScriptError(err) {
 		return err
 	}
 	// Reload the script and retry once with EVAL so a single flush does not
 	// silently drop the counters for this request.
-	return execTrackPipeline(ctx, keys, requestID, true)
+	return execTrackPipeline(ctx, keys, requestID, member, true)
 }
 
-func execTrackPipeline(ctx context.Context, keys []string, requestID string, useEval bool) error {
+func execTrackPipeline(ctx context.Context, keys []string, requestID string, member string, useEval bool) error {
 	pipe := common.RDB.Pipeline()
 	for _, key := range keys {
 		if useEval {
-			pipe.Eval(ctx, trackScriptSrc, []string{key}, SlotTTLSeconds, requestID)
+			pipe.Eval(ctx, trackScriptSrc, []string{key}, SlotTTLSeconds, member)
 			continue
 		}
-		pipe.EvalSha(ctx, trackScript.Hash(), []string{key}, SlotTTLSeconds, requestID)
+		pipe.EvalSha(ctx, trackScript.Hash(), []string{key}, SlotTTLSeconds, member)
 	}
 	_, err := pipe.Exec(ctx)
 	if err == redis.Nil {
@@ -211,8 +232,9 @@ func Release(dims Dimensions, requestID string) func() {
 			defer cancel()
 
 			pipe := common.RDB.Pipeline()
+			member := dims.member(requestID)
 			for _, key := range keys {
-				pipe.ZRem(releaseCtx, key, requestID)
+				pipe.ZRem(releaseCtx, key, member)
 			}
 			if _, err := pipe.Exec(releaseCtx); err != nil && err != redis.Nil {
 				// The slot self-heals once the key TTL expires.
@@ -220,6 +242,80 @@ func Release(dims Dimensions, requestID string) func() {
 			}
 		})
 	}
+}
+
+// CountByDimension breaks the live concurrency of each id down by the
+// "model|group" pair recorded in the sorted-set member. Ids with no live
+// request are absent from the result.
+//
+// It returns a map keyed by "model|group" for one id at a time because the
+// caller (the performance sampler) needs the per-id breakdown to attribute
+// concurrency to a channel row. Concurrency is normally in the tens, so
+// reading every member is cheap.
+func CountByDimension(dim Dimension, id int) (map[string]int, error) {
+	result := make(map[string]int)
+	if !enabled() || id <= 0 {
+		return result, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), readTimeout)
+	defer cancel()
+
+	key := slotKey(dim, id)
+	now, err := common.RDB.Time(ctx).Result()
+	if err != nil {
+		return nil, err
+	}
+	cutoff := strconv.FormatInt(now.Unix()-SlotTTLSeconds, 10)
+	if err := common.RDB.ZRemRangeByScore(ctx, key, "-inf", cutoff).Err(); err != nil && err != redis.Nil {
+		return nil, err
+	}
+
+	members, err := common.RDB.ZRange(ctx, key, 0, -1).Result()
+	if err != nil && err != redis.Nil {
+		return nil, err
+	}
+	for _, member := range members {
+		parts := strings.SplitN(member, memberSeparator, 3)
+		if len(parts) < 3 {
+			continue
+		}
+		bucket := parts[1] + "|" + parts[2]
+		result[bucket]++
+	}
+	return result, nil
+}
+
+// LiveIDs lists the ids that currently have at least one in-flight request for
+// the given dimension. It scans the key namespace, so it is meant for the
+// periodic sampler rather than a request path.
+func LiveIDs(dim Dimension) ([]int, error) {
+	if !enabled() {
+		return nil, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), readTimeout)
+	defer cancel()
+
+	prefix := fmt.Sprintf("%s:%s:", keyNamespace, dim)
+	ids := make([]int, 0)
+	var cursor uint64
+	for {
+		keys, next, err := common.RDB.Scan(ctx, cursor, prefix+"*", 200).Result()
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range keys {
+			raw := strings.TrimPrefix(key, prefix)
+			if id, convErr := strconv.Atoi(raw); convErr == nil && id > 0 {
+				ids = append(ids, id)
+			}
+		}
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
+	return ids, nil
 }
 
 // BatchCount returns the current in-flight request count for each id. Expired

@@ -2994,3 +2994,10 @@ html.dark .with-pastel-balls::before {
   justify-content: center;
   width: 100%;
 }
+
+/* 尊重系统的「减少动态效果」偏好：并发圆点的脉冲动画在这里关闭 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse {
+    animation: none;
+  }
+}

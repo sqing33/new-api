@@ -18,6 +18,7 @@ func flushLoop() {
 			continue
 		}
 		flushCompletedBuckets()
+		sampleConcurrency()
 		cleanupExpiredMetrics(setting.RetentionDays)
 	}
 }

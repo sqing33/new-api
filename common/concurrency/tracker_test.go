@@ -287,3 +287,52 @@ func TestBatchCountHandlesMissingAndInvalidIDs(t *testing.T) {
 	assert.Equal(t, 0, counts[0], "zero id")
 	assert.Equal(t, 0, counts[-1], "negative id")
 }
+
+// TestDimensionMemberRoundTrips 覆盖分维度 member：Track 与 Release 必须用
+// 同一个 member 串，否则 Release 删不掉槽位，并发会一直虚高到 TTL 过期。
+func TestDimensionMemberRoundTrips(t *testing.T) {
+	useMiniRedis(t)
+
+	dims := Dimensions{
+		ChannelID: 11, UserID: 22, TokenID: 33,
+		Model: "gpt-test", Group: "default",
+	}
+	requestID := NewRequestID()
+
+	Track(context.Background(), dims, requestID)
+	channel, _, _ := countAll(t, dims)
+	require.Equal(t, 1, channel, "track should register the request")
+
+	breakdown, err := CountByDimension(DimensionChannel, dims.ChannelID)
+	require.NoError(t, err)
+	require.Equal(t, 1, breakdown["gpt-test|default"], "member should carry model|group")
+
+	// 释放后槽位必须消失：这是 member 一致性的关键断言
+	Release(dims, requestID)()
+	channel, _, _ = countAll(t, dims)
+	assert.Equal(t, 0, channel, "release should remove the exact member")
+}
+
+// TestCountByDimensionSeparatesModels 验证不同 model/group 落在不同桶里。
+func TestCountByDimensionSeparatesModels(t *testing.T) {
+	useMiniRedis(t)
+
+	base := Dimensions{ChannelID: 44, UserID: 55, TokenID: 66}
+	Track(context.Background(), Dimensions{
+		ChannelID: base.ChannelID, UserID: base.UserID, TokenID: base.TokenID,
+		Model: "model-a", Group: "default",
+	}, NewRequestID())
+	Track(context.Background(), Dimensions{
+		ChannelID: base.ChannelID, UserID: base.UserID, TokenID: base.TokenID,
+		Model: "model-b", Group: "vip",
+	}, NewRequestID())
+	Track(context.Background(), Dimensions{
+		ChannelID: base.ChannelID, UserID: base.UserID, TokenID: base.TokenID,
+		Model: "model-a", Group: "default",
+	}, NewRequestID())
+
+	breakdown, err := CountByDimension(DimensionChannel, base.ChannelID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, breakdown["model-a|default"])
+	assert.Equal(t, 1, breakdown["model-b|vip"])
+}

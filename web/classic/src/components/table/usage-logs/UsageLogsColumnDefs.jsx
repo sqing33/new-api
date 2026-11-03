@@ -774,18 +774,7 @@ export const getLogsColumns = ({
     },
     {
       key: COLUMN_KEYS.PROMPT,
-      title: (
-        <div className='flex items-center gap-1'>
-          {t('输入')}
-          <Tooltip
-            content={t(
-              'Input tokens are the total input, including cached input. The smaller line below shows the cache read and cache write portions of it.',
-            )}
-          >
-            <IconHelpCircle className='text-gray-400 cursor-help' />
-          </Tooltip>
-        </div>
-      ),
+      title: t('输入'),
       dataIndex: 'prompt_tokens',
       render: (text, record, index) => {
         const other = getLogOther(record.other);
@@ -809,7 +798,7 @@ export const getLogsColumns = ({
             style={{
               display: 'inline-flex',
               flexDirection: 'column',
-              alignItems: 'flex-start',
+              alignItems: 'center',
               lineHeight: 1.2,
             }}
           >
@@ -850,18 +839,7 @@ export const getLogsColumns = ({
     },
     {
       key: COLUMN_KEYS.OUTPUT_SPEED,
-      title: (
-        <div className='flex items-center gap-1'>
-          {t('输出速度')}
-          <Tooltip
-            content={t(
-              '每秒生成的输出 token 数，与数据看板「性能指标」中的吞吐口径一致；流式请求会排除首字耗时。改动前的历史日志为粗略估算值。',
-            )}
-          >
-            <IconHelpCircle className='text-gray-400 cursor-help' />
-          </Tooltip>
-        </div>
-      ),
+      title: t('输出速度'),
       dataIndex: 'completion_tokens',
       render: (text, record, index) => renderOutputSpeed(record, t),
     },
@@ -976,24 +954,42 @@ export const getLogsColumns = ({
           t,
         );
 
+        // 错误日志的报错内容由「错误」列展示，这里留空避免重复
         if (!detailSummary) {
-          return (
-            <Typography.Paragraph
-              ellipsis={{
-                rows: 2,
-                showTooltip: {
-                  type: 'popover',
-                  opts: { style: { width: 240 } },
-                },
-              }}
-              style={{ maxWidth: 200, marginBottom: 0 }}
-            >
-              {text}
-            </Typography.Paragraph>
-          );
+          return null;
         }
 
         return renderCompactDetailSummary(detailSummary.segments);
+      },
+    },
+    {
+      key: COLUMN_KEYS.ERROR,
+      title: t('错误'),
+      dataIndex: 'content',
+      fixed: 'right',
+      width: 200,
+      render: (text, record) => {
+        // 计费类日志（消费/退款）没有报错内容，交给「详情」列
+        if (record.type === 2 || record.type === 6) {
+          return null;
+        }
+        if (!text) {
+          return null;
+        }
+        return (
+          <Typography.Paragraph
+            ellipsis={{
+              rows: 2,
+              showTooltip: {
+                type: 'popover',
+                opts: { style: { width: 240 } },
+              },
+            }}
+            style={{ maxWidth: 200, marginBottom: 0 }}
+          >
+            {text}
+          </Typography.Paragraph>
+        );
       },
     },
   ];

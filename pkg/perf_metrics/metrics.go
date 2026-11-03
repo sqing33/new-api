@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -70,6 +71,7 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens i
 		Model:        info.OriginModelName,
 		Group:        info.UsingGroup,
 		ChannelName:  channelName,
+		TokenId:      info.TokenId,
 		LatencyMs:    now.Sub(info.StartTime).Milliseconds(),
 		TtftMs:       ttftMs,
 		HasTtft:      hasTtft,
@@ -98,6 +100,7 @@ func Record(sample Sample) {
 		model:    sample.Model,
 		group:    sample.Group,
 		channel:  sample.ChannelName,
+		tokenId:  sample.TokenId,
 		bucketTs: bucketStart(time.Now().Unix()),
 	}
 	actual, _ := hotBuckets.LoadOrStore(key, &atomicBucket{})
@@ -153,7 +156,103 @@ func Query(params QueryParams) (QueryResult, error) {
 		return true
 	})
 
-	return buildQueryResult(params.Model, merged), nil
+	result := buildQueryResult(params.Model, merged)
+	attachConcurrencyToResult(&result, startTs, endTs)
+	return result, nil
+}
+
+// concurrencyAgg 汇总一个维度（分组或渠道）在单个时间桶上的并发采样。
+type concurrencyAgg struct {
+	max int
+	sum int
+	cnt int
+}
+
+func addConcurrencyAgg(target map[string]map[int64]*concurrencyAgg, name string, ts int64, row model.PerfConcurrency) {
+	buckets, ok := target[name]
+	if !ok {
+		buckets = map[int64]*concurrencyAgg{}
+		target[name] = buckets
+	}
+	item, ok := buckets[ts]
+	if !ok {
+		item = &concurrencyAgg{}
+		buckets[ts] = item
+	}
+	if row.MaxConcurrency > item.max {
+		item.max = row.MaxConcurrency
+	}
+	item.sum += row.SumConcurrency
+	item.cnt += row.SampleCount
+}
+
+// concurrencyStats 从聚合结果算出峰值与均值。
+func concurrencyStats(buckets map[int64]*concurrencyAgg) (int, float64) {
+	if len(buckets) == 0 {
+		return 0, 0
+	}
+	maxValue, sumValue, countValue := 0, 0, 0
+	for _, item := range buckets {
+		if item.max > maxValue {
+			maxValue = item.max
+		}
+		sumValue += item.sum
+		countValue += item.cnt
+	}
+	avgValue := float64(maxValue)
+	if countValue > 0 {
+		avgValue = float64(sumValue) / float64(countValue)
+	}
+	return maxValue, avgValue
+}
+
+// applyConcurrencySeries 把并发采样对齐到已有的 series 时间轴上。
+// series 来自请求聚合，并发采样可能缺桶（该桶没有进行中的请求），缺桶补 0。
+func applyConcurrencySeries(series []BucketPoint, buckets map[int64]*concurrencyAgg) {
+	for i := range series {
+		item, ok := buckets[series[i].Ts]
+		if !ok {
+			continue
+		}
+		series[i].MaxConcurrency = item.max
+		if item.cnt > 0 {
+			series[i].AvgConcurrency = float64(item.sum) / float64(item.cnt)
+		} else {
+			series[i].AvgConcurrency = float64(item.max)
+		}
+	}
+}
+
+// attachConcurrencyToResult 把并发采样按分组/渠道注入查询结果。
+// 并发数据存在独立的 perf_concurrency 表里，与请求聚合的 merged 无关，
+// 因此单独映射一遍，避免改动 buildQueryResult 的聚合路径。
+func attachConcurrencyToResult(result *QueryResult, startTs int64, endTs int64) {
+	rows, err := model.GetPerfConcurrencies(result.ModelName, "", startTs, endTs)
+	if err != nil || len(rows) == 0 {
+		return
+	}
+
+	byGroup := map[string]map[int64]*concurrencyAgg{}
+	byChannel := map[string]map[int64]*concurrencyAgg{}
+	for _, row := range rows {
+		channel := row.ChannelName
+		if channel == "" {
+			channel = UnknownChannelName
+		}
+		addConcurrencyAgg(byGroup, row.Group, row.BucketTs, row)
+		addConcurrencyAgg(byChannel, channel, row.BucketTs, row)
+	}
+
+	for i := range result.Groups {
+		buckets := byGroup[result.Groups[i].Group]
+		result.Groups[i].MaxConcurrency, result.Groups[i].AvgConcurrency = concurrencyStats(buckets)
+		applyConcurrencySeries(result.Groups[i].Series, buckets)
+	}
+	for i := range result.Channels {
+		buckets := byChannel[result.Channels[i].Channel]
+		result.Channels[i].MaxConcurrency, result.Channels[i].AvgConcurrency = concurrencyStats(buckets)
+		applyConcurrencySeries(result.Channels[i].Series, buckets)
+	}
 }
 
 func QuerySummaryAll(hours int, groups []string) (SummaryAllResult, error) {
@@ -216,13 +315,27 @@ func QuerySummaryAll(hours int, groups []string) (SummaryAllResult, error) {
 		if total.generationMs > 0 {
 			avgTps = float64(total.outputTokens) / (float64(total.generationMs) / 1000.0)
 		}
+		concurrencySeries := concurrencySeriesForModel(name, startTs, endTs)
+		maxConcurrency, avgConcurrency := 0, 0.0
+		for _, point := range concurrencySeries {
+			if point.MaxConcurrency > maxConcurrency {
+				maxConcurrency = point.MaxConcurrency
+			}
+			avgConcurrency += point.AvgConcurrency
+		}
+		if len(concurrencySeries) > 0 {
+			avgConcurrency /= float64(len(concurrencySeries))
+		}
 		models = append(models, ModelSummary{
-			ModelName:           name,
-			AvgLatencyMs:        avgLatency,
-			SuccessRate:         math.Round(successRate*100) / 100,
-			AvgTps:              math.Round(avgTps*100) / 100,
-			RecentSuccessSeries: recentSuccessSeries(modelBuckets[name]),
-			RequestCount:        total.requestCount,
+			ModelName:               name,
+			AvgLatencyMs:            avgLatency,
+			SuccessRate:             math.Round(successRate*100) / 100,
+			AvgTps:                  math.Round(avgTps*100) / 100,
+			RecentSuccessSeries:     recentSuccessSeries(modelBuckets[name]),
+			RecentConcurrencySeries: concurrencySeries,
+			MaxConcurrency:          maxConcurrency,
+			AvgConcurrency:          avgConcurrency,
+			RequestCount:            total.requestCount,
 		})
 	}
 	sort.Slice(models, func(i, j int) bool {
@@ -337,6 +450,7 @@ func mergeCounters(merged map[bucketKey]counters, key bucketKey, value counters)
 func buildQueryResult(modelName string, merged map[bucketKey]counters) QueryResult {
 	groupBuckets := map[string]map[int64]counters{}
 	channelBuckets := map[string]map[int64]counters{}
+	tokenBuckets := map[string]map[int64]counters{}
 	for key, value := range merged {
 		if value.requestCount == 0 {
 			continue
@@ -349,6 +463,9 @@ func buildQueryResult(modelName string, merged map[bucketKey]counters) QueryResu
 			channelBuckets[key.channel] = map[int64]counters{}
 		}
 		mergeNamedBucket(channelBuckets, key.channel, key.bucketTs, value)
+		// token_id 为 0 表示改动前的历史数据，统一归入「未知令牌」
+		tokenKey := strconv.Itoa(key.tokenId)
+		mergeNamedBucket(tokenBuckets, tokenKey, key.bucketTs, value)
 	}
 
 	groups := make([]string, 0, len(groupBuckets))
@@ -389,11 +506,36 @@ func buildQueryResult(modelName string, merged map[bucketKey]counters) QueryResu
 		})
 	}
 
+	tokenKeys := make([]string, 0, len(tokenBuckets))
+	for key := range tokenBuckets {
+		tokenKeys = append(tokenKeys, key)
+	}
+	sort.Slice(tokenKeys, func(i, j int) bool {
+		ni, _ := strconv.Atoi(tokenKeys[i])
+		nj, _ := strconv.Atoi(tokenKeys[j])
+		return ni < nj
+	})
+
+	tokenResults := make([]TokenResult, 0, len(tokenKeys))
+	for _, key := range tokenKeys {
+		total, series := aggregateBuckets(tokenBuckets[key])
+		tokenId, _ := strconv.Atoi(key)
+		tokenResults = append(tokenResults, TokenResult{
+			TokenId:      tokenId,
+			AvgTtftMs:    avg(total.ttftSumMs, total.ttftCount),
+			AvgLatencyMs: avg(total.totalLatencyMs, total.requestCount),
+			SuccessRate:  successRate(total),
+			AvgTps:       avgTps(total),
+			Series:       series,
+		})
+	}
+
 	return QueryResult{
 		ModelName:    modelName,
 		SeriesSchema: seriesSchema,
 		Groups:       results,
 		Channels:     channelResults,
+		Tokens:       tokenResults,
 	}
 }
 

@@ -66,6 +66,7 @@ export const useLogsData = ({
     RETRY: 'retry',
     IP: 'ip',
     DETAILS: 'details',
+    ERROR: 'error',
   };
 
   // Basic state
@@ -136,6 +137,7 @@ export const useLogsData = ({
       [COLUMN_KEYS.RETRY]: isAdminUser,
       [COLUMN_KEYS.IP]: true,
       [COLUMN_KEYS.DETAILS]: true,
+    [COLUMN_KEYS.ERROR]: true,
     };
   };
 

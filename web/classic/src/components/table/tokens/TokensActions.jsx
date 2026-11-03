@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useState } from 'react';
-import { Button, Space, Switch, Typography } from '@douyinfe/semi-ui';
+import { Button, Space } from '@douyinfe/semi-ui';
 import { showError } from '../../../helpers';
 import CopyTokensModal from './modals/CopyTokensModal';
 import DeleteTokensModal from './modals/DeleteTokensModal';
@@ -30,10 +30,6 @@ const TokensActions = ({
   batchCopyTokens,
   batchDeleteTokens,
   setShowColumnSelector,
-  sortByConcurrency,
-  setSortByConcurrency,
-  sortByAccessed,
-  setSortByAccessed,
   t,
 }) => {
   // Modal states
@@ -107,30 +103,6 @@ const TokensActions = ({
         >
           {t('列设置')}
         </Button>
-      </div>
-
-      <div className='flex flex-col md:flex-row items-start md:items-center gap-2 w-full md:w-auto order-1 md:order-2'>
-        <div className='flex items-center justify-between w-full md:w-auto'>
-          <Typography.Text strong className='mr-2'>
-            {t('按并发排序')}
-          </Typography.Text>
-          <Switch
-            size='small'
-            checked={sortByConcurrency}
-            onChange={(v) => setSortByConcurrency(v)}
-          />
-        </div>
-
-        <div className='flex items-center justify-between w-full md:w-auto'>
-          <Typography.Text strong className='mr-2'>
-            {t('按最后使用排序')}
-          </Typography.Text>
-          <Switch
-            size='small'
-            checked={sortByAccessed}
-            onChange={(v) => setSortByAccessed(v)}
-          />
-        </div>
       </div>
 
       <CopyTokensModal

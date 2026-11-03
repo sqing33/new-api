@@ -2288,6 +2288,17 @@ const EditChannelModal = (props) => {
               {t('密钥去重')}
             </Button>
           )}
+          {isEdit && isMultiKeyChannel && props.onOpenMultiKeyManage && (
+            <Button
+              size='small'
+              type='tertiary'
+              theme='outline'
+              onClick={() => props.onOpenMultiKeyManage(props.editingChannel)}
+              style={{ textDecoration: 'underline' }}
+            >
+              {t('多密钥管理')}
+            </Button>
+          )}
         </>
       )}
     </Space>

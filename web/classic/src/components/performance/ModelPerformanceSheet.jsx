@@ -29,6 +29,7 @@ import {
   formatUptimePct,
   getSuccessRateColor,
 } from './format';
+import { renderConcurrency } from '../../helpers';
 
 const { Text } = Typography;
 
@@ -58,6 +59,7 @@ const ModelPerformanceSheet = ({
   const isMobile = useIsMobile();
   const groups = detail?.groups || [];
   const channels = detail?.channels || [];
+  const tokens = detail?.tokens || [];
 
   // 跨分组聚合的整体指标
   const overall = useMemo(() => {
@@ -131,6 +133,11 @@ const ModelPerformanceSheet = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [groups],
   );
+  const concurrencySpec = useMemo(
+    () => buildTrendSpec('max_concurrency', (v) => String(Math.round(v))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [groups],
+  );
 
   const groupColumns = [
     {
@@ -177,6 +184,11 @@ const ModelPerformanceSheet = ({
         </Text>
       ),
     },
+    {
+      title: t('并发'),
+      dataIndex: 'max_concurrency',
+      render: (value) => renderConcurrency(value ?? 0),
+    },
   ];
 
   const channelColumns = [
@@ -191,6 +203,63 @@ const ModelPerformanceSheet = ({
           style={{ maxWidth: 120 }}
         >
           {name}
+        </Text>
+      ),
+    },
+    {
+      title: t('平均延迟'),
+      dataIndex: 'avg_latency_ms',
+      render: (value) => (
+        <Text className='font-mono text-xs tabular-nums'>
+          {formatLatency(value)}
+        </Text>
+      ),
+    },
+    {
+      title: 'TTFT',
+      dataIndex: 'avg_ttft_ms',
+      render: (value) => (
+        <Text className='font-mono text-xs tabular-nums'>
+          {formatLatency(value)}
+        </Text>
+      ),
+    },
+    {
+      title: t('成功率'),
+      dataIndex: 'success_rate',
+      render: (value) => (
+        <Text
+          className='font-mono text-xs tabular-nums'
+          style={{ color: getSuccessRateColor(value) }}
+        >
+          {formatUptimePct(value)}
+        </Text>
+      ),
+    },
+    {
+      title: t('吞吐'),
+      dataIndex: 'avg_tps',
+      render: (value) => (
+        <Text className='font-mono text-xs tabular-nums'>
+          {formatThroughput(value)}
+        </Text>
+      ),
+    },
+    {
+      title: t('并发'),
+      dataIndex: 'max_concurrency',
+      render: (value) => renderConcurrency(value ?? 0),
+    },
+  ];
+
+  const tokenColumns = [
+    {
+      title: t('令牌'),
+      dataIndex: 'token_id',
+      width: 120,
+      render: (tokenId) => (
+        <Text className='font-mono text-xs' ellipsis={{ showTooltip: true }}>
+          {tokenId > 0 ? `#${tokenId}` : t('未知令牌')}
         </Text>
       ),
     },
@@ -305,6 +374,21 @@ const ModelPerformanceSheet = ({
                     />
                   </div>
                 )}
+                {tokens.length > 0 && (
+                  <div>
+                    <Text strong className='text-sm'>
+                      {t('令牌指标')}
+                    </Text>
+                    <Table
+                      className='mt-2'
+                      columns={tokenColumns}
+                      dataSource={tokens}
+                      pagination={false}
+                      size='small'
+                      rowKey='token_id'
+                    />
+                  </div>
+                )}
                 <div>
                   <Text strong className='text-sm'>
                     {t('TTFT 趋势')}
@@ -332,6 +416,24 @@ const ModelPerformanceSheet = ({
                       <VChart
                         style={{ background: 'transparent' }}
                         spec={successSpec}
+                        option={CHART_CONFIG}
+                      />
+                    ) : (
+                      <Text type='secondary' className='block text-center py-8'>
+                        {t('暂无趋势数据')}
+                      </Text>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <Text strong className='text-sm'>
+                    {t('并发趋势')}
+                  </Text>
+                  <div className='h-48 mt-2'>
+                    {concurrencySpec ? (
+                      <VChart
+                        style={{ background: 'transparent' }}
+                        spec={concurrencySpec}
                         option={CHART_CONFIG}
                       />
                     ) : (

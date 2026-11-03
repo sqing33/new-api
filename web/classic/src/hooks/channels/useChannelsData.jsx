@@ -46,12 +46,18 @@ import {
 import { Modal, Button } from '@douyinfe/semi-ui';
 import { openCodexUsageModal } from '../../components/table/channels/modals/CodexUsageModal';
 
-// 名称排序使用独立 storage key，避免与其他页面的开关互相串扰
+// 名称排序与并发排序各自使用独立 storage key，避免与其他页面的开关互相串扰
 const CHANNEL_NAME_SORT_KEY = 'channels-name-sort';
+const CHANNEL_CONCURRENCY_SORT_KEY = 'channels-concurrency-sort';
 
-// 后端 sort_by 白名单已包含 name，这里只在开启时下发参数
-const buildChannelSortParam = (nameSort) =>
-  nameSort ? '&sort_by=name&sort_order=asc' : '';
+// 排序优先级：套餐用量 > 并发 > 名称/ID。
+// 套餐用量是纯前端排序（数据来自异步上报，不在数据库里），开启时完全接管排序，
+// 不再下发任何后端排序参数；并发必须走后端才能跨页正确。
+const buildChannelSortParam = (planUsageSort, concurrencySort, nameSort) => {
+  if (planUsageSort) return '';
+  if (concurrencySort) return '&sort_by=concurrency';
+  return nameSort ? '&sort_by=name&sort_order=asc' : '';
+};
 
 export const useChannelsData = () => {
   const { t } = useTranslation();
@@ -68,9 +74,16 @@ export const useChannelsData = () => {
   const [nameSort, setNameSortState] = useState(
     () => localStorage.getItem(CHANNEL_NAME_SORT_KEY) === 'true',
   );
+  // 并发排序与 ID/名称排序互斥（同为后端排序，只能选一个）
+  const [concurrencySort, setConcurrencySortState] = useState(
+    () => localStorage.getItem(CHANNEL_CONCURRENCY_SORT_KEY) === 'true',
+  );
   // 请求构造函数通过位置参数传递排序，这里用 ref 让 URL 始终读到最新值
   const nameSortRef = useRef(nameSort);
+  const concurrencySortRef = useRef(concurrencySort);
+  const planUsageSortRef = useRef(false);
   nameSortRef.current = nameSort;
+  concurrencySortRef.current = concurrencySort;
   const [searching, setSearching] = useState(false);
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
   const [channelCount, setChannelCount] = useState(0);
@@ -104,6 +117,7 @@ export const useChannelsData = () => {
   // Client-side "sort by plan usage" toggle; persisted alongside the other
   // toolbar switches (id-sort, batch ops) in localStorage.
   const [planUsageSort, setPlanUsageSort] = useState(false);
+  planUsageSortRef.current = planUsageSort;
   const [planQuotaRegistryVersion, setPlanQuotaRegistryVersion] = useState(
     getPlanQuotaRegistryVersion(),
   );
@@ -186,6 +200,8 @@ export const useChannelsData = () => {
     const localIdSort = localStorage.getItem('id-sort') === 'true';
     const localNameSort =
       localStorage.getItem(CHANNEL_NAME_SORT_KEY) === 'true';
+    const localConcurrencySort =
+      localStorage.getItem(CHANNEL_CONCURRENCY_SORT_KEY) === 'true';
     const localPageSize =
       parseInt(localStorage.getItem('page-size')) || ITEMS_PER_PAGE;
     const localEnableTagMode =
@@ -195,11 +211,14 @@ export const useChannelsData = () => {
     const localPlanUsageSort =
       localStorage.getItem('plan-usage-sort') === 'true';
 
-    // 名称排序与 ID 排序互斥，持久化状态可能不一致时以名称排序为准
-    const effectiveIdSort = localNameSort ? false : localIdSort;
+    // 三个后端排序互斥，持久化状态可能不一致时以并发 > 名称 > ID 为准
+    const effectiveNameSort = localConcurrencySort ? false : localNameSort;
+    const effectiveIdSort =
+      localConcurrencySort || effectiveNameSort ? false : localIdSort;
 
     setIdSort(effectiveIdSort);
-    setNameSortState(localNameSort);
+    setNameSortState(effectiveNameSort);
+    setConcurrencySortState(localConcurrencySort);
     setPageSize(localPageSize);
     setEnableTagMode(localEnableTagMode);
     setEnableBatchDelete(localEnableBatchDelete);
@@ -215,12 +234,12 @@ export const useChannelsData = () => {
     fetchGlobalPassThroughEnabled().then();
   }, []);
 
-  // 名称排序变化后重新拉取。必须放在 effect 里而不是 onChange 里直接调用：
-  // setState 是异步的，同一事件循环内 nameSortRef 还是旧值，请求会带上旧排序。
-  const nameSortInitialized = useRef(false);
+  // 名称/并发排序变化后重新拉取。必须放在 effect 里而不是 onChange 里直接调用：
+  // setState 是异步的，同一事件循环内 ref 还是旧值，请求会带上旧排序。
+  const sortInitialized = useRef(false);
   useEffect(() => {
-    if (!nameSortInitialized.current) {
-      nameSortInitialized.current = true;
+    if (!sortInitialized.current) {
+      sortInitialized.current = true;
       return;
     }
     const { searchKeyword, searchGroup, searchModel } = getFormValues();
@@ -230,7 +249,7 @@ export const useChannelsData = () => {
       searchChannels(enableTagMode, activeTypeKey, statusFilter, 1, pageSize, idSort).then();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nameSort]);
+  }, [nameSort, concurrencySort]);
 
   // Column visibility management
   const getDefaultColumnVisibility = () => {
@@ -389,10 +408,24 @@ export const useChannelsData = () => {
     if (value) {
       localStorage.setItem('id-sort', 'false');
       setIdSort(false);
+      localStorage.setItem(CHANNEL_CONCURRENCY_SORT_KEY, 'false');
+      setConcurrencySortState(false);
     }
   };
 
   const toggleNameSort = () => setNameSort(!nameSort);
+
+  // 并发排序与 ID/名称排序互斥：开启时把另外两个都关掉
+  const setConcurrencySort = (value) => {
+    localStorage.setItem(CHANNEL_CONCURRENCY_SORT_KEY, value + '');
+    setConcurrencySortState(value);
+    if (value) {
+      localStorage.setItem('id-sort', 'false');
+      setIdSort(false);
+      localStorage.setItem(CHANNEL_NAME_SORT_KEY, 'false');
+      setNameSortState(false);
+    }
+  };
 
   // Load channels
   const loadChannels = async (
@@ -424,7 +457,11 @@ export const useChannelsData = () => {
     setLoading(true);
     const typeParam = typeKey !== 'all' ? `&type=${typeKey}` : '';
     const statusParam = statusF !== 'all' ? `&status=${statusF}` : '';
-    const sortParam = buildChannelSortParam(nameSortRef.current);
+    const sortParam = buildChannelSortParam(
+      planUsageSortRef.current,
+      concurrencySortRef.current,
+      nameSortRef.current,
+    );
     const res = await API.get(
       `/api/channel/?p=${page}&page_size=${pageSize}&id_sort=${idSort && !nameSortRef.current}&tag_mode=${enableTagMode}${typeParam}${statusParam}${sortParam}`,
     );
@@ -477,7 +514,11 @@ export const useChannelsData = () => {
 
       const typeParam = typeKey !== 'all' ? `&type=${typeKey}` : '';
       const statusParam = statusF !== 'all' ? `&status=${statusF}` : '';
-      const sortParam = buildChannelSortParam(nameSortRef.current);
+      const sortParam = buildChannelSortParam(
+      planUsageSortRef.current,
+      concurrencySortRef.current,
+      nameSortRef.current,
+    );
       const res = await API.get(
         `/api/channel/search?keyword=${searchKeyword}&group=${searchGroup}&model=${searchModel}&id_sort=${sortFlag && !nameSortRef.current}&tag_mode=${enableTagMode}&p=${page}&page_size=${pageSz}${typeParam}${statusParam}${sortParam}`,
       );
@@ -1250,6 +1291,8 @@ export const useChannelsData = () => {
     groupOptions,
     idSort,
     nameSort,
+    concurrencySort,
+    setConcurrencySort,
     planUsageSort,
     setPlanUsageSort,
     enableTagMode,

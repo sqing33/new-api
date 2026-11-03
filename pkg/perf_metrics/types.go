@@ -11,6 +11,8 @@ type Sample struct {
 	Model        string
 	Group        string
 	ChannelName  string
+	TokenId      int
+	TokenName    string
 	LatencyMs    int64
 	TtftMs       int64
 	HasTtft      bool
@@ -28,29 +30,48 @@ type QueryParams struct {
 }
 
 type BucketPoint struct {
-	Ts           int64   `json:"ts"`
-	AvgTtftMs    int64   `json:"avg_ttft_ms"`
-	AvgLatencyMs int64   `json:"avg_latency_ms"`
-	SuccessRate  float64 `json:"success_rate"`
-	AvgTps       float64 `json:"avg_tps"`
+	Ts             int64   `json:"ts"`
+	AvgTtftMs      int64   `json:"avg_ttft_ms"`
+	AvgLatencyMs   int64   `json:"avg_latency_ms"`
+	SuccessRate    float64 `json:"success_rate"`
+	AvgTps         float64 `json:"avg_tps"`
+	MaxConcurrency int     `json:"max_concurrency"`
+	AvgConcurrency float64 `json:"avg_concurrency"`
 }
 
 type GroupResult struct {
-	Group        string        `json:"group"`
-	AvgTtftMs    int64         `json:"avg_ttft_ms"`
-	AvgLatencyMs int64         `json:"avg_latency_ms"`
-	SuccessRate  float64       `json:"success_rate"`
-	AvgTps       float64       `json:"avg_tps"`
-	Series       []BucketPoint `json:"series"`
+	Group          string        `json:"group"`
+	AvgTtftMs      int64         `json:"avg_ttft_ms"`
+	AvgLatencyMs   int64         `json:"avg_latency_ms"`
+	SuccessRate    float64       `json:"success_rate"`
+	AvgTps         float64       `json:"avg_tps"`
+	MaxConcurrency int           `json:"max_concurrency"`
+	AvgConcurrency float64       `json:"avg_concurrency"`
+	Series         []BucketPoint `json:"series"`
 }
 
 type ChannelResult struct {
-	Channel      string        `json:"channel"`
-	AvgTtftMs    int64         `json:"avg_ttft_ms"`
-	AvgLatencyMs int64         `json:"avg_latency_ms"`
-	SuccessRate  float64       `json:"success_rate"`
-	AvgTps       float64       `json:"avg_tps"`
-	Series       []BucketPoint `json:"series"`
+	Channel        string        `json:"channel"`
+	AvgTtftMs      int64         `json:"avg_ttft_ms"`
+	AvgLatencyMs   int64         `json:"avg_latency_ms"`
+	SuccessRate    float64       `json:"success_rate"`
+	AvgTps         float64       `json:"avg_tps"`
+	MaxConcurrency int           `json:"max_concurrency"`
+	AvgConcurrency float64       `json:"avg_concurrency"`
+	Series         []BucketPoint `json:"series"`
+}
+
+// TokenResult 是按令牌维度聚合的指标，与 ChannelResult 同构。
+type TokenResult struct {
+	TokenId        int           `json:"token_id"`
+	TokenName      string        `json:"token_name"`
+	AvgTtftMs      int64         `json:"avg_ttft_ms"`
+	AvgLatencyMs   int64         `json:"avg_latency_ms"`
+	SuccessRate    float64       `json:"success_rate"`
+	AvgTps         float64       `json:"avg_tps"`
+	MaxConcurrency int           `json:"max_concurrency"`
+	AvgConcurrency float64       `json:"avg_concurrency"`
+	Series         []BucketPoint `json:"series"`
 }
 
 type QueryResult struct {
@@ -58,6 +79,7 @@ type QueryResult struct {
 	SeriesSchema string          `json:"series_schema"`
 	Groups       []GroupResult   `json:"groups"`
 	Channels     []ChannelResult `json:"channels"`
+	Tokens       []TokenResult   `json:"tokens"`
 }
 
 type SuccessRatePoint struct {
@@ -65,13 +87,23 @@ type SuccessRatePoint struct {
 	SuccessRate float64 `json:"success_rate"`
 }
 
+// ConcurrencyPoint 是并发采样序列上的一个点。
+type ConcurrencyPoint struct {
+	Ts             int64   `json:"ts"`
+	MaxConcurrency int     `json:"max_concurrency"`
+	AvgConcurrency float64 `json:"avg_concurrency"`
+}
+
 type ModelSummary struct {
-	ModelName           string             `json:"model_name"`
-	AvgLatencyMs        int64              `json:"avg_latency_ms"`
-	SuccessRate         float64            `json:"success_rate"`
-	AvgTps              float64            `json:"avg_tps"`
-	RecentSuccessSeries []SuccessRatePoint `json:"recent_success_series,omitempty"`
-	RequestCount        int64              `json:"-"`
+	ModelName               string             `json:"model_name"`
+	AvgLatencyMs            int64              `json:"avg_latency_ms"`
+	SuccessRate             float64            `json:"success_rate"`
+	AvgTps                  float64            `json:"avg_tps"`
+	RecentSuccessSeries     []SuccessRatePoint `json:"recent_success_series,omitempty"`
+	RecentConcurrencySeries []ConcurrencyPoint `json:"recent_concurrency_series,omitempty"`
+	MaxConcurrency          int                `json:"max_concurrency"`
+	AvgConcurrency          float64            `json:"avg_concurrency"`
+	RequestCount            int64              `json:"-"`
 }
 
 type SummaryAllResult struct {
@@ -82,6 +114,7 @@ type bucketKey struct {
 	model    string
 	group    string
 	channel  string
+	tokenId  int
 	bucketTs int64
 }
 

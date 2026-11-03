@@ -55,11 +55,7 @@ const UsersPage = () => {
     loading,
     searching,
 
-    // Sort & column settings
-    sortByConcurrency,
-    setSortByConcurrency,
-    sortByLastLogin,
-    setSortByLastLogin,
+    // Column settings
     setShowColumnSelector,
 
     // Description state
@@ -101,10 +97,6 @@ const UsersPage = () => {
             <UsersActions
               setShowAddUser={setShowAddUser}
               setShowColumnSelector={setShowColumnSelector}
-              sortByConcurrency={sortByConcurrency}
-              setSortByConcurrency={setSortByConcurrency}
-              sortByLastLogin={sortByLastLogin}
-              setSortByLastLogin={setSortByLastLogin}
               t={t}
             />
 

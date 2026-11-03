@@ -449,7 +449,9 @@ func GetAllUsers(pageInfo *common.PageInfo, sortOptions ...UserSortOptions) (use
 			return nil, 0, err
 		}
 		users = SortByConcurrencyDesc(all, concurrency.DimensionUser,
-			func(u *User) int { return u.Id }, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+			func(u *User) int { return u.Id },
+			func(u *User) int64 { return u.LastLoginAt },
+			pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 		return users, total, nil
 	}
 	err = order.Apply(DB.Unscoped()).Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password", "access_token").Find(&users).Error
@@ -469,6 +471,7 @@ func SortByConcurrencyDesc[T any](
 	items []T,
 	dim concurrency.Dimension,
 	idOf func(T) int,
+	secondaryOf func(T) int64,
 	startIdx int,
 	num int,
 ) []T {
@@ -481,7 +484,12 @@ func SortByConcurrencyDesc[T any](
 	sorted := make([]T, len(items))
 	copy(sorted, items)
 	sort.SliceStable(sorted, func(i, j int) bool {
-		return counts[idOf(sorted[i])] > counts[idOf(sorted[j])]
+		ci, cj := counts[idOf(sorted[i])], counts[idOf(sorted[j])]
+		if ci != cj {
+			return ci > cj
+		}
+		// 并发相同时按二级键降序（最后使用时间 / 最后登录时间 / ID）
+		return secondaryOf(sorted[i]) > secondaryOf(sorted[j])
 	})
 
 	if startIdx >= len(sorted) {
@@ -546,7 +554,9 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 			return nil, 0, err
 		}
 		users = SortByConcurrencyDesc(all, concurrency.DimensionUser,
-			func(u *User) int { return u.Id }, startIdx, num)
+			func(u *User) int { return u.Id },
+			func(u *User) int64 { return u.LastLoginAt },
+			startIdx, num)
 		return users, total, nil
 	}
 	err = order.Apply(query.Omit("password", "access_token")).Limit(num).Offset(startIdx).Find(&users).Error

@@ -55,6 +55,10 @@ const ChannelsPage = () => {
         visible={channelsData.showEdit}
         handleClose={channelsData.closeEdit}
         editingChannel={channelsData.editingChannel}
+        onOpenMultiKeyManage={(channel) => {
+          channelsData.setCurrentMultiKeyChannel(channel);
+          channelsData.setShowMultiKeyManageModal(true);
+        }}
       />
       <BatchTagModal {...channelsData} />
       <ModelTestModal {...channelsData} />

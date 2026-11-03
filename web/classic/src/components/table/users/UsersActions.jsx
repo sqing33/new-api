@@ -18,15 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button, Switch, Typography } from '@douyinfe/semi-ui';
+import { Button } from '@douyinfe/semi-ui';
 
 const UsersActions = ({
   setShowAddUser,
   setShowColumnSelector,
-  sortByConcurrency,
-  setSortByConcurrency,
-  sortByLastLogin,
-  setSortByLastLogin,
   t,
 }) => {
   // Add new user
@@ -54,29 +50,6 @@ const UsersActions = ({
         </Button>
       </div>
 
-      <div className='flex flex-col md:flex-row items-start md:items-center gap-2 w-full md:w-auto order-1 md:order-2'>
-        <div className='flex items-center justify-between w-full md:w-auto'>
-          <Typography.Text strong className='mr-2'>
-            {t('按并发排序')}
-          </Typography.Text>
-          <Switch
-            size='small'
-            checked={sortByConcurrency}
-            onChange={(v) => setSortByConcurrency(v)}
-          />
-        </div>
-
-        <div className='flex items-center justify-between w-full md:w-auto'>
-          <Typography.Text strong className='mr-2'>
-            {t('按最后登录排序')}
-          </Typography.Text>
-          <Switch
-            size='small'
-            checked={sortByLastLogin}
-            onChange={(v) => setSortByLastLogin(v)}
-          />
-        </div>
-      </div>
     </>
   );
 };

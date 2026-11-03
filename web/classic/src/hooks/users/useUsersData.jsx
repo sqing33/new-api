@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { API, showError, showSuccess } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
@@ -25,9 +25,6 @@ import { useTableCompactMode } from '../common/useTableCompactMode';
 
 // 用户页使用独立的分页存储键，避免与 /channel、/log 共用的 page-size 互相串扰
 const USER_PAGE_SIZE_KEY = 'user-page-size';
-// 排序开关：并发排序与最后登录排序互斥，各自持久化
-const USER_SORT_BY_CONCURRENCY_KEY = 'user-sort-by-concurrency';
-const USER_SORT_BY_LAST_LOGIN_KEY = 'user-sort-by-last-login';
 // 列设置持久化键
 const USERS_COLUMNS_STORAGE_KEY = 'users-table-columns';
 
@@ -111,41 +108,8 @@ export const useUsersData = () => {
     setVisibleColumns(getDefaultUserColumnVisibility());
   };
 
-  // 排序开关：两个互斥，都关闭时走后端默认的 id desc
-  const [sortByConcurrency, setSortByConcurrencyState] = useState(
-    () => localStorage.getItem(USER_SORT_BY_CONCURRENCY_KEY) === 'true',
-  );
-  const [sortByLastLogin, setSortByLastLoginState] = useState(
-    () => localStorage.getItem(USER_SORT_BY_LAST_LOGIN_KEY) === 'true',
-  );
-  const sortByConcurrencyRef = useRef(sortByConcurrency);
-  const sortByLastLoginRef = useRef(sortByLastLogin);
-  sortByConcurrencyRef.current = sortByConcurrency;
-  sortByLastLoginRef.current = sortByLastLogin;
-
-  const setSortByConcurrency = (value) => {
-    localStorage.setItem(USER_SORT_BY_CONCURRENCY_KEY, value + '');
-    setSortByConcurrencyState(value);
-    if (value) {
-      localStorage.setItem(USER_SORT_BY_LAST_LOGIN_KEY, 'false');
-      setSortByLastLoginState(false);
-    }
-  };
-  const setSortByLastLogin = (value) => {
-    localStorage.setItem(USER_SORT_BY_LAST_LOGIN_KEY, value + '');
-    setSortByLastLoginState(value);
-    if (value) {
-      localStorage.setItem(USER_SORT_BY_CONCURRENCY_KEY, 'false');
-      setSortByConcurrencyState(false);
-    }
-  };
-
-  // 供请求 URL 使用：并发优先，其次最后登录，都没有则不传排序参数
-  const buildUserSortParam = () => {
-    if (sortByConcurrencyRef.current) return '&sort_by=concurrency';
-    if (sortByLastLoginRef.current) return '&sort_by=last_login_at';
-    return '';
-  };
+  // 列表固定按并发降序、并发相同再按最后登录时间降序
+  const buildUserSortParam = () => '&sort_by=concurrency';
   const [searching, setSearching] = useState(false);
   const [groupOptions, setGroupOptions] = useState([]);
   const [userCount, setUserCount] = useState(0);
@@ -381,22 +345,6 @@ export const useUsersData = () => {
     });
   };
 
-  // 排序开关变化后回到第一页重新拉取。放在 effect 里而不是 onChange 里，
-  // 因为 setState 是异步的，同一事件循环内 ref 还是旧值。
-  const sortInitialized = useRef(false);
-  useEffect(() => {
-    if (!sortInitialized.current) {
-      sortInitialized.current = true;
-      return;
-    }
-    loadUsers(0, pageSize)
-      .then()
-      .catch((reason) => {
-        showError(reason);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortByConcurrency, sortByLastLogin]);
-
   // Initialize data on component mount
   useEffect(() => {
     // 首个请求直接用回读的 pageSize，避免后端按默认值回传把状态打回去
@@ -417,10 +365,6 @@ export const useUsersData = () => {
     loading,
     activePage,
     pageSize,
-    sortByConcurrency,
-    setSortByConcurrency,
-    sortByLastLogin,
-    setSortByLastLogin,
     USER_COLUMN_KEYS,
     showColumnSelector,
     setShowColumnSelector,
