@@ -6,9 +6,11 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/concurrency"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Token struct {
@@ -106,10 +108,71 @@ func (token *Token) GetIpLimits() []string {
 	return ipLimits
 }
 
-func GetAllUserTokens(userId int, startIdx int, num int) ([]*Token, error) {
+// TokenSortByConcurrency 是虚拟排序列：并发数存在 Redis 而非数据库，
+// 命中它时改走内存排序。
+const TokenSortByConcurrency = "concurrency"
+
+// tokenSortColumns 是令牌列表允许的排序列白名单，避免任意列名注入。
+var tokenSortColumns = map[string]string{
+	"id":            "id",
+	"name":          "name",
+	"status":        "status",
+	"created_time":  "created_time",
+	"accessed_time": "accessed_time",
+	"expired_time":  "expired_time",
+}
+
+// TokenSortOptions 描述令牌列表的排序方式。
+type TokenSortOptions struct {
+	SortBy    string
+	SortOrder string
+}
+
+// NewTokenSortOptions 归一化排序参数；无法识别的列回落到 id desc。
+func NewTokenSortOptions(sortBy string, sortOrder string) TokenSortOptions {
+	normalizedSortBy := strings.ToLower(strings.TrimSpace(sortBy))
+	normalizedSortOrder := strings.ToLower(strings.TrimSpace(sortOrder))
+	if normalizedSortBy != TokenSortByConcurrency {
+		if _, ok := tokenSortColumns[normalizedSortBy]; !ok {
+			normalizedSortBy = "id"
+			normalizedSortOrder = "desc"
+		}
+	}
+	if normalizedSortOrder != "asc" {
+		normalizedSortOrder = "desc"
+	}
+	return TokenSortOptions{SortBy: normalizedSortBy, SortOrder: normalizedSortOrder}
+}
+
+// Order 返回可直接用于 GORM 的排序子句；并发排序不在 SQL 上生效，
+// 由调用方改走 SortByConcurrencyDesc。
+func (options TokenSortOptions) Order() clause.OrderByColumn {
+	columnName, ok := tokenSortColumns[options.SortBy]
+	if !ok {
+		columnName = "id"
+	}
+	return clause.OrderByColumn{
+		Column: clause.Column{Name: columnName},
+		Desc:   options.SortOrder != "asc",
+	}
+}
+
+func GetAllUserTokens(userId int, startIdx int, num int, sortOptions ...TokenSortOptions) ([]*Token, error) {
 	var tokens []*Token
 	var err error
-	err = DB.Where("user_id = ?", userId).Order("id desc").Limit(num).Offset(startIdx).Find(&tokens).Error
+	order := NewTokenSortOptions("", "")
+	if len(sortOptions) > 0 {
+		order = sortOptions[0]
+	}
+	if order.SortBy == TokenSortByConcurrency {
+		var all []*Token
+		if err = DB.Where("user_id = ?", userId).Order(order.Order()).Find(&all).Error; err != nil {
+			return nil, err
+		}
+		return SortByConcurrencyDesc(all, concurrency.DimensionToken,
+			func(t *Token) int { return t.Id }, startIdx, num), nil
+	}
+	err = DB.Where("user_id = ?", userId).Order(order.Order()).Limit(num).Offset(startIdx).Find(&tokens).Error
 	return tokens, err
 }
 
@@ -159,7 +222,7 @@ func validateLikePattern(input string) error {
 
 const searchHardLimit = 100
 
-func SearchUserTokens(userId int, keyword string, token string, offset int, limit int) (tokens []*Token, total int64, err error) {
+func SearchUserTokens(userId int, keyword string, token string, offset int, limit int, sortOptions ...TokenSortOptions) (tokens []*Token, total int64, err error) {
 	// model 层强制截断
 	if limit <= 0 || limit > searchHardLimit {
 		limit = searchHardLimit
@@ -212,7 +275,21 @@ func SearchUserTokens(userId int, keyword string, token string, offset int, limi
 	}
 
 	// 再分页查数据
-	err = baseQuery.Order("id desc").Offset(offset).Limit(limit).Find(&tokens).Error
+	order := NewTokenSortOptions("", "")
+	if len(sortOptions) > 0 {
+		order = sortOptions[0]
+	}
+	if order.SortBy == TokenSortByConcurrency {
+		var all []*Token
+		if err = baseQuery.Order(order.Order()).Find(&all).Error; err != nil {
+			common.SysError("failed to search tokens: " + err.Error())
+			return nil, 0, errors.New("搜索令牌失败")
+		}
+		tokens = SortByConcurrencyDesc(all, concurrency.DimensionToken,
+			func(t *Token) int { return t.Id }, offset, limit)
+		return tokens, total, nil
+	}
+	err = baseQuery.Order(order.Order()).Offset(offset).Limit(limit).Find(&tokens).Error
 	if err != nil {
 		common.SysError("failed to search tokens: " + err.Error())
 		return nil, 0, errors.New("搜索令牌失败")

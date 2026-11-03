@@ -330,15 +330,18 @@ export const getUsersColumns = ({
     {
       title: 'ID',
       dataIndex: 'id',
+      key: 'id',
     },
     {
       title: t('用户名'),
       dataIndex: 'username',
+      key: 'username',
       render: (text, record) => renderUsername(text, record),
     },
     {
       title: t('状态'),
       dataIndex: 'info',
+      key: 'info',
       render: (text, record, index) =>
         renderStatistics(text, record, showEnableDisableModal, t),
     },
@@ -350,6 +353,7 @@ export const getUsersColumns = ({
     {
       title: t('分组'),
       dataIndex: 'group',
+      key: 'group',
       render: (text, record, index) => {
         return <div>{renderGroup(text)}</div>;
       },
@@ -357,6 +361,7 @@ export const getUsersColumns = ({
     {
       title: t('并发'),
       dataIndex: 'current_concurrency',
+      key: 'current_concurrency',
       render: (text) => (
         <Tooltip content={t('当前进行中的请求数（近似值）')}>
           <div>{renderConcurrency(text)}</div>
@@ -366,6 +371,7 @@ export const getUsersColumns = ({
     {
       title: t('角色'),
       dataIndex: 'role',
+      key: 'role',
       render: (text, record, index) => {
         return <div>{renderRole(text, t)}</div>;
       },
@@ -373,21 +379,25 @@ export const getUsersColumns = ({
     {
       title: t('邀请信息'),
       dataIndex: 'invite',
+      key: 'invite',
       render: (text, record, index) => renderInviteInfo(text, record, t),
     },
     {
       title: t('创建时间'),
       dataIndex: 'created_at',
+      key: 'created_at',
       render: renderTimestamp,
     },
     {
       title: t('最后登录'),
       dataIndex: 'last_login_at',
+      key: 'last_login_at',
       render: renderTimestamp,
     },
     {
       title: '',
       dataIndex: 'operate',
+      key: 'operate',
       fixed: 'right',
       width: 200,
       render: (text, record, index) =>

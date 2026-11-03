@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/concurrency"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -18,6 +20,10 @@ import (
 )
 
 const UserNameMaxLength = 20
+
+// UserSortByConcurrency 是虚拟排序列：并发数存在 Redis 而非数据库，
+// 命中它时改走内存排序，见 SortByConcurrencyDesc。
+const UserSortByConcurrency = "concurrency"
 
 var userSortColumns = map[string]string{
 	"id":            "id",
@@ -36,10 +42,13 @@ type UserSortOptions struct {
 func NewUserSortOptions(sortBy string, sortOrder string) UserSortOptions {
 	normalizedSortBy := strings.ToLower(strings.TrimSpace(sortBy))
 	normalizedSortOrder := strings.ToLower(strings.TrimSpace(sortOrder))
-	if _, ok := userSortColumns[normalizedSortBy]; !ok {
-		normalizedSortBy = "id"
-		normalizedSortOrder = "desc"
-	} else if normalizedSortOrder != "asc" {
+	if normalizedSortBy != UserSortByConcurrency {
+		if _, ok := userSortColumns[normalizedSortBy]; !ok {
+			normalizedSortBy = "id"
+			normalizedSortOrder = "desc"
+		}
+	}
+	if normalizedSortOrder != "asc" {
 		normalizedSortOrder = "desc"
 	}
 
@@ -52,6 +61,7 @@ func NewUserSortOptions(sortBy string, sortOrder string) UserSortOptions {
 func (options UserSortOptions) Apply(query *gorm.DB) *gorm.DB {
 	columnName, ok := userSortColumns[options.SortBy]
 	if !ok {
+		// 并发排序不落在 SQL 上，这里给一个稳定的兜底顺序
 		columnName = "id"
 	}
 	q := query.Order(clause.OrderByColumn{
@@ -432,12 +442,56 @@ func GetAllUsers(pageInfo *common.PageInfo, sortOptions ...UserSortOptions) (use
 	}
 
 	order := resolveUserSortOptions(sortOptions)
+	if order.SortBy == UserSortByConcurrency {
+		// 并发数在 Redis 里，先取全量再内存排序分页
+		var all []*User
+		if err = order.Apply(DB.Unscoped()).Omit("password", "access_token").Find(&all).Error; err != nil {
+			return nil, 0, err
+		}
+		users = SortByConcurrencyDesc(all, concurrency.DimensionUser,
+			func(u *User) int { return u.Id }, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+		return users, total, nil
+	}
 	err = order.Apply(DB.Unscoped()).Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password", "access_token").Find(&users).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
 	return users, total, nil
+}
+
+// SortByConcurrencyDesc 按实时并发数降序重排并做内存分页。
+//
+// 并发数来自 Redis，不在数据库里，因此无法用 SQL ORDER BY 跨页排序：
+// 必须先取出全部候选行，查到各自并发数，排序后再切片分页。
+// 候选集是管理员列表场景（用户/令牌数量有限），全量取行的开销可接受。
+func SortByConcurrencyDesc[T any](
+	items []T,
+	dim concurrency.Dimension,
+	idOf func(T) int,
+	startIdx int,
+	num int,
+) []T {
+	ids := make([]int, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, idOf(item))
+	}
+	counts := concurrency.BatchCount(dim, ids)
+
+	sorted := make([]T, len(items))
+	copy(sorted, items)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return counts[idOf(sorted[i])] > counts[idOf(sorted[j])]
+	})
+
+	if startIdx >= len(sorted) {
+		return []T{}
+	}
+	end := len(sorted)
+	if num >= 0 && startIdx+num < end {
+		end = startIdx + num
+	}
+	return sorted[startIdx:end]
 }
 
 func SearchUsers(keyword string, group string, role *int, status *int, startIdx int, num int, sortOptions ...UserSortOptions) ([]*User, int64, error) {
@@ -486,6 +540,15 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 
 	// 获取分页数据
 	order := resolveUserSortOptions(sortOptions)
+	if order.SortBy == UserSortByConcurrency {
+		var all []*User
+		if err = order.Apply(query.Omit("password", "access_token")).Find(&all).Error; err != nil {
+			return nil, 0, err
+		}
+		users = SortByConcurrencyDesc(all, concurrency.DimensionUser,
+			func(u *User) int { return u.Id }, startIdx, num)
+		return users, total, nil
+	}
 	err = order.Apply(query.Omit("password", "access_token")).Limit(num).Offset(startIdx).Find(&users).Error
 	if err != nil {
 		return nil, 0, err

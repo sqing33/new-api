@@ -361,6 +361,10 @@ function TokensPage() {
     batchCopyTokens,
     batchDeleteTokens,
     setShowColumnSelector,
+    sortByConcurrency,
+    setSortByConcurrency,
+    sortByAccessed,
+    setSortByAccessed,
 
     // Filters state
     formInitValues,
@@ -413,6 +417,10 @@ function TokensPage() {
               batchCopyTokens={batchCopyTokens}
               batchDeleteTokens={batchDeleteTokens}
               setShowColumnSelector={setShowColumnSelector}
+              sortByConcurrency={sortByConcurrency}
+              setSortByConcurrency={setSortByConcurrency}
+              sortByAccessed={sortByAccessed}
+              setSortByAccessed={setSortByAccessed}
               t={t}
             />
 

@@ -62,9 +62,15 @@ const CardTable = ({
       ? { ...tableProps, pagination: false }
       : tableProps;
 
+    // 表头与单元格统一水平居中：各列表列宽差异大，左对齐时视线跳跃明显。
+    // 调用方在 columns 里显式写了 align 的列保持原样。
+    const centeredColumns = columns.map((col) =>
+      col.align ? col : { ...col, align: 'center' },
+    );
+
     return (
       <Table
-        columns={columns}
+        columns={centeredColumns}
         dataSource={dataSource}
         loading={loading}
         rowKey={rowKey}

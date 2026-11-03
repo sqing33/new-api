@@ -41,6 +41,9 @@ const TOKEN_PAGE_SIZE_KEY = 'token-page-size';
 
 // 列设置持久化键
 const TOKENS_COLUMNS_STORAGE_KEY = 'tokens-table-columns';
+// 排序开关：并发排序与最后使用排序互斥，各自持久化
+const TOKEN_SORT_BY_CONCURRENCY_KEY = 'token-sort-by-concurrency';
+const TOKEN_SORT_BY_ACCESSED_KEY = 'token-sort-by-accessed';
 
 const TOKEN_COLUMN_KEYS = {
   NAME: 'name',
@@ -83,6 +86,41 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
   const [searching, setSearching] = useState(false);
   const [searchMode, setSearchMode] = useState(false); // 是否处于搜索结果视图
+
+  // 排序开关：两个互斥，都关闭时走后端默认的 id desc
+  const [sortByConcurrency, setSortByConcurrencyState] = useState(
+    () => localStorage.getItem(TOKEN_SORT_BY_CONCURRENCY_KEY) === 'true',
+  );
+  const [sortByAccessed, setSortByAccessedState] = useState(
+    () => localStorage.getItem(TOKEN_SORT_BY_ACCESSED_KEY) === 'true',
+  );
+  const sortByConcurrencyRef = useRef(sortByConcurrency);
+  const sortByAccessedRef = useRef(sortByAccessed);
+  sortByConcurrencyRef.current = sortByConcurrency;
+  sortByAccessedRef.current = sortByAccessed;
+
+  const setSortByConcurrency = (value) => {
+    localStorage.setItem(TOKEN_SORT_BY_CONCURRENCY_KEY, value + '');
+    setSortByConcurrencyState(value);
+    if (value) {
+      localStorage.setItem(TOKEN_SORT_BY_ACCESSED_KEY, 'false');
+      setSortByAccessedState(false);
+    }
+  };
+  const setSortByAccessed = (value) => {
+    localStorage.setItem(TOKEN_SORT_BY_ACCESSED_KEY, value + '');
+    setSortByAccessedState(value);
+    if (value) {
+      localStorage.setItem(TOKEN_SORT_BY_CONCURRENCY_KEY, 'false');
+      setSortByConcurrencyState(false);
+    }
+  };
+
+  const buildTokenSortParam = () => {
+    if (sortByConcurrencyRef.current) return '&sort_by=concurrency';
+    if (sortByAccessedRef.current) return '&sort_by=accessed_time';
+    return '';
+  };
 
   // Column visibility
   const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -151,7 +189,9 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const loadTokens = async (page = 1, size = pageSize) => {
     setLoading(true);
     setSearchMode(false);
-    const res = await API.get(`/api/token/?p=${page}&size=${size}`);
+    const res = await API.get(
+      `/api/token/?p=${page}&size=${size}${buildTokenSortParam()}`,
+    );
     const { success, message, data } = res.data;
     if (success) {
       syncPageData(data);
@@ -364,7 +404,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     }
     setSearching(true);
     const res = await API.get(
-      `/api/token/search?keyword=${encodeURIComponent(searchKeyword)}&token=${encodeURIComponent(searchToken)}&p=${normalizedPage}&size=${normalizedSize}`,
+      `/api/token/search?keyword=${encodeURIComponent(searchKeyword)}&token=${encodeURIComponent(searchToken)}&p=${normalizedPage}&size=${normalizedSize}${buildTokenSortParam()}`,
     );
     const { success, message, data } = res.data;
     if (success) {
@@ -489,6 +529,21 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     }
   };
 
+  // 排序开关变化后回到第一页重新拉取
+  const tokenSortInitialized = useRef(false);
+  useEffect(() => {
+    if (!tokenSortInitialized.current) {
+      tokenSortInitialized.current = true;
+      return;
+    }
+    if (searchMode) {
+      searchTokens(1, pageSize).then();
+    } else {
+      loadTokens(1, pageSize).then();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortByConcurrency, sortByAccessed]);
+
   // 持久化列可见性
   useEffect(() => {
     if (Object.keys(visibleColumns).length > 0) {
@@ -550,6 +605,12 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     tokenCount,
     pageSize,
     searching,
+
+    // Sort state
+    sortByConcurrency,
+    setSortByConcurrency,
+    sortByAccessed,
+    setSortByAccessed,
 
     // Column visibility
     TOKEN_COLUMN_KEYS,

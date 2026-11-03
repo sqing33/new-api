@@ -24,6 +24,7 @@ import UsersActions from './UsersActions';
 import UsersFilters from './UsersFilters';
 import UsersDescription from './UsersDescription';
 import AddUserModal from './modals/AddUserModal';
+import ColumnSelectorModal from './modals/ColumnSelectorModal';
 import EditUserModal from './modals/EditUserModal';
 import { useUsersData } from '../../../hooks/users/useUsersData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
@@ -54,6 +55,13 @@ const UsersPage = () => {
     loading,
     searching,
 
+    // Sort & column settings
+    sortByConcurrency,
+    setSortByConcurrency,
+    sortByLastLogin,
+    setSortByLastLogin,
+    setShowColumnSelector,
+
     // Description state
     compactMode,
     setCompactMode,
@@ -69,6 +77,8 @@ const UsersPage = () => {
         visible={showAddUser}
         handleClose={closeAddUser}
       />
+
+      <ColumnSelectorModal {...usersData} t={t} />
 
       <EditUserModal
         refresh={refresh}
@@ -88,7 +98,15 @@ const UsersPage = () => {
         }
         actionsArea={
           <div className='flex flex-col md:flex-row justify-between items-center gap-2 w-full'>
-            <UsersActions setShowAddUser={setShowAddUser} t={t} />
+            <UsersActions
+              setShowAddUser={setShowAddUser}
+              setShowColumnSelector={setShowColumnSelector}
+              sortByConcurrency={sortByConcurrency}
+              setSortByConcurrency={setSortByConcurrency}
+              sortByLastLogin={sortByLastLogin}
+              setSortByLastLogin={setSortByLastLogin}
+              t={t}
+            />
 
             <UsersFilters
               formInitValues={formInitValues}

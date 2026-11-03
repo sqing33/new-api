@@ -18,20 +18,66 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button } from '@douyinfe/semi-ui';
+import { Button, Switch, Typography } from '@douyinfe/semi-ui';
 
-const UsersActions = ({ setShowAddUser, t }) => {
+const UsersActions = ({
+  setShowAddUser,
+  setShowColumnSelector,
+  sortByConcurrency,
+  setSortByConcurrency,
+  sortByLastLogin,
+  setSortByLastLogin,
+  t,
+}) => {
   // Add new user
   const handleAddUser = () => {
     setShowAddUser(true);
   };
 
   return (
-    <div className='flex gap-2 w-full md:w-auto order-2 md:order-1'>
-      <Button className='w-full md:w-auto' onClick={handleAddUser} size='small'>
-        {t('添加用户')}
-      </Button>
-    </div>
+    <>
+      <div className='flex gap-2 w-full md:w-auto order-2 md:order-1'>
+        <Button
+          className='w-full md:w-auto'
+          onClick={handleAddUser}
+          size='small'
+        >
+          {t('添加用户')}
+        </Button>
+        <Button
+          type='secondary'
+          className='w-full md:w-auto'
+          onClick={() => setShowColumnSelector(true)}
+          size='small'
+        >
+          {t('列设置')}
+        </Button>
+      </div>
+
+      <div className='flex flex-col md:flex-row items-start md:items-center gap-2 w-full md:w-auto order-1 md:order-2'>
+        <div className='flex items-center justify-between w-full md:w-auto'>
+          <Typography.Text strong className='mr-2'>
+            {t('按并发排序')}
+          </Typography.Text>
+          <Switch
+            size='small'
+            checked={sortByConcurrency}
+            onChange={(v) => setSortByConcurrency(v)}
+          />
+        </div>
+
+        <div className='flex items-center justify-between w-full md:w-auto'>
+          <Typography.Text strong className='mr-2'>
+            {t('按最后登录排序')}
+          </Typography.Text>
+          <Switch
+            size='small'
+            checked={sortByLastLogin}
+            onChange={(v) => setSortByLastLogin(v)}
+          />
+        </div>
+      </div>
+    </>
   );
 };
 
