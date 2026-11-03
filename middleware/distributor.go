@@ -213,13 +213,20 @@ func Distribute() func(c *gin.Context) {
 // single call covers every dimension. Release runs on a detached context so a
 // client disconnect cannot cancel the cleanup.
 func trackChannelConcurrency(c *gin.Context) {
+	channelID := common.GetContextKeyInt(c, constant.ContextKeyChannelId)
+	userID := common.GetContextKeyInt(c, constant.ContextKeyUserId)
+	tokenID := common.GetContextKeyInt(c, constant.ContextKeyTokenId)
+	// TODO: 临时诊断日志，用于定位并发统计恒为 0 的断点，定位后移除
+	common.SysError(fmt.Sprintf(
+		"concurrency-diag: redisEnabled=%v rdbNil=%v ch=%d user=%d token=%d",
+		common.RedisEnabled, common.RDB == nil, channelID, userID, tokenID))
 	if !common.RedisEnabled {
 		return
 	}
 	dims := concurrency.Dimensions{
-		ChannelID: common.GetContextKeyInt(c, constant.ContextKeyChannelId),
-		UserID:    common.GetContextKeyInt(c, constant.ContextKeyUserId),
-		TokenID:   common.GetContextKeyInt(c, constant.ContextKeyTokenId),
+		ChannelID: channelID,
+		UserID:    userID,
+		TokenID:   tokenID,
 	}
 	requestID := concurrency.NewRequestID()
 	concurrency.Track(c.Request.Context(), dims, requestID)

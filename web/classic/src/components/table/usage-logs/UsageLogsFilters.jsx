@@ -22,6 +22,7 @@ import { Button, Form } from '@douyinfe/semi-ui';
 import { IconSearch } from '@douyinfe/semi-icons';
 
 import { DATE_RANGE_PRESETS } from '../../../constants/console.constants';
+import { selectFilter } from '../../../helpers';
 
 const LogsFilters = ({
   formInitValues,
@@ -148,9 +149,12 @@ const LogsFilters = ({
           {imageOnly ? (
             <Form.Select
               field='model_name'
-              placeholder={t('生图模型')}
-              showClear={false}
+              placeholder={t('全部生成模型')}
+              showClear
               multiple
+              filter={selectFilter}
+              autoClearSearchValue={false}
+              searchPosition='dropdown'
               pure
               size='small'
               maxTagCount={2}

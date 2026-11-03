@@ -105,13 +105,15 @@ export const useLogsData = ({
   const formInitValues = {
     username: '',
     token_name: '',
-    model_name: imageOnly ? imageModelOptions : '',
+    // 清荫日志默认不预选模型：输入框留空即表示不筛选，
+    // 后端凭 image_only 已限定只看生成类模型
+    model_name: '',
     channel: '',
     group: '',
     request_id: '',
     dateRange: [
       timestamp2string(getTodayStartTimestamp()),
-      timestamp2string(now.getTime() / 1000),
+      timestamp2string(now.getTime() / 1000 + 3600),
     ],
     logType: imageOnly ? '2' : '0',
   };
@@ -269,7 +271,7 @@ export const useLogsData = ({
     const formValues = formApi ? formApi.getValues() : {};
 
     let start_timestamp = timestamp2string(getTodayStartTimestamp());
-    let end_timestamp = timestamp2string(now.getTime() / 1000);
+    let end_timestamp = timestamp2string(now.getTime() / 1000 + 3600);
 
     if (
       formValues.dateRange &&
@@ -285,12 +287,14 @@ export const useLogsData = ({
     return {
       username: formValues.username || '',
       token_name: formValues.token_name || '',
+      // 清荫日志下留空表示不筛选（后端 image_only 已限定生成类模型），
+      // 勾选后才把所选模型作为精确条件下发
       model_name: imageOnly
         ? Array.isArray(modelNameValue)
           ? modelNameValue
           : modelNameValue
             ? [modelNameValue]
-            : imageModelOptions
+            : []
         : modelNameValue || '',
       start_timestamp,
       end_timestamp,
@@ -963,10 +967,8 @@ export const useLogsData = ({
 
   useEffect(() => {
     if (!canLoadLogs || !imageOnly || !formApi) return;
-    const values = formApi.getValues();
-    if (Array.isArray(values.model_name) && values.model_name.length > 0)
-      return;
-    formApi.setValue('model_name', imageModelOptions);
+    // 不再把全部生成模型回填到输入框：留空即表示不筛选，
+    // 后端凭 image_only 已限定只看生成类模型
     setLogType(2);
     setTimeout(() => {
       loadLogs(1, pageSize, 2).catch((reason) => {

@@ -4634,5 +4634,6 @@
   "未启用ASR": "ASR not enabled",
   "名称排序": "Sort by name",
   "模型名称排序": "Sort by model name",
-  "供应商排序": "Sort by vendor"
+  "供应商排序": "Sort by vendor",
+  "全部生成模型": "All generative models"
 }

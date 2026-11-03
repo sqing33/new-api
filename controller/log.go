@@ -12,11 +12,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// isGenerativeModelSetting 判断该模型是否属于「生成类」工作台能力
+// （生图 / 视频 / TTS / ASR）。清荫日志收录这些模型，通用日志则把它们
+// 排除，避免污染文本模型的用量视图。
+func isGenerativeModelSetting(item setting.ImageModelSetting) bool {
+	return len(item.Modes) > 0 ||
+		len(item.VideoModes) > 0 ||
+		len(item.TTSModes) > 0 ||
+		len(item.ASRModes) > 0
+}
+
+// getConfiguredImageLogModels 返回所有生成类模型名。函数名沿用历史命名，
+// 但涵盖范围已从生图扩展到视频、TTS 与 ASR。
 func getConfiguredImageLogModels() []string {
 	modelSet := map[string]bool{}
 	models := make([]string, 0)
 	for _, item := range setting.ImageModelSettings {
-		if strings.TrimSpace(item.Model) == "" || len(item.Modes) == 0 {
+		if strings.TrimSpace(item.Model) == "" || !isGenerativeModelSetting(item) {
 			continue
 		}
 		if modelSet[item.Model] {
@@ -47,8 +59,31 @@ func getLogModelFilters(c *gin.Context) (string, []string) {
 		modelSet[model] = true
 		normalizedModelNames = append(normalizedModelNames, model)
 	}
-	if c.Query("image_only") == "true" && modelName == "" && len(normalizedModelNames) == 0 {
-		normalizedModelNames = getConfiguredImageLogModels()
+	// image_only 表示「只看生成类模型」，它是页面语义而非用户筛选条件，
+	// 因此无论前端是否勾选具体模型都必须生效：
+	//   - 未勾选：限定为全部生成类模型（前端输入框留空即走这一支）
+	//   - 已勾选：与生成类名单取交集，避免前端传入非生成类模型绕过页面语义
+	if c.Query("image_only") == "true" {
+		generative := getConfiguredImageLogModels()
+		if modelName == "" && len(normalizedModelNames) == 0 {
+			normalizedModelNames = generative
+		} else if len(generative) > 0 {
+			allowed := make(map[string]bool, len(generative))
+			for _, model := range generative {
+				allowed[model] = true
+			}
+			intersection := make([]string, 0, len(normalizedModelNames))
+			for _, model := range normalizedModelNames {
+				if allowed[model] {
+					intersection = append(intersection, model)
+				}
+			}
+			// 交集为空说明勾选的都不是生成类模型，回退到全量而不是返回空列表
+			if len(intersection) == 0 {
+				intersection = generative
+			}
+			normalizedModelNames = intersection
+		}
 	}
 	return modelName, normalizedModelNames
 }

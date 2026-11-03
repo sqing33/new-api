@@ -31,9 +31,18 @@ const ImageLogs = () => {
         ? [
             ...new Set(
               parseImageModelSettings(statusState?.status?.image_model_settings)
+                // 与后端 isGenerativeModelSetting 保持一致：
+                // 生图、视频、TTS、ASR 任一能力开启即归入清荫日志
                 .filter(
                   (setting) =>
-                    Array.isArray(setting.modes) && setting.modes.length > 0,
+                    (Array.isArray(setting.modes) &&
+                      setting.modes.length > 0) ||
+                    (Array.isArray(setting.video_modes) &&
+                      setting.video_modes.length > 0) ||
+                    (Array.isArray(setting.tts_modes) &&
+                      setting.tts_modes.length > 0) ||
+                    (Array.isArray(setting.asr_modes) &&
+                      setting.asr_modes.length > 0),
                 )
                 .map((setting) => setting.model),
             ),

@@ -705,6 +705,11 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		rateStart = now.Add(-60 * time.Second).Unix()
 		rpmTpmQuery = rpmTpmQuery.Where("created_at >= ?", rateStart).Where("created_at <= ?", rateEnd)
 	}
+	// 前端会把结束时间往后延 1 小时以容忍浏览器与服务器的时钟偏移，
+	// 这段未来时间不计入分母，否则 TPM 会被系统性拉低。
+	if nowUnix := time.Now().Unix(); rateEnd > nowUnix {
+		rateEnd = nowUnix
+	}
 	rateMinutes := float64(rateEnd-rateStart) / 60
 	if rateMinutes <= 0 {
 		rateMinutes = 1
