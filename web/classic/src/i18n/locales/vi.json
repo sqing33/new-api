@@ -5008,5 +5008,9 @@
   "标记该模型支持语音合成，可在定价页按能力筛选": "Đánh dấu mô hình này hỗ trợ tổng hợp giọng nói để lọc trên trang định giá",
   "标记该模型支持语音识别，可在定价页按能力筛选": "Đánh dấu mô hình này hỗ trợ nhận dạng giọng nói để lọc trên trang định giá",
   "TTS": "TTS",
-  "ASR": "ASR"
+  "ASR": "ASR",
+  "语音合成": "Tổng hợp giọng nói",
+  "语音识别": "Nhận dạng giọng nói",
+  "未启用TTS": "Chưa bật TTS",
+  "未启用ASR": "Chưa bật ASR"
 }

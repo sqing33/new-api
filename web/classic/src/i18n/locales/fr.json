@@ -4496,5 +4496,9 @@
   "标记该模型支持语音合成，可在定价页按能力筛选": "Marquer ce modèle comme compatible avec la synthèse vocale pour le filtrer sur la page de tarification",
   "标记该模型支持语音识别，可在定价页按能力筛选": "Marquer ce modèle comme compatible avec la reconnaissance vocale pour le filtrer sur la page de tarification",
   "TTS": "TTS",
-  "ASR": "ASR"
+  "ASR": "ASR",
+  "语音合成": "Synthèse vocale",
+  "语音识别": "Reconnaissance vocale",
+  "未启用TTS": "TTS non activé",
+  "未启用ASR": "ASR non activé"
 }

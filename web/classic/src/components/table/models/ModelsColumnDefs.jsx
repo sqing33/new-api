@@ -212,6 +212,18 @@ const renderVideoCapability = (modelName, imageModelSettingsMap, t) => {
   );
 };
 
+const renderTTSCapability = (modelName, imageModelSettingsMap, t) => {
+  const setting = imageModelSettingsMap?.[modelName];
+  const enabled = (setting?.tts_modes || []).length > 0;
+  return renderCapabilityIcon(enabled, enabled ? t('语音合成') : t('未启用TTS'));
+};
+
+const renderASRCapability = (modelName, imageModelSettingsMap, t) => {
+  const setting = imageModelSettingsMap?.[modelName];
+  const enabled = (setting?.asr_modes || []).length > 0;
+  return renderCapabilityIcon(enabled, enabled ? t('语音识别') : t('未启用ASR'));
+};
+
 // Render operations column
 const renderOperations = (
   text,
@@ -367,6 +379,24 @@ export const getModelsColumns = ({
       width: 90,
       render: (modelName) =>
         renderVideoCapability(modelName, imageModelSettingsMap, t),
+    },
+    {
+      key: MODEL_COLUMN_KEYS.TTS,
+      title: t('TTS'),
+      dataIndex: 'model_name',
+      align: 'center',
+      width: 80,
+      render: (modelName) =>
+        renderTTSCapability(modelName, imageModelSettingsMap, t),
+    },
+    {
+      key: MODEL_COLUMN_KEYS.ASR,
+      title: t('ASR'),
+      dataIndex: 'model_name',
+      align: 'center',
+      width: 80,
+      render: (modelName) =>
+        renderASRCapability(modelName, imageModelSettingsMap, t),
     },
     {
       key: MODEL_COLUMN_KEYS.NAME_RULE,

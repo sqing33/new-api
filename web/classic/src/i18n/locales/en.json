@@ -4625,5 +4625,9 @@
   "标记该模型支持语音合成，可在定价页按能力筛选": "Mark this model as speech synthesis capable so it can be filtered on the pricing page",
   "标记该模型支持语音识别，可在定价页按能力筛选": "Mark this model as speech recognition capable so it can be filtered on the pricing page",
   "TTS": "TTS",
-  "ASR": "ASR"
+  "ASR": "ASR",
+  "语音合成": "Speech synthesis",
+  "语音识别": "Speech recognition",
+  "未启用TTS": "TTS not enabled",
+  "未启用ASR": "ASR not enabled"
 }
