@@ -172,14 +172,21 @@ func runTrackPipeline(ctx context.Context, keys []string, requestID string) erro
 
 func execTrackPipeline(ctx context.Context, keys []string, requestID string, useEval bool) error {
 	pipe := common.RDB.Pipeline()
+	cmds := make([]*redis.Cmd, 0, len(keys))
 	for _, key := range keys {
 		if useEval {
-			pipe.Eval(ctx, trackScriptSrc, []string{key}, SlotTTLSeconds, requestID)
+			cmds = append(cmds, pipe.Eval(ctx, trackScriptSrc, []string{key}, SlotTTLSeconds, requestID))
 			continue
 		}
-		pipe.EvalSha(ctx, trackScript.Hash(), []string{key}, SlotTTLSeconds, requestID)
+		cmds = append(cmds, pipe.EvalSha(ctx, trackScript.Hash(), []string{key}, SlotTTLSeconds, requestID))
 	}
 	_, err := pipe.Exec(ctx)
+	// TODO: 临时诊断日志，用于定位并发统计恒为 0 的断点，定位后移除
+	for i, cmd := range cmds {
+		common.SysError(fmt.Sprintf(
+			"concurrency-diag2: req=%s key=%s err=%v val=%v",
+			requestID, keys[i], cmd.Err(), cmd.Val()))
+	}
 	if err == redis.Nil {
 		return nil
 	}
