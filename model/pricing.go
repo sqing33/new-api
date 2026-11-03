@@ -210,6 +210,14 @@ func updatePricing() {
 	}
 	metaMap := resolveModelMetadata(allMeta, names)
 
+	// initDefaultVendorMapping 会给未配置的模型合成虚拟元数据，
+	// 因此必须在此之前记录哪些模型是真正在 models 表里配置过的。
+	// 定价页只展示这些模型，避免渠道里临时填的带后缀模型直接上架。
+	configuredModels := make(map[string]bool, len(metaMap))
+	for name := range metaMap {
+		configuredModels[name] = true
+	}
+
 	// 预加载供应商
 	var vendors []Vendor
 	_ = DB.Find(&vendors).Error
@@ -331,6 +339,12 @@ func updatePricing() {
 	pricingMap = make([]Pricing, 0)
 	pluginGeneration := jsplugin.DefaultRegistry.Generation()
 	for model, groups := range modelGroupsMap {
+		// 只展示在模型管理页配置过的模型，未配置的（例如渠道里临时填的
+		// 带后缀模型）不上架；用 configuredModels 而非 metaMap，
+		// 因为后者已被 initDefaultVendorMapping 补全过虚拟元数据。
+		if !configuredModels[model] {
+			continue
+		}
 		pricing := Pricing{
 			ModelName:              model,
 			EnableGroup:            groups.Items(),

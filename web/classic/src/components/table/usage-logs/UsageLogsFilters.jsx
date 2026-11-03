@@ -35,6 +35,8 @@ const LogsFilters = ({
   groupOptions = [],
   imageOnly,
   imageModelOptions,
+  excludeImageModels,
+  setExcludeImageModels,
   t,
 }) => {
   const operationControls = (
@@ -64,6 +66,23 @@ const LogsFilters = ({
           <Form.Select.Option value='5'>{t('错误')}</Form.Select.Option>
           <Form.Select.Option value='6'>{t('退款')}</Form.Select.Option>
         </Form.Select>
+      )}
+      {!imageOnly && (
+        <Button
+          type={excludeImageModels ? 'primary' : 'tertiary'}
+          theme={excludeImageModels ? 'solid' : 'borderless'}
+          size='small'
+          className='shrink-0'
+          onClick={() => {
+            setExcludeImageModels(!excludeImageModels);
+            // 切换后立即按新条件重新查询
+            setTimeout(() => {
+              refresh();
+            }, 0);
+          }}
+        >
+          {t('排除生图日志')}
+        </Button>
       )}
       <Button
         type='tertiary'

@@ -4500,5 +4500,9 @@
   "语音合成": "Synthèse vocale",
   "语音识别": "Reconnaissance vocale",
   "未启用TTS": "TTS non activé",
-  "未启用ASR": "ASR non activé"
+  "未启用ASR": "ASR non activé",
+  "名称排序": "Trier par nom",
+  "排除生图日志": "Exclure les journaux d'images",
+  "模型名称排序": "Trier par nom de modèle",
+  "供应商排序": "Trier par fournisseur"
 }

@@ -292,6 +292,13 @@ func TestListModelsIncludesTieredBillingModel(t *testing.T) {
 		{Group: "default", Model: "zz-tiered-missing-expr-model", ChannelId: 1, Enabled: true},
 		{Group: "default", Model: "zz-unpriced-model", ChannelId: 1, Enabled: true},
 	}).Error)
+	// 定价页只展示已在模型管理页登记的模型，这里补齐登记
+	require.NoError(t, db.Create(&[]model.Model{
+		{ModelName: "zz-tiered-visible-model", Status: 1, NameRule: model.NameRuleExact},
+		{ModelName: "zz-tiered-empty-expr-model", Status: 1, NameRule: model.NameRuleExact},
+		{ModelName: "zz-tiered-missing-expr-model", Status: 1, NameRule: model.NameRuleExact},
+		{ModelName: "zz-unpriced-model", Status: 1, NameRule: model.NameRuleExact},
+	}).Error)
 
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)

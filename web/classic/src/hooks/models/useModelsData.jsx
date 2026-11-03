@@ -51,6 +51,16 @@ const MODEL_COLUMN_KEYS = {
 };
 
 const MODELS_COLUMNS_STORAGE_KEY = 'models-table-columns-admin';
+// 排序开关使用各自的 storage key，避免与其他页面互相串扰
+const MODEL_NAME_SORT_KEY = 'models-name-sort';
+const MODEL_VENDOR_SORT_KEY = 'models-vendor-sort';
+
+// 后端一次只接受一个排序字段，供应商排序优先（它更粗粒度）
+const buildModelSortParam = (nameSort, vendorSort) => {
+  if (vendorSort) return '&sort_by=vendor&sort_order=asc';
+  if (nameSort) return '&sort_by=name&sort_order=asc';
+  return '';
+};
 
 export const useModelsData = () => {
   const { t } = useTranslation();
@@ -66,6 +76,22 @@ export const useModelsData = () => {
   const [modelCount, setModelCount] = useState(0);
   const [imageModelSettings, setImageModelSettings] = useState([]);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
+  // 名称排序与供应商排序可同时开启；各自持久化，刷新后保持
+  const [nameSort, setNameSortState] = useState(
+    () => localStorage.getItem(MODEL_NAME_SORT_KEY) === 'true',
+  );
+  const [vendorSort, setVendorSortState] = useState(
+    () => localStorage.getItem(MODEL_VENDOR_SORT_KEY) === 'true',
+  );
+
+  const setNameSort = (value) => {
+    localStorage.setItem(MODEL_NAME_SORT_KEY, value + '');
+    setNameSortState(value);
+  };
+  const setVendorSort = (value) => {
+    localStorage.setItem(MODEL_VENDOR_SORT_KEY, value + '');
+    setVendorSortState(value);
+  };
 
   const getDefaultColumnVisibility = () => ({
     [MODEL_COLUMN_KEYS.ICON]: true,
@@ -223,10 +249,11 @@ export const useModelsData = () => {
   ) => {
     setLoading(true);
     try {
-      let url = `/api/models/?p=${page}&page_size=${size}`;
+      const sortParam = buildModelSortParam(nameSort, vendorSort);
+      let url = `/api/models/?p=${page}&page_size=${size}${sortParam}`;
       if (vendorKey && vendorKey !== 'all') {
         // Filter by vendor ID
-        url = `/api/models/search?vendor=${vendorKey}&p=${page}&page_size=${size}`;
+        url = `/api/models/search?vendor=${vendorKey}&p=${page}&page_size=${size}${sortParam}`;
       }
 
       const res = await API.get(url);
@@ -359,7 +386,7 @@ export const useModelsData = () => {
     setSearching(true);
     try {
       const res = await API.get(
-        `/api/models/search?keyword=${searchKeyword}&vendor=${searchVendor}&p=1&page_size=${pageSize}`,
+        `/api/models/search?keyword=${searchKeyword}&vendor=${searchVendor}&p=1&page_size=${pageSize}${buildModelSortParam(nameSort, vendorSort)}`,
       );
       const { success, message, data } = res.data;
       if (success) {
@@ -444,6 +471,12 @@ export const useModelsData = () => {
   useEffect(() => {
     loadModels(1, pageSize, activeVendorKey);
   }, [activeVendorKey]);
+
+  // 排序开关变化后回到第一页重新拉取，保证排序立即生效
+  useEffect(() => {
+    loadModels(1, pageSize, activeVendorKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nameSort, vendorSort]);
 
   // Handle page size change
   const handlePageSizeChange = async (size) => {
@@ -632,6 +665,10 @@ export const useModelsData = () => {
     // UI state
     compactMode,
     setCompactMode,
+    nameSort,
+    setNameSort,
+    vendorSort,
+    setVendorSort,
 
     // Vendor data
     vendors,

@@ -43,7 +43,9 @@ func TestPricingCarriesTaskUsageSchemaAndRefreshesWithPluginGeneration(t *testin
 
 	insertPricingEndpointChannel(t, 901, constant.ChannelTypeTaskPlugin, dto.ChannelOtherSettings{})
 	insertPricingEndpointAbility(t, 901, "pricing-usage-model")
+	insertPricingEndpointModel(t, "pricing-usage-model")
 	insertPricingEndpointAbility(t, 901, "ordinary-model")
+	insertPricingEndpointModel(t, "ordinary-model")
 
 	initialPricing := pricingByModel(GetPricing())
 	require.Contains(t, initialPricing, "pricing-usage-model")
@@ -89,7 +91,9 @@ func TestPricingAliasCarriesPluginUsageSchemaAndTailExpr(t *testing.T) {
 	}
 	require.NoError(t, DB.Create(channel).Error)
 	insertPricingEndpointAbility(t, 910, "alias-model")
+	insertPricingEndpointModel(t, "alias-model")
 	insertPricingEndpointAbility(t, 910, "pricing-usage-model")
+	insertPricingEndpointModel(t, "pricing-usage-model")
 	InitChannelCache()
 
 	saved := map[string]string{}
@@ -128,6 +132,7 @@ func TestPricingAliasCarriesPluginUsageSchemaAndTailExpr(t *testing.T) {
 	}
 	require.NoError(t, DB.Create(own).Error)
 	insertPricingEndpointAbility(t, 911, "alias-own-expr")
+	insertPricingEndpointModel(t, "alias-own-expr")
 	InitChannelCache()
 	InvalidatePricingCache()
 
@@ -178,6 +183,7 @@ export function parseTaskResult(){return {};}
 		}).Error)
 		for _, name := range []string{"profile-image", "profile-video", "image-alias", "video-alias", "ambiguous-alias"} {
 			insertPricingEndpointAbility(t, id, name)
+			insertPricingEndpointModel(t, name)
 		}
 	}
 	InitChannelCache()
@@ -233,6 +239,7 @@ func TestPricingSharedPluginVariantsUseEachSchemaAndExpression(t *testing.T) {
 	}
 	insertPricingEndpointChannel(t, 930, constant.ChannelTypeTaskPlugin, dto.ChannelOtherSettings{})
 	insertPricingEndpointAbility(t, 930, "pricing-usage-model")
+	insertPricingEndpointModel(t, "pricing-usage-model")
 	const expression = `tier("base", u("seconds") * 0.4)`
 	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
 		"billing_setting.billing_mode":          `{"pricing-usage-model":"tiered_expr"}`,

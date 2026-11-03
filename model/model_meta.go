@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -189,8 +190,8 @@ func GetConfiguredModelChannels() (map[string][]int, error) {
 
 // SearchModelsWithChannels augments metadata with concrete configured names.
 // Synthetic rows never persist and never affect the public pricing catalog.
-func SearchModelsWithChannels(keyword, vendor, status, syncOfficial string, offset, limit int) ([]*Model, int64, error) {
-	records, _, err := SearchModels(keyword, vendor, status, syncOfficial, 0, -1)
+func SearchModelsWithChannels(keyword, vendor, status, syncOfficial, sortBy, sortOrder string, offset, limit int) ([]*Model, int64, error) {
+	records, _, err := SearchModels(keyword, vendor, status, syncOfficial, sortBy, sortOrder, 0, -1)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -401,7 +402,7 @@ func GetVendorModelCounts() (map[int64]int64, error) {
 }
 
 func GetAllModels(offset int, limit int) ([]*Model, error) {
-	models, _, err := SearchModels("", "", "", "", offset, limit)
+	models, _, err := SearchModels("", "", "", "", "", "", offset, limit)
 	return models, err
 }
 
@@ -478,7 +479,31 @@ func GetPreferredModelOwnerChannelTypes(modelNames []string, groups []string) (m
 	return result, nil
 }
 
-func SearchModels(keyword string, vendor string, status string, syncOfficial string, offset int, limit int) ([]*Model, int64, error) {
+// modelSortColumns 是模型列表允许的排序列白名单，避免任意列名注入。
+var modelSortColumns = map[string]string{
+	"name":   "models.model_name",
+	"vendor": "vendors.name",
+}
+
+// applyModelSort 应用排序。供应商排序需要 JOIN vendors，
+// 因为 models 表只存 vendor_id。默认保持原有的按 id 倒序。
+func applyModelSort(db *gorm.DB, sortBy string, sortOrder string) *gorm.DB {
+	column, ok := modelSortColumns[sortBy]
+	if !ok {
+		return db.Order("models.id DESC")
+	}
+	desc := sortOrder != "asc"
+	if sortBy == "vendor" {
+		// 供应商可能为空，NULL 在不同数据库的排序位置不一致，统一放到末尾
+		db = db.Joins("LEFT JOIN vendors ON vendors.id = models.vendor_id")
+	}
+	return db.Order(clause.OrderByColumn{
+		Column: clause.Column{Name: column},
+		Desc:   desc,
+	})
+}
+
+func SearchModels(keyword string, vendor string, status string, syncOfficial string, sortBy string, sortOrder string, offset int, limit int) ([]*Model, int64, error) {
 	var models []*Model
 	db := DB.Model(&Model{})
 	if keyword != "" {
@@ -502,7 +527,7 @@ func SearchModels(keyword string, vendor string, status string, syncOfficial str
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	if err := db.Order("models.id DESC").Offset(offset).Limit(limit).Find(&models).Error; err != nil {
+	if err := applyModelSort(db, sortBy, sortOrder).Offset(offset).Limit(limit).Find(&models).Error; err != nil {
 		return nil, 0, err
 	}
 	return models, total, nil

@@ -89,6 +89,7 @@ import {
   PlugZap,
   Trophy,
   Activity,
+  Check,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -973,14 +974,14 @@ export const renderGroupOption = (item) => {
     alignItems: 'center',
     padding: '8px 16px',
     cursor: disabled ? 'not-allowed' : 'pointer',
+    // 选中态用左侧色条表达，不再覆盖背景色：
+    // 背景色只表示 hover/focus，否则选中项看起来和悬停项没有区别
     backgroundColor: focused ? 'var(--semi-color-fill-0)' : 'transparent',
     opacity: disabled ? 0.5 : 1,
     ...(selected && {
-      backgroundColor: 'var(--semi-color-primary-light-default)',
+      boxShadow: 'inset 2px 0 0 0 var(--semi-color-primary)',
     }),
-    '&:hover': {
-      backgroundColor: !disabled && 'var(--semi-color-fill-1)',
-    },
+    ...style,
   };
 
   const handleClick = () => {
@@ -997,6 +998,7 @@ export const renderGroupOption = (item) => {
 
   return (
       <div
+          className={className}
           style={baseStyle}
           onClick={handleClick}
           onMouseEnter={handleMouseEnter}
@@ -1009,7 +1011,12 @@ export const renderGroupOption = (item) => {
             {label}
           </Typography.Text>
         </div>
-        {item.ratio && renderRatio(item.ratio)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {selected && (
+            <Check size={14} color='var(--semi-color-primary)' />
+          )}
+          {item.ratio && renderRatio(item.ratio)}
+        </div>
       </div>
   );
 };

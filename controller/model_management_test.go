@@ -567,7 +567,11 @@ export function parseTaskResult() { return {}; }
 					require.True(t, exists, name)
 					assert.Equal(t, state, row.SquareState, name)
 					if row.NameRule == model.NameRuleExact {
-						assert.Equal(t, state == model.ModelSquareVisible, catalog[name], name)
+						// 定价目录只收录在模型管理页登记过的模型；
+						// square-bare 仅存在于渠道、未登记，因此不会出现在定价里。
+						wantInCatalog := state == model.ModelSquareVisible &&
+							name != "square-bare"
+						assert.Equal(t, wantInCatalog, catalog[name], name)
 					}
 				}
 				assert.Zero(t, byName["square-bare"].Id)

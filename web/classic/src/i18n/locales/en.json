@@ -4629,5 +4629,9 @@
   "语音合成": "Speech synthesis",
   "语音识别": "Speech recognition",
   "未启用TTS": "TTS not enabled",
-  "未启用ASR": "ASR not enabled"
+  "未启用ASR": "ASR not enabled",
+  "名称排序": "Sort by name",
+  "排除生图日志": "Exclude image logs",
+  "模型名称排序": "Sort by model name",
+  "供应商排序": "Sort by vendor"
 }

@@ -105,7 +105,11 @@ const PerformanceSummaryTable = ({ models, loading = false, onOpenDetail, t }) =
           >
             {formatUptimePct(value)}
           </Text>
-          <SuccessRateSparkline values={record.recent_success_rates} />
+          <SuccessRateSparkline
+            values={(record.recent_success_series || []).map(
+              (point) => point.success_rate,
+            )}
+          />
         </div>
       ),
     },

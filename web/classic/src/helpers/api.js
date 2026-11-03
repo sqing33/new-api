@@ -211,13 +211,17 @@ export const processModelsData = (data, currentModel) => {
 
 // 处理分组数据
 export const processGroupsData = (data, userGroup) => {
-  let groupOptions = Object.entries(data).map(([group, info]) => ({
-    label:
-      info.desc.length > 20 ? info.desc.substring(0, 20) + '...' : info.desc,
-    value: group,
-    ratio: info.ratio,
-    fullLabel: info.desc,
-  }));
+  let groupOptions = Object.entries(data).map(([group, info]) => {
+    // 描述可能为空或重复，而 Semi 的选中态以 label 为键，
+    // 因此回退到分组名，避免多个选项被判为同时选中
+    const desc = info.desc || group;
+    return {
+      label: desc.length > 20 ? desc.substring(0, 20) + '...' : desc,
+      value: group,
+      ratio: info.ratio,
+      fullLabel: desc,
+    };
+  });
 
   if (groupOptions.length === 0) {
     groupOptions = [

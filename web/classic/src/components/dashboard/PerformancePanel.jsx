@@ -157,21 +157,22 @@ const PerformancePanel = ({ CARD_PROPS, t }) => {
     {
       title: t('成功率'),
       dataIndex: 'success_rate',
-      render: (value, record) => (
-        <div className='flex items-center gap-2'>
-          <SuccessRateDot value={value} />
-          <Tooltip
-            content={(record.recent_success_rates || [])
-              .map((v) => `${v}%`)
-              .join(' → ')}
-            showArrow
-          >
-            <span className='inline-flex'>
-              <SuccessRateSparkline values={record.recent_success_rates} />
-            </span>
-          </Tooltip>
-        </div>
-      ),
+      render: (value, record) => {
+        // 后端返回 [{ts, success_rate}]，这里取出成功率序列用于迷你趋势线
+        const recentRates = (record.recent_success_series || []).map(
+          (point) => point.success_rate,
+        );
+        return (
+          <div className='flex items-center gap-2'>
+            <SuccessRateDot value={value} />
+            <Tooltip content={recentRates.map((v) => `${v}%`).join(' → ')} showArrow>
+              <span className='inline-flex'>
+                <SuccessRateSparkline values={recentRates} />
+              </span>
+            </Tooltip>
+          </div>
+        );
+      },
     },
   ];
 

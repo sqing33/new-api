@@ -42,6 +42,10 @@ const ModelsActions = ({
   compactMode,
   setCompactMode,
   setShowColumnSelector,
+  nameSort,
+  setNameSort,
+  vendorSort,
+  setVendorSort,
   t,
 }) => {
   // Modal states
@@ -186,6 +190,26 @@ const ModelsActions = ({
           onClick={() => setShowColumnSelector(true)}
         >
           {t('列设置')}
+        </Button>
+
+        <Button
+          type={nameSort ? 'primary' : 'secondary'}
+          theme={nameSort ? 'solid' : 'light'}
+          className='flex-1 md:flex-initial'
+          size='small'
+          onClick={() => setNameSort(!nameSort)}
+        >
+          {t('模型名称排序')}
+        </Button>
+
+        <Button
+          type={vendorSort ? 'primary' : 'secondary'}
+          theme={vendorSort ? 'solid' : 'light'}
+          className='flex-1 md:flex-initial'
+          size='small'
+          onClick={() => setVendorSort(!vendorSort)}
+        >
+          {t('供应商排序')}
         </Button>
       </div>
 

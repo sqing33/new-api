@@ -44,7 +44,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     token_name: '',
     model_name: '',
     start_timestamp: getInitialTimestamp(),
-    end_timestamp: timestamp2string(new Date().getTime() / 1000 + 3600),
+    end_timestamp: timestamp2string(new Date().getTime() / 1000),
     channel: '',
     data_export_default_time: '',
   });
@@ -109,12 +109,12 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     const { start_timestamp, end_timestamp } = inputs;
     const timeDiff =
       (Date.parse(end_timestamp) - Date.parse(start_timestamp)) / 60000;
-    const avgRPM = isNaN(times / timeDiff)
-      ? '0'
-      : (times / timeDiff).toFixed(3);
-    const avgTPM = isNaN(consumeTokens / timeDiff)
-      ? '0'
-      : (consumeTokens / timeDiff).toFixed(3);
+    // 区间非法或为零时不做除法，否则会渲染出 Infinity / NaN
+    if (!Number.isFinite(timeDiff) || timeDiff <= 0) {
+      return { avgRPM: '0', avgTPM: '0', timeDiff: 0 };
+    }
+    const avgRPM = (times / timeDiff).toFixed(3);
+    const avgTPM = (consumeTokens / timeDiff).toFixed(3);
 
     return { avgRPM, avgTPM, timeDiff };
   }, [times, consumeTokens, inputs.start_timestamp, inputs.end_timestamp]);

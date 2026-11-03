@@ -43,12 +43,14 @@ import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
 import ParamOverrideEntry from '../../components/table/usage-logs/components/ParamOverrideEntry';
 
+// 「排除生图日志」开关的持久化键；按角色分槽，避免管理员与普通用户互相影响
+const EXCLUDE_IMAGE_MODELS_KEY = 'logs-exclude-image-models';
+
 export const useLogsData = ({
   imageOnly = false,
   imageModelOptions = [],
   enabled = true,
-} = {}) => {
-  const { t } = useTranslation();
+} = {}) => {  const { t } = useTranslation();
 
   // Define column keys for selection
   const COLUMN_KEYS = {
@@ -79,6 +81,14 @@ export const useLogsData = ({
   const [logCount, setLogCount] = useState(0);
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
   const [logType, setLogType] = useState(imageOnly ? 2 : 0);
+  // 通用日志页可排除生图模型，名单与 /image-logs 保持一致（后端复用同一份配置）
+  const [excludeImageModels, setExcludeImageModelsState] = useState(
+    () => localStorage.getItem(EXCLUDE_IMAGE_MODELS_KEY) === 'true',
+  );
+  const setExcludeImageModels = (value) => {
+    localStorage.setItem(EXCLUDE_IMAGE_MODELS_KEY, value + '');
+    setExcludeImageModelsState(value);
+  };
   const imageModelOptionsKey = imageModelOptions.join('|');
 
   // User and admin
@@ -112,7 +122,7 @@ export const useLogsData = ({
     request_id: '',
     dateRange: [
       timestamp2string(getTodayStartTimestamp()),
-      timestamp2string(now.getTime() / 1000 + 3600),
+      timestamp2string(now.getTime() / 1000),
     ],
     logType: imageOnly ? '2' : '0',
   };
@@ -270,7 +280,7 @@ export const useLogsData = ({
     const formValues = formApi ? formApi.getValues() : {};
 
     let start_timestamp = timestamp2string(getTodayStartTimestamp());
-    let end_timestamp = timestamp2string(now.getTime() / 1000 + 3600);
+    let end_timestamp = timestamp2string(now.getTime() / 1000);
 
     if (
       formValues.dateRange &&
@@ -340,6 +350,8 @@ export const useLogsData = ({
       model_name: Array.isArray(model_name) ? '' : model_name,
       model_names: Array.isArray(model_name) ? model_name : [],
       image_only: imageOnly ? 'true' : '',
+      exclude_image_models:
+        !imageOnly && excludeImageModels ? 'true' : '',
       start_timestamp: localStartTimestamp,
       end_timestamp: localEndTimestamp,
       group,
@@ -374,6 +386,8 @@ export const useLogsData = ({
       model_name: Array.isArray(model_name) ? '' : model_name,
       model_names: Array.isArray(model_name) ? model_name : [],
       image_only: imageOnly ? 'true' : '',
+      exclude_image_models:
+        !imageOnly && excludeImageModels ? 'true' : '',
       start_timestamp: localStartTimestamp,
       end_timestamp: localEndTimestamp,
       channel,
@@ -875,6 +889,8 @@ export const useLogsData = ({
         model_name: Array.isArray(model_name) ? '' : model_name,
         model_names: Array.isArray(model_name) ? model_name : [],
         image_only: imageOnly ? 'true' : '',
+        exclude_image_models:
+          !imageOnly && excludeImageModels ? 'true' : '',
         start_timestamp: localStartTimestamp,
         end_timestamp: localEndTimestamp,
         channel,
@@ -890,6 +906,8 @@ export const useLogsData = ({
         model_name: Array.isArray(model_name) ? '' : model_name,
         model_names: Array.isArray(model_name) ? model_name : [],
         image_only: imageOnly ? 'true' : '',
+        exclude_image_models:
+          !imageOnly && excludeImageModels ? 'true' : '',
         start_timestamp: localStartTimestamp,
         end_timestamp: localEndTimestamp,
         group,
@@ -997,6 +1015,7 @@ export const useLogsData = ({
     logCount,
     pageSize,
     logType,
+    excludeImageModels,
     stat,
     isAdminUser,
     groupOptions,
@@ -1050,6 +1069,7 @@ export const useLogsData = ({
     setLogsFormat,
     hasExpandableRows,
     setLogType,
+    setExcludeImageModels,
     openParamOverrideModal,
 
     // Translation

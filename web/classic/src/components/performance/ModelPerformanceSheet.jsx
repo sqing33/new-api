@@ -77,6 +77,9 @@ const ModelPerformanceSheet = ({
     for (const group of groups) {
       for (const point of group.series || []) {
         points.push({
+          // 保留原始时间戳用于排序：X 轴是类目轴，类目顺序取数据首次出现顺序，
+          // 而这里是按分组逐段拼接的，不排序会让后一个分组的时间轴从左侧重新开始
+          ts: point.ts,
           // X 轴数据直接预处理为可读时间(该版本对轴 formatMethod 不生效)
           time: dayjs(point.ts * 1000).format('MM-DD HH:mm'),
           group: group.group,
@@ -85,6 +88,8 @@ const ModelPerformanceSheet = ({
       }
     }
     if (points.length === 0) return null;
+    // 与 useDashboardCharts 里其他时间轴图表一致，构造完成后按时间全局升序
+    points.sort((a, b) => a.ts - b.ts);
     return {
       type: 'line',
       data: [{ id: 'modelTrendData', values: points }],

@@ -36,6 +36,9 @@ import {
   encodeChannelConnectionString,
 } from '../../helpers/token';
 
+// 令牌页使用独立的分页存储键，避免与 /channel、/user 共用的 page-size 互相串扰
+const TOKEN_PAGE_SIZE_KEY = 'token-page-size';
+
 export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const { t } = useTranslation();
 
@@ -354,6 +357,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   };
 
   const handlePageSizeChange = async (size) => {
+    localStorage.setItem(TOKEN_PAGE_SIZE_KEY, size + '');
     setPageSize(size);
     if (searchMode) {
       await searchTokens(1, size);
@@ -443,7 +447,11 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
 
   // Initialize data
   useEffect(() => {
-    loadTokens(1)
+    // 首个请求直接用回读的 pageSize，避免后端按默认值回传 page_size 把状态打回去
+    const localPageSize =
+      parseInt(localStorage.getItem(TOKEN_PAGE_SIZE_KEY)) || ITEMS_PER_PAGE;
+    setPageSize(localPageSize);
+    loadTokens(1, localPageSize)
       .then()
       .catch((reason) => {
         showError(reason);
@@ -459,7 +467,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
         }
       })
       .catch(() => {});
-  }, [pageSize]);
+  }, []);
 
   return {
     // Basic state

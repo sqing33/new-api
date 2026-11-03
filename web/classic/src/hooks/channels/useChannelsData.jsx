@@ -46,6 +46,13 @@ import {
 import { Modal, Button } from '@douyinfe/semi-ui';
 import { openCodexUsageModal } from '../../components/table/channels/modals/CodexUsageModal';
 
+// 名称排序使用独立 storage key，避免与其他页面的开关互相串扰
+const CHANNEL_NAME_SORT_KEY = 'channels-name-sort';
+
+// 后端 sort_by 白名单已包含 name，这里只在开启时下发参数
+const buildChannelSortParam = (nameSort) =>
+  nameSort ? '&sort_by=name&sort_order=asc' : '';
+
 export const useChannelsData = () => {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
@@ -54,7 +61,16 @@ export const useChannelsData = () => {
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState(1);
-  const [idSort, setIdSort] = useState(false);
+  const [idSort, setIdSort] = useState(
+    () => localStorage.getItem('id-sort') === 'true',
+  );
+  // 名称排序与 ID 排序互斥；持久化在各自的 storage key 上
+  const [nameSort, setNameSortState] = useState(
+    () => localStorage.getItem(CHANNEL_NAME_SORT_KEY) === 'true',
+  );
+  // 请求构造函数通过位置参数传递排序，这里用 ref 让 URL 始终读到最新值
+  const nameSortRef = useRef(nameSort);
+  nameSortRef.current = nameSort;
   const [searching, setSearching] = useState(false);
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
   const [channelCount, setChannelCount] = useState(0);
@@ -167,6 +183,8 @@ export const useChannelsData = () => {
   // Initialize from localStorage
   useEffect(() => {
     const localIdSort = localStorage.getItem('id-sort') === 'true';
+    const localNameSort =
+      localStorage.getItem(CHANNEL_NAME_SORT_KEY) === 'true';
     const localPageSize =
       parseInt(localStorage.getItem('page-size')) || ITEMS_PER_PAGE;
     const localEnableTagMode =
@@ -176,13 +194,17 @@ export const useChannelsData = () => {
     const localPlanUsageSort =
       localStorage.getItem('plan-usage-sort') === 'true';
 
-    setIdSort(localIdSort);
+    // 名称排序与 ID 排序互斥，持久化状态可能不一致时以名称排序为准
+    const effectiveIdSort = localNameSort ? false : localIdSort;
+
+    setIdSort(effectiveIdSort);
+    setNameSortState(localNameSort);
     setPageSize(localPageSize);
     setEnableTagMode(localEnableTagMode);
     setEnableBatchDelete(localEnableBatchDelete);
     setPlanUsageSort(localPlanUsageSort);
 
-    loadChannels(1, localPageSize, localIdSort, localEnableTagMode)
+    loadChannels(1, localPageSize, effectiveIdSort, localEnableTagMode)
       .then()
       .catch((reason) => {
         showError(reason);
@@ -341,6 +363,18 @@ export const useChannelsData = () => {
     };
   };
 
+  // 名称排序与 ID 排序互斥：开启一方时关闭另一方，并同步各自的持久化状态
+  const setNameSort = (value) => {
+    localStorage.setItem(CHANNEL_NAME_SORT_KEY, value + '');
+    setNameSortState(value);
+    if (value) {
+      localStorage.setItem('id-sort', 'false');
+      setIdSort(false);
+    }
+  };
+
+  const toggleNameSort = () => setNameSort(!nameSort);
+
   // Load channels
   const loadChannels = async (
     page,
@@ -371,8 +405,9 @@ export const useChannelsData = () => {
     setLoading(true);
     const typeParam = typeKey !== 'all' ? `&type=${typeKey}` : '';
     const statusParam = statusF !== 'all' ? `&status=${statusF}` : '';
+    const sortParam = buildChannelSortParam(nameSortRef.current);
     const res = await API.get(
-      `/api/channel/?p=${page}&page_size=${pageSize}&id_sort=${idSort}&tag_mode=${enableTagMode}${typeParam}${statusParam}`,
+      `/api/channel/?p=${page}&page_size=${pageSize}&id_sort=${idSort && !nameSortRef.current}&tag_mode=${enableTagMode}${typeParam}${statusParam}${sortParam}`,
     );
 
     if (res === undefined || reqId !== requestCounter.current) {
@@ -423,8 +458,9 @@ export const useChannelsData = () => {
 
       const typeParam = typeKey !== 'all' ? `&type=${typeKey}` : '';
       const statusParam = statusF !== 'all' ? `&status=${statusF}` : '';
+      const sortParam = buildChannelSortParam(nameSortRef.current);
       const res = await API.get(
-        `/api/channel/search?keyword=${searchKeyword}&group=${searchGroup}&model=${searchModel}&id_sort=${sortFlag}&tag_mode=${enableTagMode}&p=${page}&page_size=${pageSz}${typeParam}${statusParam}`,
+        `/api/channel/search?keyword=${searchKeyword}&group=${searchGroup}&model=${searchModel}&id_sort=${sortFlag && !nameSortRef.current}&tag_mode=${enableTagMode}&p=${page}&page_size=${pageSz}${typeParam}${statusParam}${sortParam}`,
       );
       const { success, message, data } = res.data;
       if (success) {
@@ -1194,6 +1230,7 @@ export const useChannelsData = () => {
     channelCount,
     groupOptions,
     idSort,
+    nameSort,
     planUsageSort,
     setPlanUsageSort,
     enableTagMode,
@@ -1302,6 +1339,8 @@ export const useChannelsData = () => {
 
     // Setters
     setIdSort,
+    setNameSort,
+    toggleNameSort,
     setEnableTagMode,
     setEnableBatchDelete,
     setStatusFilter,

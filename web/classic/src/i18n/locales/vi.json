@@ -5012,5 +5012,9 @@
   "语音合成": "Tổng hợp giọng nói",
   "语音识别": "Nhận dạng giọng nói",
   "未启用TTS": "Chưa bật TTS",
-  "未启用ASR": "Chưa bật ASR"
+  "未启用ASR": "Chưa bật ASR",
+  "名称排序": "Sắp xếp theo tên",
+  "排除生图日志": "Loại trừ nhật ký tạo ảnh",
+  "模型名称排序": "Sắp xếp theo tên mô hình",
+  "供应商排序": "Sắp xếp theo nhà cung cấp"
 }

@@ -79,7 +79,8 @@ const EditTokenModal = (props) => {
     model_limits_enabled: false,
     model_limits: [],
     allow_ips: '',
-    group: '',
+    // 留空表示跟随用户分组；用 undefined 而非空串，避免 Semi 生成 label 为空的幽灵选中项
+    group: undefined,
     cross_group_retry: false,
     tokenCount: 1,
   });
@@ -138,7 +139,9 @@ const EditTokenModal = (props) => {
     const { success, message, data } = res.data;
     if (success) {
       let localGroupOptions = Object.entries(data).map(([group, info]) => ({
-        label: info.desc,
+        // 描述可能为空或重复，而 Semi 的选中态以 label 为键，
+        // 因此回退到分组名，避免多个选项被判为同时选中
+        label: info.desc || group,
         value: group,
         ratio: info.ratio,
       }));
