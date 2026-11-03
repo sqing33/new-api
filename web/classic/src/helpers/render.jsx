@@ -858,6 +858,28 @@ export function renderGroup(group) {
   );
 }
 
+export function renderConcurrency(count) {
+  const value = Number(count) || 0;
+  if (value <= 0) {
+    return (
+      <Tag color='grey' shape='circle'>
+        0
+      </Tag>
+    );
+  }
+  let color = 'green';
+  if (value >= 50) {
+    color = 'red';
+  } else if (value >= 10) {
+    color = 'orange';
+  }
+  return (
+    <Tag color={color} shape='circle'>
+      {value}
+    </Tag>
+  );
+}
+
 export function renderRatio(ratio) {
   let color = 'green';
   if (ratio > 5) {

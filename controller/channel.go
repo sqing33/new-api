@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/concurrency"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
@@ -70,6 +71,27 @@ func clearChannelInfo(channel *model.Channel) {
 	if channel.ChannelInfo.IsMultiKey {
 		channel.ChannelInfo.MultiKeyDisabledReason = nil
 		channel.ChannelInfo.MultiKeyDisabledTime = nil
+	}
+}
+
+// attachChannelConcurrency fills in the live in-flight request count for each
+// listed channel. It is best effort: a Redis outage leaves every count at zero
+// rather than failing the list.
+func attachChannelConcurrency(channels []*model.Channel) {
+	if len(channels) == 0 {
+		return
+	}
+	ids := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		if channel != nil {
+			ids = append(ids, channel.Id)
+		}
+	}
+	counts := concurrency.BatchCount(concurrency.DimensionChannel, ids)
+	for _, channel := range channels {
+		if channel != nil {
+			channel.CurrentConcurrency = counts[channel.Id]
+		}
 	}
 }
 
@@ -180,6 +202,7 @@ func GetAllChannels(c *gin.Context) {
 	for _, datum := range channelData {
 		clearChannelInfo(datum)
 	}
+	attachChannelConcurrency(channelData)
 
 	countQuery := buildChannelListQuery(groupFilter, statusFilter, -1)
 	var results []struct {
@@ -387,6 +410,7 @@ func SearchChannels(c *gin.Context) {
 	for _, datum := range pagedData {
 		clearChannelInfo(datum)
 	}
+	attachChannelConcurrency(pagedData)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

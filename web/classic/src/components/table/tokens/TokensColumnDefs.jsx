@@ -36,6 +36,7 @@ import {
 import {
   timestamp2string,
   renderGroup,
+  renderConcurrency,
   renderQuota,
   getModelCategories,
   showError,
@@ -511,6 +512,16 @@ export const getTokensColumns = ({
       dataIndex: 'group',
       key: 'group',
       render: (text, record) => renderGroupColumn(text, record, t, groupRatios),
+    },
+    {
+      title: t('并发'),
+      dataIndex: 'current_concurrency',
+      key: 'current_concurrency',
+      render: (text) => (
+        <Tooltip content={t('当前进行中的请求数（近似值）')}>
+          <div>{renderConcurrency(text)}</div>
+        </Tooltip>
+      ),
     },
     {
       title: t('密钥'),

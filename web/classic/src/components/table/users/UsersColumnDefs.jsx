@@ -31,6 +31,7 @@ import {
 import { IconMore } from '@douyinfe/semi-icons';
 import {
   renderGroup,
+  renderConcurrency,
   renderNumber,
   renderQuota,
   timestamp2string,
@@ -352,6 +353,15 @@ export const getUsersColumns = ({
       render: (text, record, index) => {
         return <div>{renderGroup(text)}</div>;
       },
+    },
+    {
+      title: t('并发'),
+      dataIndex: 'current_concurrency',
+      render: (text) => (
+        <Tooltip content={t('当前进行中的请求数（近似值）')}>
+          <div>{renderConcurrency(text)}</div>
+        </Tooltip>
+      ),
     },
     {
       title: t('角色'),

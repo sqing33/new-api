@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/concurrency"
 	"github.com/QuantumNous/new-api/constant"
 	taskdto "github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
@@ -195,11 +196,34 @@ func Distribute() func(c *gin.Context) {
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
+		trackChannelConcurrency(c)
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)
 		}
 	}
+}
+
+// trackChannelConcurrency records this request as in-flight for its channel,
+// user and token so the admin lists can show live concurrency. It is
+// stats-only: it never rejects or delays the request, and it registers the
+// matching release for when the downstream handler chain finishes.
+//
+// The channel, user and token ids are all resolved before c.Next() runs, so a
+// single call covers every dimension. Release runs on a detached context so a
+// client disconnect cannot cancel the cleanup.
+func trackChannelConcurrency(c *gin.Context) {
+	if !common.RedisEnabled {
+		return
+	}
+	dims := concurrency.Dimensions{
+		ChannelID: common.GetContextKeyInt(c, constant.ContextKeyChannelId),
+		UserID:    common.GetContextKeyInt(c, constant.ContextKeyUserId),
+		TokenID:   common.GetContextKeyInt(c, constant.ContextKeyTokenId),
+	}
+	requestID := concurrency.NewRequestID()
+	concurrency.Track(c.Request.Context(), dims, requestID)
+	defer concurrency.Release(dims, requestID)()
 }
 
 // noAvailableChannelMessage explains a 503 for a task-plugin-claimed model.

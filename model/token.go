@@ -30,6 +30,9 @@ type Token struct {
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	AutoGroups         string         `json:"-" gorm:"type:text"`
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
+	// CurrentConcurrency is the number of in-flight relay requests observed for
+	// this token at list time. It is server-computed and never persisted.
+	CurrentConcurrency int `json:"current_concurrency" gorm:"-:all"`
 }
 
 func (token *Token) GetAutoGroups() ([]string, error) {

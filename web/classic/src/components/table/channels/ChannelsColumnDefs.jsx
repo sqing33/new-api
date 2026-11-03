@@ -32,6 +32,7 @@ import {
 import {
   timestamp2string,
   renderGroup,
+  renderConcurrency,
   renderQuota,
   getChannelIcon,
   renderQuotaWithAmount,
@@ -524,6 +525,16 @@ export const getChannelsColumns = ({
       title: t('响应时间'),
       dataIndex: 'response_time',
       render: (text, record, index) => <div>{renderResponseTime(text, t)}</div>,
+    },
+    {
+      key: COLUMN_KEYS.CONCURRENCY,
+      title: t('并发'),
+      dataIndex: 'current_concurrency',
+      render: (text, record, index) => (
+        <Tooltip content={t('当前进行中的请求数（近似值）')}>
+          <div>{renderConcurrency(text)}</div>
+        </Tooltip>
+      ),
     },
     {
       key: COLUMN_KEYS.BALANCE,

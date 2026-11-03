@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/concurrency"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
@@ -381,12 +382,34 @@ func GetAllUsers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	attachUserConcurrency(users)
 
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(users)
 
 	common.ApiSuccess(c, pageInfo)
 	return
+}
+
+// attachUserConcurrency fills in the live in-flight request count for each
+// listed user. It is best effort: a Redis outage leaves every count at zero
+// rather than failing the list.
+func attachUserConcurrency(users []*model.User) {
+	if len(users) == 0 {
+		return
+	}
+	ids := make([]int, 0, len(users))
+	for _, user := range users {
+		if user != nil {
+			ids = append(ids, user.Id)
+		}
+	}
+	counts := concurrency.BatchCount(concurrency.DimensionUser, ids)
+	for _, user := range users {
+		if user != nil {
+			user.CurrentConcurrency = counts[user.Id]
+		}
+	}
 }
 
 func SearchUsers(c *gin.Context) {
@@ -411,6 +434,7 @@ func SearchUsers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	attachUserConcurrency(users)
 
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(users)

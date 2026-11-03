@@ -4489,7 +4489,9 @@
     "转换结果为空": "La conversion n'a renvoyé aucune expression",
     "序列化旧定价失败": "Échec de la sérialisation de l'ancien tarif",
     "该模型已使用表达式计费": "Ce modèle utilise déjà une expression",
-    "确认后将切换到表达式/阶梯计费，保存后生效；取消不影响当前草稿。": "La confirmation basculera vers la tarification par expression/paliers, effectif après enregistrement ; l'annulation ne modifie pas le brouillon."
+    "确认后将切换到表达式/阶梯计费，保存后生效；取消不影响当前草稿。": "La confirmation basculera vers la tarification par expression/paliers, effectif après enregistrement ; l'annulation ne modifie pas le brouillon.",
+    "并发": "Concurrence",
+    "当前进行中的请求数（近似值）": "Requêtes en cours (valeur approximative)"
   },
   "启用TTS": "Activer TTS",
   "启用ASR": "Activer ASR",

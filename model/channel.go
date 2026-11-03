@@ -58,6 +58,10 @@ type Channel struct {
 
 	// cache info
 	Keys []string `json:"-" gorm:"-"`
+
+	// CurrentConcurrency is the number of in-flight relay requests observed for
+	// this channel at list time. It is server-computed and never persisted.
+	CurrentConcurrency int `json:"current_concurrency" gorm:"-"`
 }
 
 type ChannelInfo struct {

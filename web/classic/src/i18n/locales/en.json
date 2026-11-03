@@ -4618,7 +4618,9 @@
     "转换结果为空": "Conversion returned no expression",
     "序列化旧定价失败": "Failed to serialize legacy pricing",
     "该模型已使用表达式计费": "This model already uses expression billing",
-    "确认后将切换到表达式/阶梯计费，保存后生效；取消不影响当前草稿。": "Confirming switches this model to expression/tiered billing. Takes effect after saving; cancelling leaves the draft unchanged."
+    "确认后将切换到表达式/阶梯计费，保存后生效；取消不影响当前草稿。": "Confirming switches this model to expression/tiered billing. Takes effect after saving; cancelling leaves the draft unchanged.",
+    "并发": "Concurrency",
+    "当前进行中的请求数（近似值）": "In-flight requests (approximate)"
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",

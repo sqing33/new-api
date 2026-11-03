@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/concurrency"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
@@ -70,11 +71,33 @@ func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
 }
 
 func buildMaskedTokenResponses(tokens []*model.Token) []*tokenResponse {
+	attachTokenConcurrency(tokens)
 	maskedTokens := make([]*tokenResponse, 0, len(tokens))
 	for _, token := range tokens {
 		maskedTokens = append(maskedTokens, buildMaskedTokenResponse(token))
 	}
 	return maskedTokens
+}
+
+// attachTokenConcurrency fills in the live in-flight request count for each
+// listed token. It is best effort: a Redis outage leaves every count at zero
+// rather than failing the list.
+func attachTokenConcurrency(tokens []*model.Token) {
+	if len(tokens) == 0 {
+		return
+	}
+	ids := make([]int, 0, len(tokens))
+	for _, token := range tokens {
+		if token != nil {
+			ids = append(ids, token.Id)
+		}
+	}
+	counts := concurrency.BatchCount(concurrency.DimensionToken, ids)
+	for _, token := range tokens {
+		if token != nil {
+			token.CurrentConcurrency = counts[token.Id]
+		}
+	}
 }
 
 func getTokenRequestUserGroup(c *gin.Context) (string, error) {
