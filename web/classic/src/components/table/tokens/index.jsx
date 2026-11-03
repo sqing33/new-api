@@ -39,6 +39,7 @@ import TokensFilters from './TokensFilters';
 import TokensDescription from './TokensDescription';
 import EditTokenModal from './modals/EditTokenModal';
 import CCSwitchModal from './modals/CCSwitchModal';
+import ColumnSelectorModal from './modals/ColumnSelectorModal';
 import { useTokensData } from '../../../hooks/tokens/useTokensData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -359,6 +360,7 @@ function TokensPage() {
     setShowEdit,
     batchCopyTokens,
     batchDeleteTokens,
+    setShowColumnSelector,
 
     // Filters state
     formInitValues,
@@ -384,6 +386,8 @@ function TokensPage() {
         handleClose={closeEdit}
       />
 
+      <ColumnSelectorModal {...tokensData} t={t} />
+
       <CCSwitchModal
         visible={ccSwitchVisible}
         onClose={() => setCCSwitchVisible(false)}
@@ -408,6 +412,7 @@ function TokensPage() {
               setShowEdit={setShowEdit}
               batchCopyTokens={batchCopyTokens}
               batchDeleteTokens={batchDeleteTokens}
+              setShowColumnSelector={setShowColumnSelector}
               t={t}
             />
 

@@ -296,35 +296,16 @@ const ChannelsActions = ({
             />
           </div>
 
-          <Button
-            size='small'
-            type={nameSort ? 'primary' : 'tertiary'}
-            theme={nameSort ? 'solid' : 'borderless'}
-            onClick={() => {
-              const next = !nameSort;
-              setNameSort(next);
-              const { searchKeyword, searchGroup, searchModel } =
-                getFormValues();
-              if (
-                searchKeyword === '' &&
-                searchGroup === '' &&
-                searchModel === ''
-              ) {
-                loadChannels(activePage, pageSize, idSort && !next, enableTagMode);
-              } else {
-                searchChannels(
-                  enableTagMode,
-                  activeTypeKey,
-                  statusFilter,
-                  activePage,
-                  pageSize,
-                  idSort && !next,
-                );
-              }
-            }}
-          >
-            {t('名称排序')}
-          </Button>
+          <div className='flex items-center justify-between w-full md:w-auto'>
+            <Typography.Text strong className='mr-2'>
+              {t('名称排序')}
+            </Typography.Text>
+            <Switch
+              size='small'
+              checked={nameSort}
+              onChange={(v) => setNameSort(v)}
+            />
+          </div>
 
           <div className='flex items-center justify-between w-full md:w-auto'>
             <Typography.Text strong className='mr-2'>

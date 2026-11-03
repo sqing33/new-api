@@ -50,6 +50,7 @@ const TokensTable = (tokensData) => {
     setShowEdit,
     refresh,
     groupRatios,
+    visibleColumns,
     t,
   } = tokensData;
 
@@ -86,18 +87,20 @@ const TokensTable = (tokensData) => {
     groupRatios,
   ]);
 
-  // Handle compact mode by removing fixed positioning
+  // 先按列设置过滤，再处理紧凑模式下的固定列
   const tableColumns = useMemo(() => {
-    return compactMode
-      ? columns.map((col) => {
-          if (col.dataIndex === 'operate') {
-            const { fixed, ...rest } = col;
-            return rest;
-          }
-          return col;
-        })
-      : columns;
-  }, [compactMode, columns]);
+    const visible = columns.filter(
+      (col) => !col.key || visibleColumns[col.key] !== false,
+    );
+    if (!compactMode) return visible;
+    return visible.map((col) => {
+      if (col.dataIndex === 'operate') {
+        const { fixed, ...rest } = col;
+        return rest;
+      }
+      return col;
+    });
+  }, [compactMode, columns, visibleColumns]);
 
   return (
     <CardTable

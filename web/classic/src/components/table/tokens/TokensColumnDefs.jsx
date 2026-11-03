@@ -493,6 +493,7 @@ export const getTokensColumns = ({
     {
       title: t('名称'),
       dataIndex: 'name',
+      key: 'name',
     },
     {
       title: t('状态'),
@@ -530,16 +531,19 @@ export const getTokensColumns = ({
     {
       title: t('可用模型'),
       dataIndex: 'model_limits',
+      key: 'model_limits',
       render: (text, record) => renderModelLimits(text, record, t),
     },
     {
       title: t('IP限制'),
       dataIndex: 'allow_ips',
+      key: 'allow_ips',
       render: (text) => renderAllowIps(text, t),
     },
     {
       title: t('创建时间'),
       dataIndex: 'created_time',
+      key: 'created_time',
       render: (text, record, index) => {
         return <div>{renderTimestamp(text)}</div>;
       },
@@ -547,6 +551,7 @@ export const getTokensColumns = ({
     {
       title: t('最后使用时间'),
       dataIndex: 'accessed_time',
+      key: 'accessed_time',
       render: (text, record, index) => {
         return <div>{text ? renderTimestamp(text) : '-'}</div>;
       },
@@ -554,6 +559,7 @@ export const getTokensColumns = ({
     {
       title: t('过期时间'),
       dataIndex: 'expired_time',
+      key: 'expired_time',
       render: (text, record, index) => {
         return (
           <div>
@@ -565,6 +571,7 @@ export const getTokensColumns = ({
     {
       title: '',
       dataIndex: 'operate',
+      key: 'operate',
       fixed: 'right',
       render: (text, record, index) =>
         renderOperations(

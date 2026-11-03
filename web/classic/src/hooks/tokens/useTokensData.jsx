@@ -39,6 +39,38 @@ import {
 // 令牌页使用独立的分页存储键，避免与 /channel、/user 共用的 page-size 互相串扰
 const TOKEN_PAGE_SIZE_KEY = 'token-page-size';
 
+// 列设置持久化键
+const TOKENS_COLUMNS_STORAGE_KEY = 'tokens-table-columns';
+
+const TOKEN_COLUMN_KEYS = {
+  NAME: 'name',
+  STATUS: 'status',
+  QUOTA_USAGE: 'quota_usage',
+  GROUP: 'group',
+  TOKEN_KEY: 'token_key',
+  MODEL_LIMITS: 'model_limits',
+  ALLOW_IPS: 'allow_ips',
+  CREATED_TIME: 'created_time',
+  ACCESSED_TIME: 'accessed_time',
+  EXPIRED_TIME: 'expired_time',
+  OPERATE: 'operate',
+};
+
+// 默认展示的列；密钥、IP 限制、过期时间等信息量较低，默认隐藏
+const getDefaultTokenColumnVisibility = () => ({
+  [TOKEN_COLUMN_KEYS.NAME]: true,
+  [TOKEN_COLUMN_KEYS.STATUS]: true,
+  [TOKEN_COLUMN_KEYS.QUOTA_USAGE]: true,
+  [TOKEN_COLUMN_KEYS.GROUP]: true,
+  [TOKEN_COLUMN_KEYS.TOKEN_KEY]: true,
+  [TOKEN_COLUMN_KEYS.MODEL_LIMITS]: false,
+  [TOKEN_COLUMN_KEYS.ALLOW_IPS]: false,
+  [TOKEN_COLUMN_KEYS.CREATED_TIME]: true,
+  [TOKEN_COLUMN_KEYS.ACCESSED_TIME]: true,
+  [TOKEN_COLUMN_KEYS.EXPIRED_TIME]: false,
+  [TOKEN_COLUMN_KEYS.OPERATE]: true,
+});
+
 export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const { t } = useTranslation();
 
@@ -51,6 +83,18 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
   const [searching, setSearching] = useState(false);
   const [searchMode, setSearchMode] = useState(false); // 是否处于搜索结果视图
+
+  // Column visibility
+  const [showColumnSelector, setShowColumnSelector] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    const defaults = getDefaultTokenColumnVisibility();
+    try {
+      const saved = localStorage.getItem(TOKENS_COLUMNS_STORAGE_KEY);
+      // 用默认值兜底，新增列在旧存档里缺失时仍能获得默认值
+      if (saved) return { ...defaults, ...JSON.parse(saved) };
+    } catch (_) {}
+    return defaults;
+  });
 
   // Selection state
   const [selectedKeys, setSelectedKeys] = useState([]);
@@ -445,6 +489,35 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     }
   };
 
+  // 持久化列可见性
+  useEffect(() => {
+    if (Object.keys(visibleColumns).length > 0) {
+      localStorage.setItem(
+        TOKENS_COLUMNS_STORAGE_KEY,
+        JSON.stringify(visibleColumns),
+      );
+    }
+  }, [visibleColumns]);
+
+  const handleColumnVisibilityChange = (columnKey, checked) => {
+    // 操作列不允许隐藏，否则用户无法编辑或删除令牌
+    if (columnKey === TOKEN_COLUMN_KEYS.OPERATE) return;
+    setVisibleColumns((prev) => ({ ...prev, [columnKey]: checked }));
+  };
+
+  const handleSelectAllColumns = (checked) => {
+    const next = {};
+    Object.keys(TOKEN_COLUMN_KEYS).forEach((k) => {
+      const key = TOKEN_COLUMN_KEYS[k];
+      next[key] = key === TOKEN_COLUMN_KEYS.OPERATE ? true : checked;
+    });
+    setVisibleColumns(next);
+  };
+
+  const initDefaultColumns = () => {
+    setVisibleColumns(getDefaultTokenColumnVisibility());
+  };
+
   // Initialize data
   useEffect(() => {
     // 首个请求直接用回读的 pageSize，避免后端按默认值回传 page_size 把状态打回去
@@ -477,6 +550,15 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     tokenCount,
     pageSize,
     searching,
+
+    // Column visibility
+    TOKEN_COLUMN_KEYS,
+    showColumnSelector,
+    setShowColumnSelector,
+    visibleColumns,
+    handleColumnVisibilityChange,
+    handleSelectAllColumns,
+    initDefaultColumns,
     groupRatios,
 
     // Selection state

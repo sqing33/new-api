@@ -29,6 +29,7 @@ const TokensActions = ({
   setShowEdit,
   batchCopyTokens,
   batchDeleteTokens,
+  setShowColumnSelector,
   t,
 }) => {
   // Modal states
@@ -92,6 +93,15 @@ const TokensActions = ({
           size='small'
         >
           {t('删除所选令牌')}
+        </Button>
+
+        <Button
+          type='secondary'
+          className='flex-1 md:flex-initial'
+          onClick={() => setShowColumnSelector(true)}
+          size='small'
+        >
+          {t('列设置')}
         </Button>
       </div>
 

@@ -214,6 +214,23 @@ export const useChannelsData = () => {
     fetchGlobalPassThroughEnabled().then();
   }, []);
 
+  // 名称排序变化后重新拉取。必须放在 effect 里而不是 onChange 里直接调用：
+  // setState 是异步的，同一事件循环内 nameSortRef 还是旧值，请求会带上旧排序。
+  const nameSortInitialized = useRef(false);
+  useEffect(() => {
+    if (!nameSortInitialized.current) {
+      nameSortInitialized.current = true;
+      return;
+    }
+    const { searchKeyword, searchGroup, searchModel } = getFormValues();
+    if (searchKeyword === '' && searchGroup === '' && searchModel === '') {
+      loadChannels(1, pageSize, idSort, enableTagMode).then();
+    } else {
+      searchChannels(enableTagMode, activeTypeKey, statusFilter, 1, pageSize, idSort).then();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nameSort]);
+
   // Column visibility management
   const getDefaultColumnVisibility = () => {
     return {
