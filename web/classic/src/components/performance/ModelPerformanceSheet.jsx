@@ -29,7 +29,7 @@ import {
   formatUptimePct,
   getSuccessRateColor,
 } from './format';
-import { renderConcurrency } from '../../helpers';
+import { renderConcurrencyDot } from '../../helpers';
 
 const { Text } = Typography;
 
@@ -187,7 +187,19 @@ const ModelPerformanceSheet = ({
     {
       title: t('并发'),
       dataIndex: 'max_concurrency',
-      render: (value) => renderConcurrency(value ?? 0),
+      render: (value, record) => {
+        const peak = Math.round(value ?? 0);
+        const average = Math.round(record?.avg_concurrency ?? 0);
+        return (
+          <span className='inline-flex items-center gap-1.5'>
+            {renderConcurrencyDot(peak)}
+            <span className='font-mono text-xs tabular-nums whitespace-nowrap'>
+              {peak}
+              <span className='text-[var(--semi-color-text-2)]'> / {average}</span>
+            </span>
+          </span>
+        );
+      },
     },
   ];
 
@@ -248,7 +260,19 @@ const ModelPerformanceSheet = ({
     {
       title: t('并发'),
       dataIndex: 'max_concurrency',
-      render: (value) => renderConcurrency(value ?? 0),
+      render: (value, record) => {
+        const peak = Math.round(value ?? 0);
+        const average = Math.round(record?.avg_concurrency ?? 0);
+        return (
+          <span className='inline-flex items-center gap-1.5'>
+            {renderConcurrencyDot(peak)}
+            <span className='font-mono text-xs tabular-nums whitespace-nowrap'>
+              {peak}
+              <span className='text-[var(--semi-color-text-2)]'> / {average}</span>
+            </span>
+          </span>
+        );
+      },
     },
   ];
 
@@ -302,6 +326,8 @@ const ModelPerformanceSheet = ({
         </Text>
       ),
     },
+    // 令牌维度暂无并发数据：perf_concurrency 只按 model/group/channel 采样，
+    // 没有 token 列，因此这里不加并发列，避免长期显示 0 / 0 造成误导。
   ];
 
   return (

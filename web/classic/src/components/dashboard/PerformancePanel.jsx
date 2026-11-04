@@ -31,7 +31,7 @@ import {
   PERFORMANCE_HOURS_OPTIONS,
   usePerformanceData,
 } from '../../hooks/performance/usePerformanceData';
-import { renderConcurrency } from '../../helpers';
+import { renderConcurrencyDot } from '../../helpers';
 
 const { Text } = Typography;
 
@@ -242,12 +242,25 @@ const PerformancePanel = ({ CARD_PROPS, t }) => {
       dataIndex: 'max_concurrency',
       render: (value, record) => {
         const series = record.recent_concurrency_series || [];
+        // 峰值与均值一并展示：两者差距大说明存在突发流量，只看任一个都会误判。
+        // 圆点按峰值着色，保持与渠道/令牌/用户表格一致的视觉语言。
+        const peak = Math.round(value ?? record.max_concurrency ?? 0);
+        const average = Math.round(record.avg_concurrency ?? 0);
         return (
           <div className='flex items-center gap-2'>
-            {renderConcurrency(value ?? record.max_concurrency ?? 0)}
+            <span className='inline-flex items-center gap-1.5'>
+              {renderConcurrencyDot(peak)}
+              <span className='font-mono text-xs tabular-nums whitespace-nowrap'>
+                {peak}
+                <span className='text-[var(--semi-color-text-2)]'> / {average}</span>
+              </span>
+            </span>
             <Tooltip
               content={series
-                .map((p) => String(p.max_concurrency ?? 0))
+                .map(
+                  (p) =>
+                    `${Math.round(p.max_concurrency ?? 0)} / ${Math.round(p.avg_concurrency ?? 0)}`,
+                )
                 .join(' → ')}
               showArrow
             >
