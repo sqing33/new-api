@@ -2,7 +2,6 @@ package controller
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
@@ -77,8 +76,10 @@ func setupPlaygroundTokenContext(c *gin.Context, relayFormat types.RelayFormat) 
 
 	tempToken := &model.Token{
 		UserId: userId,
-		Name:   fmt.Sprintf("playground-%s", relayInfo.UsingGroup),
-		Group:  relayInfo.UsingGroup,
+		// 操练场的请求没有真实令牌，这里伪造一个仅用于日志与性能指标的归属。
+		// 名称与「清荫」系列入口保持一致；分组信息在日志的分组列已有，不再重复。
+		Name:  "清荫",
+		Group: relayInfo.UsingGroup,
 	}
 	_ = middleware.SetupContextForToken(c, tempToken)
 	return newAPIError == nil

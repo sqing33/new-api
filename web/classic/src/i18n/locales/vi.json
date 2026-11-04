@@ -5020,5 +5020,13 @@
   "供应商排序": "Sắp xếp theo nhà cung cấp",
   "全部生成模型": "Tất cả mô hình tạo sinh",
   "按并发排序": "Sắp xếp theo đồng thời",
-  "错误": "Lỗi"
+  "错误": "Lỗi",
+  "按分组": "Theo nhóm",
+  "按渠道": "Theo kênh",
+  "趋势维度": "Chiều xu hướng",
+  "未知令牌": "Token không xác định",
+  "排序优先级": "Ưu tiên sắp xếp",
+  "当前生效": "Đang áp dụng",
+  "其余已忽略": "các mục khác bị bỏ qua",
+  "拖动调整优先级": "Kéo để sắp xếp lại"
 }

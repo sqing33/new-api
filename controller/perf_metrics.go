@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
@@ -71,11 +72,48 @@ func GetPerfMetrics(c *gin.Context) {
 	if c.GetInt("role") < common.RoleAdminUser {
 		result.Channels = nil
 	}
+	// 令牌名称同理:管理员看全部用户的令牌,普通用户只看自己的。
+	result.Tokens = scopePerfTokenResults(result.Tokens, c.GetInt("role"), c.GetInt("id"))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    result,
 	})
+}
+
+// scopePerfTokenResults 下发令牌维度指标前做权限收敛:
+// 管理员保留全部行并补全真实令牌名;普通用户只保留自己的令牌,
+// 名称为空的历史行统一显示为「未知令牌」。
+func scopePerfTokenResults(tokens []perfmetrics.TokenResult, role int, userId int) []perfmetrics.TokenResult {
+	if len(tokens) == 0 {
+		return tokens
+	}
+
+	ids := make([]int, 0, len(tokens))
+	for _, token := range tokens {
+		if token.TokenId > 0 {
+			ids = append(ids, token.TokenId)
+		}
+	}
+	ownerships, err := model.GetTokenOwnerships(ids)
+	if err != nil {
+		// 查不到归属时不能把别人的令牌名泄露出去:整段令牌视图降级为隐藏。
+		common.SysError("failed to load token ownerships for perf metrics: " + err.Error())
+		return nil
+	}
+
+	scoped := make([]perfmetrics.TokenResult, 0, len(tokens))
+	for _, token := range tokens {
+		ownership, known := ownerships[token.TokenId]
+		if role < common.RoleAdminUser && (!known || ownership.UserId != userId) {
+			continue
+		}
+		if token.TokenName == "" && known {
+			token.TokenName = ownership.Name
+		}
+		scoped = append(scoped, token)
+	}
+	return scoped
 }
 
 func filterActiveGroups(groups []perfmetrics.GroupResult) []perfmetrics.GroupResult {

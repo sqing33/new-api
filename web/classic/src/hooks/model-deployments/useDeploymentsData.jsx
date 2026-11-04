@@ -23,6 +23,9 @@ import { API, showError, showSuccess } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
 
+// 部署页使用独立的分页存储键，避免与 /channel、/log 共用的 page-size 互相串扰
+const DEPLOYMENT_PAGE_SIZE_KEY = 'deployment-page-size';
+
 export const useDeploymentsData = () => {
   const { t } = useTranslation();
   const [compactMode, setCompactMode] = useTableCompactMode('deployments');
@@ -247,6 +250,7 @@ export const useDeploymentsData = () => {
 
   // Handle page size change
   const handlePageSizeChange = (size) => {
+    localStorage.setItem(DEPLOYMENT_PAGE_SIZE_KEY, size + '');
     setPageSize(size);
     setActivePage(1);
     fetchDeployments({
@@ -458,8 +462,14 @@ export const useDeploymentsData = () => {
   });
 
   // Initial load
+  // 挂载时回读每页条数，并把回读值直接传给首次请求；
+  // 只 setState 不传值的话，请求仍会用默认 10 条，被后端回传的 page_size 打回。
   useEffect(() => {
-    loadDeployments();
+    const localPageSize =
+      parseInt(localStorage.getItem(DEPLOYMENT_PAGE_SIZE_KEY)) ||
+      ITEMS_PER_PAGE;
+    setPageSize(localPageSize);
+    loadDeployments(1, localPageSize);
   }, []);
 
   return {

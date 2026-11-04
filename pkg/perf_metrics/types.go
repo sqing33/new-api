@@ -111,11 +111,12 @@ type SummaryAllResult struct {
 }
 
 type bucketKey struct {
-	model    string
-	group    string
-	channel  string
-	tokenId  int
-	bucketTs int64
+	model     string
+	group     string
+	channel   string
+	tokenId   int
+	tokenName string
+	bucketTs  int64
 }
 
 type counters struct {

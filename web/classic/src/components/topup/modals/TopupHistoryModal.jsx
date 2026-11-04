@@ -56,13 +56,20 @@ const PAYMENT_METHOD_MAP = {
   wxpay: '微信',
 };
 
+// 充值记录弹窗使用独立的分页存储键，关闭重开与刷新都保持上次的每页条数
+const TOPUP_HISTORY_PAGE_SIZE_KEY = 'topup-history-page-size';
+const TOPUP_HISTORY_PAGE_SIZE_DEFAULT = 10;
+
 const TopupHistoryModal = ({ visible, onCancel, t }) => {
   const [loading, setLoading] = useState(false);
   const [topups, setTopups] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(TOPUP_HISTORY_PAGE_SIZE_DEFAULT);
   const [keyword, setKeyword] = useState('');
+  // 打开时先回读每页条数再加载：回读完成前不发请求，
+  // 否则会先用默认值发一次、再用持久化值发一次。
+  const [pageSizeReady, setPageSizeReady] = useState(false);
   const isMobile = useIsMobile();
 
   const loadTopups = async (currentPage, currentPageSize) => {
@@ -88,17 +95,34 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
     }
   };
 
+  // 打开时回读每页条数。回读必须先于加载，所以用 pageSizeReady 串起来：
+  // 未就绪时下面的加载 effect 直接跳过，避免先用默认值发一次请求。
   useEffect(() => {
-    if (visible) {
+    if (!visible) {
+      setPageSizeReady(false);
+      return;
+    }
+    const localPageSize =
+      parseInt(localStorage.getItem(TOPUP_HISTORY_PAGE_SIZE_KEY)) ||
+      TOPUP_HISTORY_PAGE_SIZE_DEFAULT;
+    setPageSize(localPageSize);
+    setPage(1);
+    setPageSizeReady(true);
+  }, [visible]);
+
+  useEffect(() => {
+    if (visible && pageSizeReady) {
       loadTopups(page, pageSize);
     }
-  }, [visible, page, pageSize, keyword]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, pageSizeReady, page, pageSize, keyword]);
 
   const handlePageChange = (currentPage) => {
     setPage(currentPage);
   };
 
   const handlePageSizeChange = (currentPageSize) => {
+    localStorage.setItem(TOPUP_HISTORY_PAGE_SIZE_KEY, currentPageSize + '');
     setPageSize(currentPageSize);
     setPage(1);
   };

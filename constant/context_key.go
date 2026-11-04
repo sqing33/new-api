@@ -14,6 +14,7 @@ const (
 	ContextKeyTokenUnlimited         ContextKey = "token_unlimited_quota"
 	ContextKeyTokenKey               ContextKey = "token_key"
 	ContextKeyTokenId                ContextKey = "token_id"
+	ContextKeyTokenName              ContextKey = "token_name"
 	ContextKeyTokenGroup             ContextKey = "token_group"
 	ContextKeyOriginTasks            ContextKey = "origin_tasks"
 	ContextKeyChannelConstraints     ContextKey = "channel_constraints"

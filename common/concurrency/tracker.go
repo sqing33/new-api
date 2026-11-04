@@ -95,11 +95,17 @@ const memberSeparator = "\x1f"
 // member builds the sorted-set member for one in-flight request. Track and
 // Release MUST both go through this function: Release removes by exact member
 // value, so any divergence here would leak slots until the TTL expires.
+//
+// The breakdown carries model, group and token id so the performance sampler can
+// attribute concurrency to a (model, group, token) row. Legacy members written
+// before the token id existed have only three fields; CountByDimension skips
+// them and they expire on their own.
 func (d Dimensions) member(requestID string) string {
-	if d.Model == "" && d.Group == "" {
+	if d.Model == "" && d.Group == "" && d.TokenID <= 0 {
 		return requestID
 	}
-	return requestID + memberSeparator + d.Model + memberSeparator + d.Group
+	return requestID + memberSeparator + d.Model + memberSeparator + d.Group +
+		memberSeparator + strconv.Itoa(d.TokenID)
 }
 
 // keys returns the Redis keys for every populated dimension.
@@ -245,11 +251,11 @@ func Release(dims Dimensions, requestID string) func() {
 }
 
 // CountByDimension breaks the live concurrency of each id down by the
-// "model|group" pair recorded in the sorted-set member. Ids with no live
-// request are absent from the result.
+// "model|group|tokenId" triple recorded in the sorted-set member. Ids with no
+// live request are absent from the result.
 //
-// It returns a map keyed by "model|group" for one id at a time because the
-// caller (the performance sampler) needs the per-id breakdown to attribute
+// It returns a map keyed by "model|group|tokenId" for one id at a time because
+// the caller (the performance sampler) needs the per-id breakdown to attribute
 // concurrency to a channel row. Concurrency is normally in the tens, so
 // reading every member is cheap.
 func CountByDimension(dim Dimension, id int) (map[string]int, error) {
@@ -276,11 +282,11 @@ func CountByDimension(dim Dimension, id int) (map[string]int, error) {
 		return nil, err
 	}
 	for _, member := range members {
-		parts := strings.SplitN(member, memberSeparator, 3)
-		if len(parts) < 3 {
+		parts := strings.SplitN(member, memberSeparator, 4)
+		if len(parts) < 4 {
 			continue
 		}
-		bucket := parts[1] + "|" + parts[2]
+		bucket := parts[1] + "|" + parts[2] + "|" + parts[3]
 		result[bucket]++
 	}
 	return result, nil

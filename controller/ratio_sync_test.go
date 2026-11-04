@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,6 +69,15 @@ func TestRatioConfigExportsEffectiveExpressions(t *testing.T) {
 }
 
 func TestPricingSyncCompleteSourcesAndArrayFormats(t *testing.T) {
+	// httptest.NewServer 绑在 127.0.0.1 的随机端口上，而默认 SSRF 配置拒绝私有 IP
+	// 且只放行 80/443/8080/8443。这里放行回环与全部端口，只为让用例能连上自己的
+	// 测试服务器；生产逻辑不变（拒绝内网 baseURL 正是这个端点的安全前提）。
+	originalFetchSetting := *system_setting.GetFetchSetting()
+	system_setting.GetFetchSetting().EnableSSRFProtection = true
+	system_setting.GetFetchSetting().AllowPrivateIp = true
+	system_setting.GetFetchSetting().AllowedPorts = []string{"1-65535"}
+	t.Cleanup(func() { *system_setting.GetFetchSetting() = originalFetchSetting })
+
 	before := config.GlobalConfig.ExportAllConfigs()
 	oldRatios, oldCompletion := ratio_setting.ModelRatio2JSONString(), ratio_setting.CompletionRatio2JSONString()
 	t.Cleanup(func() {

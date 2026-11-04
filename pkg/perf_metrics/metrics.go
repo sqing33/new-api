@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +21,16 @@ var hotBuckets sync.Map
 // seriesSchema is a stable client cache/schema marker. Do not change it when
 // hiding fields or making response-only privacy hardening changes.
 const seriesSchema = "dbcd0a3c01b55203"
+
+// tokenKeySeparator 分隔令牌聚合键里的 id 与名称。令牌名可能为空或含任意字符，
+// 用不可能出现在名称里的控制字符做分隔，输出时再按第一个分隔符切回两个字段。
+const tokenKeySeparator = "\x00"
+
+func splitTokenKey(key string) (int, string) {
+	idText, name, _ := strings.Cut(key, tokenKeySeparator)
+	id, _ := strconv.Atoi(idText)
+	return id, name
+}
 
 func Init() {
 	go flushLoop()
@@ -72,6 +83,7 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens i
 		Group:        info.UsingGroup,
 		ChannelName:  channelName,
 		TokenId:      info.TokenId,
+		TokenName:    info.TokenName,
 		LatencyMs:    now.Sub(info.StartTime).Milliseconds(),
 		TtftMs:       ttftMs,
 		HasTtft:      hasTtft,
@@ -97,11 +109,12 @@ func Record(sample Sample) {
 	}
 
 	key := bucketKey{
-		model:    sample.Model,
-		group:    sample.Group,
-		channel:  sample.ChannelName,
-		tokenId:  sample.TokenId,
-		bucketTs: bucketStart(time.Now().Unix()),
+		model:     sample.Model,
+		group:     sample.Group,
+		channel:   sample.ChannelName,
+		tokenId:   sample.TokenId,
+		tokenName: sample.TokenName,
+		bucketTs:  bucketStart(time.Now().Unix()),
 	}
 	actual, _ := hotBuckets.LoadOrStore(key, &atomicBucket{})
 	actual.(*atomicBucket).add(sample)
@@ -129,10 +142,12 @@ func Query(params QueryParams) (QueryResult, error) {
 			channel = UnknownChannelName
 		}
 		mergeCounters(merged, bucketKey{
-			model:    row.ModelName,
-			group:    row.Group,
-			channel:  channel,
-			bucketTs: row.BucketTs,
+			model:     row.ModelName,
+			group:     row.Group,
+			channel:   channel,
+			tokenId:   row.TokenId,
+			tokenName: row.TokenName,
+			bucketTs:  row.BucketTs,
 		}, counters{
 			requestCount:   row.RequestCount,
 			successCount:   row.SuccessCount,
@@ -186,6 +201,25 @@ func addConcurrencyAgg(target map[string]map[int64]*concurrencyAgg, name string,
 	item.cnt += row.SampleCount
 }
 
+// addTokenConcurrencyAgg 汇总单个令牌在某个时间桶上的并发采样。
+// 令牌粒度的行按渠道分别落库，读取时要求「该令牌的总并发」，
+// 所以峰值取各渠道峰值之和（同一时刻不同渠道各自有峰值）。
+func addTokenConcurrencyAgg(target map[int]map[int64]*concurrencyAgg, tokenId int, ts int64, row model.PerfConcurrency) {
+	buckets, ok := target[tokenId]
+	if !ok {
+		buckets = map[int64]*concurrencyAgg{}
+		target[tokenId] = buckets
+	}
+	item, ok := buckets[ts]
+	if !ok {
+		item = &concurrencyAgg{}
+		buckets[ts] = item
+	}
+	item.max += row.MaxConcurrency
+	item.sum += row.SumConcurrency
+	item.cnt += row.SampleCount
+}
+
 // concurrencyStats 从聚合结果算出峰值与均值。
 func concurrencyStats(buckets map[int64]*concurrencyAgg) (int, float64) {
 	if len(buckets) == 0 {
@@ -223,9 +257,12 @@ func applyConcurrencySeries(series []BucketPoint, buckets map[int64]*concurrency
 	}
 }
 
-// attachConcurrencyToResult 把并发采样按分组/渠道注入查询结果。
+// attachConcurrencyToResult 把并发采样按分组/渠道/令牌注入查询结果。
 // 并发数据存在独立的 perf_concurrency 表里，与请求聚合的 merged 无关，
 // 因此单独映射一遍，避免改动 buildQueryResult 的聚合路径。
+//
+// 该表同时存两种粒度：channel_name 非空的是渠道行，token_id > 0 的是令牌行。
+// 令牌行跨渠道求和后写入 Tokens，渠道行写入 Groups/Channels，互不干扰。
 func attachConcurrencyToResult(result *QueryResult, startTs int64, endTs int64) {
 	rows, err := model.GetPerfConcurrencies(result.ModelName, "", startTs, endTs)
 	if err != nil || len(rows) == 0 {
@@ -234,7 +271,12 @@ func attachConcurrencyToResult(result *QueryResult, startTs int64, endTs int64) 
 
 	byGroup := map[string]map[int64]*concurrencyAgg{}
 	byChannel := map[string]map[int64]*concurrencyAgg{}
+	byToken := map[int]map[int64]*concurrencyAgg{}
 	for _, row := range rows {
+		if row.TokenId > 0 {
+			addTokenConcurrencyAgg(byToken, row.TokenId, row.BucketTs, row)
+			continue
+		}
 		channel := row.ChannelName
 		if channel == "" {
 			channel = UnknownChannelName
@@ -252,6 +294,11 @@ func attachConcurrencyToResult(result *QueryResult, startTs int64, endTs int64) 
 		buckets := byChannel[result.Channels[i].Channel]
 		result.Channels[i].MaxConcurrency, result.Channels[i].AvgConcurrency = concurrencyStats(buckets)
 		applyConcurrencySeries(result.Channels[i].Series, buckets)
+	}
+	for i := range result.Tokens {
+		buckets := byToken[result.Tokens[i].TokenId]
+		result.Tokens[i].MaxConcurrency, result.Tokens[i].AvgConcurrency = concurrencyStats(buckets)
+		applyConcurrencySeries(result.Tokens[i].Series, buckets)
 	}
 }
 
@@ -463,8 +510,9 @@ func buildQueryResult(modelName string, merged map[bucketKey]counters) QueryResu
 			channelBuckets[key.channel] = map[int64]counters{}
 		}
 		mergeNamedBucket(channelBuckets, key.channel, key.bucketTs, value)
-		// token_id 为 0 表示改动前的历史数据，统一归入「未知令牌」
-		tokenKey := strconv.Itoa(key.tokenId)
+		// token_id 为 0 表示改动前的历史数据，统一归入「未知令牌」。
+		// 令牌可能被改名，所以聚合键要带上名称，否则改名前后的行会分成两行。
+		tokenKey := strconv.Itoa(key.tokenId) + tokenKeySeparator + key.tokenName
 		mergeNamedBucket(tokenBuckets, tokenKey, key.bucketTs, value)
 	}
 
@@ -511,17 +559,21 @@ func buildQueryResult(modelName string, merged map[bucketKey]counters) QueryResu
 		tokenKeys = append(tokenKeys, key)
 	}
 	sort.Slice(tokenKeys, func(i, j int) bool {
-		ni, _ := strconv.Atoi(tokenKeys[i])
-		nj, _ := strconv.Atoi(tokenKeys[j])
-		return ni < nj
+		idLeft, _ := splitTokenKey(tokenKeys[i])
+		idRight, _ := splitTokenKey(tokenKeys[j])
+		if idLeft != idRight {
+			return idLeft < idRight
+		}
+		return tokenKeys[i] < tokenKeys[j]
 	})
 
 	tokenResults := make([]TokenResult, 0, len(tokenKeys))
 	for _, key := range tokenKeys {
 		total, series := aggregateBuckets(tokenBuckets[key])
-		tokenId, _ := strconv.Atoi(key)
+		tokenId, tokenName := splitTokenKey(key)
 		tokenResults = append(tokenResults, TokenResult{
 			TokenId:      tokenId,
+			TokenName:    tokenName,
 			AvgTtftMs:    avg(total.ttftSumMs, total.ttftCount),
 			AvgLatencyMs: avg(total.totalLatencyMs, total.requestCount),
 			SuccessRate:  successRate(total),

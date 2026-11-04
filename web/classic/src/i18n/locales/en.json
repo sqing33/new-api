@@ -4637,5 +4637,13 @@
   "供应商排序": "Sort by vendor",
   "全部生成模型": "All generative models",
   "按并发排序": "Sort by concurrency",
-  "错误": "Error"
+  "错误": "Error",
+  "按分组": "By group",
+  "按渠道": "By channel",
+  "趋势维度": "Trend dimension",
+  "未知令牌": "Unknown token",
+  "排序优先级": "Sort priority",
+  "当前生效": "Active",
+  "其余已忽略": "others ignored",
+  "拖动调整优先级": "Drag to reorder"
 }

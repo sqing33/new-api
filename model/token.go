@@ -597,3 +597,35 @@ func invalidateTokensCache(tokens []Token) error {
 	}
 	return firstErr
 }
+
+// TokenOwnership carries the owner and display name of a token, used to scope
+// and label performance metrics aggregated by token.
+// TokenOwnership 保存令牌的归属与名称，用于按令牌维度过滤和标注性能指标。
+type TokenOwnership struct {
+	Id     int
+	UserId int
+	Name   string
+}
+
+// GetTokenOwnerships loads ownership for the given token ids, including
+// soft-deleted tokens: performance metrics outlive the token itself, and the
+// historical rows still need a name and an owner to be scoped correctly.
+// GetTokenOwnerships 按 id 批量取令牌归属与名称，包含已软删除的令牌——
+// 性能指标的生命周期比令牌长，历史行仍需要一个名称和归属才能正确过滤。
+func GetTokenOwnerships(ids []int) (map[int]TokenOwnership, error) {
+	result := make(map[int]TokenOwnership, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	var tokens []Token
+	if err := DB.Unscoped().
+		Select("id", "user_id", "name").
+		Where("id IN ?", ids).
+		Find(&tokens).Error; err != nil {
+		return nil, err
+	}
+	for _, token := range tokens {
+		result[token.Id] = TokenOwnership{Id: token.Id, UserId: token.UserId, Name: token.Name}
+	}
+	return result, nil
+}

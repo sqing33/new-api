@@ -305,7 +305,7 @@ func TestDimensionMemberRoundTrips(t *testing.T) {
 
 	breakdown, err := CountByDimension(DimensionChannel, dims.ChannelID)
 	require.NoError(t, err)
-	require.Equal(t, 1, breakdown["gpt-test|default"], "member should carry model|group")
+	require.Equal(t, 1, breakdown["gpt-test|default|33"], "member should carry model|group|token")
 
 	// 释放后槽位必须消失：这是 member 一致性的关键断言
 	Release(dims, requestID)()
@@ -313,7 +313,28 @@ func TestDimensionMemberRoundTrips(t *testing.T) {
 	assert.Equal(t, 0, channel, "release should remove the exact member")
 }
 
-// TestCountByDimensionSeparatesModels 验证不同 model/group 落在不同桶里。
+// TestDimensionMemberRoundTripsWithoutToken 覆盖没有令牌维度的请求：
+// member 仍然要带上 token 字段（值为 0），Release 才能按精确值删除。
+func TestDimensionMemberRoundTripsWithoutToken(t *testing.T) {
+	useMiniRedis(t)
+
+	dims := Dimensions{
+		ChannelID: 12, UserID: 23,
+		Model: "gpt-test", Group: "default",
+	}
+	requestID := NewRequestID()
+
+	Track(context.Background(), dims, requestID)
+	breakdown, err := CountByDimension(DimensionChannel, dims.ChannelID)
+	require.NoError(t, err)
+	require.Equal(t, 1, breakdown["gpt-test|default|0"])
+
+	Release(dims, requestID)()
+	channel, _, _ := countAll(t, dims)
+	assert.Equal(t, 0, channel, "release should remove the exact member")
+}
+
+// TestCountByDimensionSeparatesModels 验证不同 model/group/token 落在不同桶里。
 func TestCountByDimensionSeparatesModels(t *testing.T) {
 	useMiniRedis(t)
 
@@ -330,9 +351,15 @@ func TestCountByDimensionSeparatesModels(t *testing.T) {
 		ChannelID: base.ChannelID, UserID: base.UserID, TokenID: base.TokenID,
 		Model: "model-a", Group: "default",
 	}, NewRequestID())
+	// 同一 model/group 但不同令牌必须分开计数，否则令牌维度的并发会串。
+	Track(context.Background(), Dimensions{
+		ChannelID: base.ChannelID, UserID: base.UserID, TokenID: 77,
+		Model: "model-a", Group: "default",
+	}, NewRequestID())
 
 	breakdown, err := CountByDimension(DimensionChannel, base.ChannelID)
 	require.NoError(t, err)
-	assert.Equal(t, 2, breakdown["model-a|default"])
-	assert.Equal(t, 1, breakdown["model-b|vip"])
+	assert.Equal(t, 2, breakdown["model-a|default|66"])
+	assert.Equal(t, 1, breakdown["model-a|default|77"])
+	assert.Equal(t, 1, breakdown["model-b|vip|66"])
 }

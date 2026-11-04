@@ -9,7 +9,7 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 ## Tech Stack
 
 - **Backend**: Go 1.25.1 (see each module’s `go.mod`), Gin web framework, GORM v2 ORM
-- **Frontend**: React 19, TypeScript, Rsbuild 2, TanStack Router/Query/Table, Zustand, Base UI, Tailwind CSS 4
+- **Frontend**: React 18, Vite 5, Semi Design (`@douyinfe/semi-ui`), Tailwind CSS 3, plain JSX (JavaScript, not TypeScript)
 - **Databases**: SQLite, MySQL, PostgreSQL for the primary database (all three must be supported); a separately configured log database also supports ClickHouse
 - **Cache**: Redis (go-redis) + in-memory cache
 - **Auth**: Browser sessions, API tokens and personal access tokens, JWT, WebAuthn/Passkeys, TOTP, OAuth/OIDC; Casbin authorization in `service/authz/`
@@ -21,7 +21,7 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 - The Go gateway handles management APIs, upstream relay, billing, and background tasks across `router/`, `middleware/`, `controller/`, `service/`, `model/`, and `relay/`.
 - `relaykit/` is an independent Go module for protocol DTOs and conversions; transport, authentication, database access, and billing stay in the host.
 - JavaScript task plugins live in `plugins/tasks/`, run through `pkg/jsplugin/`, and integrate with host task polling and settlement.
-- `web/` is the React frontend (see `web/AGENTS.md`); `electron/` is the desktop wrapper.
+- `web/classic/` is the React frontend that actually ships; `web/src/` is an unfinished migration that is not built or served. `electron/` is the desktop wrapper.
 
 ## Internationalization (i18n)
 
@@ -29,12 +29,18 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 - Library: `nicksnyder/go-i18n/v2`
 - Languages: en, zh
 
-### Frontend (`web/src/i18n/`)
+### Frontend (`web/classic/src/i18n/`)
+
+`main.go` embeds `web/classic/dist`, so **`web/classic` is the frontend that actually ships**. `web/src` is an unfinished migration with no `package.json` and is not built or served; do not treat it as the frontend.
+
 - Library: `i18next` + `react-i18next` + `i18next-browser-languagedetector`
-- Languages: en (base), zh (fallback), zh-TW, fr, ru, ja, vi
-- Translation files: `web/src/i18n/locales/{lang}.json` — flat JSON, keys are English source strings
-- Usage: `useTranslation()` hook, call `t('English key')` in components
-- CLI tools: `bun run i18n:sync` (from `web/`)
+- Languages (8 files): `zh`, `zh-CN`, `zh-TW`, `en`, `fr`, `ru`, `ja`, `vi`
+- Translation files: `web/classic/src/i18n/locales/{lang}.json`
+- **Keys are Chinese source strings**, not English. Roughly 96% of existing keys are CJK (e.g. `t('名称排序')`, `t('按并发排序')`); only a small set of pre-existing English keys remain. Match this convention when adding keys — an English key will render in English for every locale and looks inconsistent next to its neighbours.
+- Most keys live under the top-level `"translation"` object; a minority sit at the file root. Either location resolves, so append new keys at the **file root** (what recent additions do) or under `translation` — just keep all 8 files in sync.
+- Usage: `useTranslation()` hook, call `t('中文源串')` in components
+- CLI tools: `bun run i18n:{extract,status,sync,lint}` (from `web/classic/`)
+- Adding a key means editing all 8 files. `bun run i18n:sync` does not fill in translations, so non-Chinese locales need the value supplied by hand.
 
 ## Rules
 
@@ -160,17 +166,16 @@ Inside `relaykit/`, use `kitutil.*` from `relaykit/relayconvert/kitutil/json.go`
 
 ### Frontend Rules
 
-- **Reuse existing UI components first (mandatory):** Before implementing or changing frontend UI, read `web/AGENTS.md` and the project `shadcn-ui` skill, search `web/src/components/` and the relevant feature for existing components, and read matching implementations and call sites. Do not start from custom markup or registry installation without checking the repository first.
-- Prefer the project's shared business components over lower-level UI primitives when they cover the use case. Evaluate existing props, composition, and a compatible extension before introducing a replacement. Importing `Button` or `AlertDialog` does not satisfy this rule if the same behavior is already provided by a shared component such as `CopyButton` or `ConfirmDialog`.
-- New implementations of common UI behavior require a concrete capability gap: identify the existing candidates and explain why reuse, composition, or a compatible extension is unsuitable in the change summary or PR description. Different text, dimensions, colors, or feature location alone do not justify duplication. Feature components may compose shared components with business data and actions. Follow the reuse workflow and component entry points in `web/AGENTS.md`; generic library or registry guidance does not override this project-specific priority.
-- Use `bun` as the preferred package manager and script runner for the frontend (`web/`):
+- **Reuse existing UI components first (mandatory):** Before implementing or changing frontend UI, search `web/classic/src/components/` and the relevant feature for existing components, and read matching implementations and call sites. Do not start from custom markup without checking the repository first. (`web/AGENTS.md` does not exist in this repo; the root `AGENTS.md` is the only conventions file.)
+- Prefer the project's shared business components over lower-level UI primitives when they cover the use case. Evaluate existing props, composition, and a compatible extension before introducing a replacement. Importing `Button` does not satisfy this rule if the same behavior is already provided by a shared component such as `CopyButton`.
+- New implementations of common UI behavior require a concrete capability gap: identify the existing candidates and explain why reuse, composition, or a compatible extension is unsuitable in the change summary or PR description. Different text, dimensions, colors, or feature location alone do not justify duplication. Feature components may compose shared components with business data and actions.
+- Use `bun` as the package manager and script runner for the frontend (`web/classic/`). **Do not use npm/yarn/pnpm here** — they hoist `semi-ui` and `sass` to versions whose combination breaks `vite build`:
   - `bun install` for dependency installation
   - `bun run dev` for development server
   - `bun run build` for production build
   - `bun run i18n:*` for i18n tooling
-- Frontend UI text must support i18n with `i18next`/`react-i18next`. Use flat JSON locale files in `web/src/i18n/locales/{lang}.json`, with English source strings as keys.
-- In React components, use `useTranslation()` and call `t('English key')` for user-facing text.
-- Follow `web/AGENTS.md` for detailed frontend conventions, including TypeScript, component structure, styling, accessibility, testing, and build checks.
+- Frontend UI text must support i18n with `i18next`/`react-i18next`. Locale files live in `web/classic/src/i18n/locales/{lang}.json` (8 languages) and **use Chinese source strings as keys** — see the i18n section above for the exact convention.
+- In React components, use `useTranslation()` and call `t('中文源串')` for user-facing text.
 
 ### Project Governance
 

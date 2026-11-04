@@ -142,11 +142,14 @@ func fetchSingleUpstreamPricing(ctx context.Context, baseURL, endpoint string, c
 	}
 
 	var pricingItems []struct {
-		ModelName            string   `json:"model_name"`
-		QuotaType            int      `json:"quota_type"`
-		ModelRatio           float64  `json:"model_ratio"`
-		ModelPrice           float64  `json:"model_price"`
-		CompletionRatio      float64  `json:"completion_ratio"`
+		ModelName string `json:"model_name"`
+		QuotaType int    `json:"quota_type"`
+		// 价格字段用指针：上游可能整项省略某个字段（例如未定价的模型只给出
+		// model_name），裸 float64 会把「缺失」和「显式 0 元」混为一谈，
+		// 导致未定价模型被当成 0 元定价写进差异。
+		ModelRatio           *float64 `json:"model_ratio"`
+		ModelPrice           *float64 `json:"model_price"`
+		CompletionRatio      *float64 `json:"completion_ratio"`
 		CacheRatio           *float64 `json:"cache_ratio"`
 		CreateCacheRatio     *float64 `json:"create_cache_ratio"`
 		ImageRatio           *float64 `json:"image_ratio"`
@@ -174,15 +177,31 @@ func fetchSingleUpstreamPricing(ctx context.Context, baseURL, endpoint string, c
 		if item.ModelName == "" {
 			continue
 		}
-		if item.BillingMode == billing_setting.BillingModeTieredExpr && strings.TrimSpace(item.BillingExpr) != "" {
+		isTieredExpr := item.BillingMode == billing_setting.BillingModeTieredExpr
+		hasExpression := isTieredExpr && strings.TrimSpace(item.BillingExpr) != ""
+		if hasExpression {
 			billingModeMap[item.ModelName] = billing_setting.BillingModeTieredExpr
 			billingExprMap[item.ModelName] = item.BillingExpr
+		} else if isTieredExpr {
+			// 声明了表达式计费却没给出表达式：这不是一个有效价格，整项丢弃。
+			// 与 map 格式路径一致（effectivePricingSyncData 会剔除表达式为空的
+			// tiered_expr 模型），否则 model_ratio=0 会被当成「0 元定价」的差异。
+			continue
 		}
+		// 声明了 tiered_expr 时数值字段不构成独立价格（与 map 路径一致）；
+		// 按次计费同样只认 model_price。字段缺失即视为该模型没有这项价格。
 		if item.QuotaType == 1 {
-			modelPriceMap[item.ModelName] = item.ModelPrice
-		} else {
-			modelRatioMap[item.ModelName] = item.ModelRatio
-			completionRatioMap[item.ModelName] = item.CompletionRatio
+			if item.ModelPrice != nil {
+				modelPriceMap[item.ModelName] = *item.ModelPrice
+			}
+		} else if !isTieredExpr && item.ModelRatio != nil {
+			modelRatioMap[item.ModelName] = *item.ModelRatio
+			// completion_ratio 缺失时按 0 处理：倍率计费下它是 model_ratio 的
+			// 附属倍率，上游省略等价于不额外计费。
+			completionRatioMap[item.ModelName] = 0
+			if item.CompletionRatio != nil {
+				completionRatioMap[item.ModelName] = *item.CompletionRatio
+			}
 		}
 		if item.CacheRatio != nil {
 			cacheRatioMap[item.ModelName] = *item.CacheRatio
@@ -200,6 +219,32 @@ func fetchSingleUpstreamPricing(ctx context.Context, baseURL, endpoint string, c
 			audioCompletionRatioMap[item.ModelName] = *item.AudioCompletionRatio
 		}
 	}
+
+	// 与 effectivePricingSyncData 的语义对齐：既没有 model_price 也没有
+	// model_ratio 的模型不算「有价」，必须整项剔除，否则它会带着
+	// billing_mode=ratio 出现在差异里，被误判成「本地无价、上游 0 元」。
+	pricedModels := make(map[string]struct{}, len(modelPriceMap)+len(modelRatioMap))
+	for name := range modelPriceMap {
+		pricedModels[name] = struct{}{}
+	}
+	for name := range modelRatioMap {
+		pricedModels[name] = struct{}{}
+	}
+	for name := range billingExprMap {
+		pricedModels[name] = struct{}{}
+	}
+	dropUnpriced := func(m map[string]float64) {
+		for name := range m {
+			if _, ok := pricedModels[name]; !ok {
+				delete(m, name)
+			}
+		}
+	}
+	dropUnpriced(cacheRatioMap)
+	dropUnpriced(createCacheRatioMap)
+	dropUnpriced(imageRatioMap)
+	dropUnpriced(audioRatioMap)
+	dropUnpriced(audioCompletionRatioMap)
 
 	converted := make(map[string]any)
 	if len(modelRatioMap) > 0 {

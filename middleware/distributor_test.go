@@ -307,8 +307,8 @@ func TestTrackChannelConcurrencyCarriesDimensions(t *testing.T) {
 
 	breakdown, err := concurrency.CountByDimension(concurrency.DimensionChannel, 7)
 	require.NoError(t, err)
-	assert.Equal(t, 1, breakdown["gpt-4o|vip"],
-		"member 必须带上 model|group，否则性能看板无法按维度拆分并发")
+	assert.Equal(t, 1, breakdown["gpt-4o|vip|9"],
+		"member 必须带上 model|group|tokenId，否则性能看板无法按维度拆分并发")
 
 	// 清理：释放函数已注册到 context，这里直接调用避免槽位残留
 	ReleaseChannelConcurrency(c)

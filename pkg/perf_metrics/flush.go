@@ -43,6 +43,8 @@ func flushCompletedBuckets() {
 			Group:          k.group,
 			ChannelName:    k.channel,
 			BucketTs:       k.bucketTs,
+			TokenId:        k.tokenId,
+			TokenName:      k.tokenName,
 			RequestCount:   drained.requestCount,
 			SuccessCount:   drained.successCount,
 			TotalLatencyMs: drained.totalLatencyMs,
@@ -53,7 +55,7 @@ func flushCompletedBuckets() {
 		})
 		if err != nil {
 			bucket.addCounters(drained)
-			common.SysError(fmt.Sprintf("failed to flush perf metric bucket model=%s group=%s channel=%s bucket=%d: %s", k.model, k.group, k.channel, k.bucketTs, err.Error()))
+			common.SysError(fmt.Sprintf("failed to flush perf metric bucket model=%s group=%s channel=%s token=%d bucket=%d: %s", k.model, k.group, k.channel, k.tokenId, k.bucketTs, err.Error()))
 			return true
 		}
 

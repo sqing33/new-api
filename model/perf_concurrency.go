@@ -1,27 +1,63 @@
 package model
 
 import (
+	"fmt"
+
+	"github.com/QuantumNous/new-api/common"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-// PerfConcurrency 记录按 (模型, 分组, 渠道, 时间桶) 聚合的并发采样。
+// PerfConcurrency 记录按 (模型, 分组, 渠道/令牌, 时间桶) 聚合的并发采样。
 //
 // 它与 PerfMetric 分开存放：PerfMetric 的数值列在 upsert 时做累加，语义是
 // 「请求完成后的增量聚合」，而并发采样需要保留桶内峰值，累加会算错。
+//
+// 同一张表承担两种粒度：channel_name 非空、token_id 为 0 的行是渠道粒度；
+// token_id 大于 0、channel_name 为空的行是令牌粒度。两者的唯一键不同，
+// 靠 channel_name 与 token_id 不会同时非空来区分。
 type PerfConcurrency struct {
-	Id             int    `json:"id" gorm:"primaryKey"`
-	ModelName      string `json:"model_name" gorm:"size:128;uniqueIndex:idx_perf_conc_bucket,priority:1"`
-	Group          string `json:"group" gorm:"column:group;size:64;uniqueIndex:idx_perf_conc_bucket,priority:2"`
-	ChannelName    string `json:"channel_name" gorm:"column:channel_name;size:255;uniqueIndex:idx_perf_conc_bucket,priority:3"`
-	BucketTs       int64  `json:"bucket_ts" gorm:"uniqueIndex:idx_perf_conc_bucket,priority:4;index:idx_perf_conc_ts"`
-	MaxConcurrency int    `json:"max_concurrency" gorm:"default:0"`
-	SumConcurrency int    `json:"-" gorm:"default:0"`
-	SampleCount    int    `json:"-" gorm:"default:0"`
+	Id          int    `json:"id" gorm:"primaryKey"`
+	ModelName   string `json:"model_name" gorm:"size:128;uniqueIndex:idx_perf_conc_bucket,priority:1"`
+	Group       string `json:"group" gorm:"column:group;size:64;uniqueIndex:idx_perf_conc_bucket,priority:2"`
+	ChannelName string `json:"channel_name" gorm:"column:channel_name;size:255;uniqueIndex:idx_perf_conc_bucket,priority:3"`
+	BucketTs    int64  `json:"bucket_ts" gorm:"uniqueIndex:idx_perf_conc_bucket,priority:4;index:idx_perf_conc_ts"`
+	// TokenId 把并发采样细化到令牌维度。历史行 token_id 为 0，语义是渠道粒度。
+	TokenId        int `json:"token_id" gorm:"default:0;uniqueIndex:idx_perf_conc_bucket,priority:5"`
+	MaxConcurrency int `json:"max_concurrency" gorm:"default:0"`
+	SumConcurrency int `json:"-" gorm:"default:0"`
+	SampleCount    int `json:"-" gorm:"default:0"`
 }
 
 func (PerfConcurrency) TableName() string {
 	return "perf_concurrency"
+}
+
+// perfConcurrencyLegacyUniqueIndexes 列出旧版本的唯一索引名。加入 token_id
+// 之前，唯一键是四列；同名索引 idx_perf_conc_bucket 的列集已变，必须先删掉，
+// 否则 AutoMigrate 在 MySQL/PostgreSQL 上只会新增列而保留旧的唯一约束，
+// 导致同一 (模型, 分组, 渠道, 桶) 下不同令牌的行互相冲突。
+var perfConcurrencyLegacyUniqueIndexes = []string{"idx_perf_conc_bucket"}
+
+func migratePerfConcurrencyUniqueIndex(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("migrate perf concurrency unique index: database is nil")
+	}
+	migrator := db.Migrator()
+	if !migrator.HasTable(&PerfConcurrency{}) {
+		return nil
+	}
+	for _, indexName := range perfConcurrencyLegacyUniqueIndexes {
+		if !migrator.HasIndex(&PerfConcurrency{}, indexName) {
+			continue
+		}
+		common.SysLog(fmt.Sprintf("dropping legacy perf_concurrency unique index %q (%s)", indexName, db.Dialector.Name()))
+		if err := migrator.DropIndex(&PerfConcurrency{}, indexName); err != nil {
+			return fmt.Errorf("drop legacy perf concurrency index %q: %w", indexName, err)
+		}
+	}
+	return nil
 }
 
 // AvgConcurrency 返回桶内采样均值；没有采样时回退到峰值，避免除零。
@@ -43,6 +79,7 @@ func UpsertPerfConcurrency(sample *PerfConcurrency) error {
 			{Name: "group"},
 			{Name: "channel_name"},
 			{Name: "bucket_ts"},
+			{Name: "token_id"},
 		},
 		DoUpdates: clause.Assignments(map[string]any{
 			// MAX(a, b) 是标量函数，各数据库函数名不一致（SQLite/MySQL 用 MAX，

@@ -27,6 +27,15 @@ import {
   Select,
 } from '@douyinfe/semi-ui';
 import CompactModeToggle from '../../common/ui/CompactModeToggle';
+import ChannelSortPriorityPopover from './ChannelSortPriorityPopover';
+
+// 排序维度的展示名。key 与 useChannelsData 里的 sortOrder 元素一一对应。
+const SORT_DIMENSION_ITEMS = {
+  plan_usage: { label: 'Sort by plan usage' },
+  concurrency: { label: '按并发排序' },
+  id: { label: '使用ID排序' },
+  name: { label: '名称排序' },
+};
 
 // 批量操作相关入口暂时隐藏：日常用不到，且占掉了工具栏的横向空间。
 // 需要恢复时把它改回 false 即可，代码与 state 都保留。
@@ -48,14 +57,11 @@ const ChannelsActions = ({
   detectAllUpstreamPricingLoading,
   compactMode,
   setCompactMode,
-  idSort,
-  setIdSort,
-  nameSort,
-  setNameSort,
-  concurrencySort,
-  setConcurrencySort,
-  planUsageSort,
-  setPlanUsageSort,
+  sortOrder,
+  sortEnabled,
+  activeSort,
+  toggleSortDimension,
+  reorderSortDimensions,
   setEnableBatchDelete,
   enableTagMode,
   setEnableTagMode,
@@ -272,78 +278,16 @@ const ChannelsActions = ({
 
         {/* 右侧：设置开关区域 */}
         <div className='flex flex-col md:flex-row items-start md:items-center gap-2 w-full md:w-auto order-1 md:order-2'>
-          <div className='flex items-center justify-between w-full md:w-auto'>
-            <Typography.Text strong className='mr-2'>
-              {t('使用ID排序')}
-            </Typography.Text>
-            <Switch
-              size='small'
-              checked={idSort}
-              onChange={(v) => {
-                localStorage.setItem('id-sort', v + '');
-                setIdSort(v);
-                // 与名称排序、并发排序互斥
-                if (v) {
-                  setNameSort(false);
-                  setConcurrencySort(false);
-                }
-                const { searchKeyword, searchGroup, searchModel } =
-                  getFormValues();
-                if (
-                  searchKeyword === '' &&
-                  searchGroup === '' &&
-                  searchModel === ''
-                ) {
-                  loadChannels(activePage, pageSize, v, enableTagMode);
-                } else {
-                  searchChannels(
-                    enableTagMode,
-                    activeTypeKey,
-                    statusFilter,
-                    activePage,
-                    pageSize,
-                    v,
-                  );
-                }
-              }}
-            />
-          </div>
-
-          <div className='flex items-center justify-between w-full md:w-auto'>
-            <Typography.Text strong className='mr-2'>
-              {t('按并发排序')}
-            </Typography.Text>
-            <Switch
-              size='small'
-              checked={concurrencySort}
-              onChange={(v) => setConcurrencySort(v)}
-            />
-          </div>
-
-          <div className='flex items-center justify-between w-full md:w-auto'>
-            <Typography.Text strong className='mr-2'>
-              {t('名称排序')}
-            </Typography.Text>
-            <Switch
-              size='small'
-              checked={nameSort}
-              onChange={(v) => setNameSort(v)}
-            />
-          </div>
-
-          <div className='flex items-center justify-between w-full md:w-auto'>
-            <Typography.Text strong className='mr-2'>
-              {t('Sort by plan usage')}
-            </Typography.Text>
-            <Switch
-              size='small'
-              checked={planUsageSort}
-              onChange={(v) => {
-                localStorage.setItem('plan-usage-sort', v + '');
-                setPlanUsageSort(v);
-              }}
-            />
-          </div>
+          {/* 四个排序维度收进一个可拖拽的优先级弹层 */}
+          <ChannelSortPriorityPopover
+            order={sortOrder}
+            items={SORT_DIMENSION_ITEMS}
+            enabled={sortEnabled}
+            activeKey={activeSort}
+            onToggle={toggleSortDimension}
+            onReorder={reorderSortDimensions}
+            t={t}
+          />
 
           {!HIDE_BATCH_ACTIONS && (
           <div className='flex items-center justify-between w-full md:w-auto'>

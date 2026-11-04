@@ -4508,5 +4508,13 @@
   "供应商排序": "Trier par fournisseur",
   "全部生成模型": "Tous les modèles génératifs",
   "按并发排序": "Trier par concurrence",
-  "错误": "Erreur"
+  "错误": "Erreur",
+  "按分组": "Par groupe",
+  "按渠道": "Par canal",
+  "趋势维度": "Dimension de tendance",
+  "未知令牌": "Jeton inconnu",
+  "排序优先级": "Priorité de tri",
+  "当前生效": "Actif",
+  "其余已忽略": "les autres sont ignorés",
+  "拖动调整优先级": "Glisser pour réordonner"
 }

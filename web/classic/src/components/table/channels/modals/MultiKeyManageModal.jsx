@@ -69,6 +69,10 @@ const channelPresetBound = (channel) => {
   return presetId !== '' && presetId !== 'disabled';
 };
 
+// 多密钥弹窗使用独立的分页存储键，关闭重开与刷新都保持上次的每页条数
+const MULTI_KEY_PAGE_SIZE_KEY = 'channel-multi-key-page-size';
+const MULTI_KEY_PAGE_SIZE_DEFAULT = 10;
+
 const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
@@ -80,7 +84,7 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(MULTI_KEY_PAGE_SIZE_DEFAULT);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
@@ -121,7 +125,8 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
         setKeyStatusList(data.keys || []);
         setTotal(data.total || 0);
         setCurrentPage(data.page || 1);
-        setPageSize(data.page_size || 10);
+        // 不要把后端回传的 page_size 写回 state：它只是回显请求参数，
+        // 缺失时还会回落成默认值，会把用户选的每页条数打回默认。
         setTotalPages(data.total_pages || 0);
 
         // Update statistics (these are always the overall statistics)
@@ -346,6 +351,7 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
 
   // Handle page size change
   const handlePageSizeChange = (size) => {
+    localStorage.setItem(MULTI_KEY_PAGE_SIZE_KEY, size + '');
     setPageSize(size);
     setCurrentPage(1); // Reset to first page
     loadKeyStatus(1, size);
@@ -359,10 +365,16 @@ const MultiKeyManageModal = ({ visible, onCancel, channel, onRefresh }) => {
   };
 
   // Effect to load data when modal opens
+  // 打开时回读每页条数，并把回读值直接传给请求；
+  // 只 setState 不传值的话，请求仍会用默认 10 条。
   useEffect(() => {
     if (visible && channel?.id) {
+      const localPageSize =
+        parseInt(localStorage.getItem(MULTI_KEY_PAGE_SIZE_KEY)) ||
+        MULTI_KEY_PAGE_SIZE_DEFAULT;
+      setPageSize(localPageSize);
       setCurrentPage(1); // Reset to first page when opening
-      loadKeyStatus(1, pageSize);
+      loadKeyStatus(1, localPageSize);
     }
   }, [visible, channel?.id]);
 

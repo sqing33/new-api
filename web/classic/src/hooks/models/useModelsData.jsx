@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect, useMemo, useContext } from 'react';
+import { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { API, showError, showSuccess } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
@@ -54,6 +54,8 @@ const MODELS_COLUMNS_STORAGE_KEY = 'models-table-columns-admin';
 // 排序开关使用各自的 storage key，避免与其他页面互相串扰
 const MODEL_NAME_SORT_KEY = 'models-name-sort';
 const MODEL_VENDOR_SORT_KEY = 'models-vendor-sort';
+// 模型页使用独立的分页存储键，避免与 /channel、/log 共用的 page-size 互相串扰
+const MODEL_PAGE_SIZE_KEY = 'models-page-size';
 
 // 后端一次只接受一个排序字段，供应商排序优先（它更粗粒度）
 const buildModelSortParam = (nameSort, vendorSort) => {
@@ -467,19 +469,33 @@ export const useModelsData = () => {
     loadModels(page, pageSize, activeVendorKey);
   };
 
-  // Reload models when activeVendorKey changes
+  // 挂载时回读每页条数，并把回读值直接传给首次请求；
+  // 只 setState 不传值的话，请求仍会用默认 10 条，被后端回传的 page_size 打回。
   useEffect(() => {
-    loadModels(1, pageSize, activeVendorKey);
-  }, [activeVendorKey]);
+    const localPageSize =
+      parseInt(localStorage.getItem(MODEL_PAGE_SIZE_KEY)) || ITEMS_PER_PAGE;
+    setPageSize(localPageSize);
+    loadModels(1, localPageSize, activeVendorKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // 排序开关变化后回到第一页重新拉取，保证排序立即生效
+  // 供应商切换或排序开关变化后回到第一页重新拉取。
+  // 必须放在 effect 里而不是 onChange 里直接调用：setState 是异步的，
+  // 同一事件循环内读到的还是旧排序，请求会带上旧参数。
+  // 首个渲染轮次跳过，避免与上面的挂载回读重复发一次请求。
+  const reloadInitialized = useRef(false);
   useEffect(() => {
+    if (!reloadInitialized.current) {
+      reloadInitialized.current = true;
+      return;
+    }
     loadModels(1, pageSize, activeVendorKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nameSort, vendorSort]);
+  }, [activeVendorKey, nameSort, vendorSort]);
 
   // Handle page size change
   const handlePageSizeChange = async (size) => {
+    localStorage.setItem(MODEL_PAGE_SIZE_KEY, size + '');
     setPageSize(size);
     setActivePage(1);
     await loadModels(1, size, activeVendorKey);

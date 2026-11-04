@@ -28,6 +28,9 @@ import { Modal } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
 import { useTableCompactMode } from '../common/useTableCompactMode';
 
+// 兑换码页使用独立的分页存储键，避免与 /channel、/log 共用的 page-size 互相串扰
+const REDEMPTION_PAGE_SIZE_KEY = 'redemption-page-size';
+
 export const useRedemptionsData = () => {
   const { t } = useTranslation();
 
@@ -93,17 +96,18 @@ export const useRedemptionsData = () => {
   };
 
   // Search redemption codes
-  const searchRedemptions = async () => {
+  // size 显式传入，避免同一事件循环内读到 setPageSize 之前的旧值
+  const searchRedemptions = async (size = pageSize) => {
     const { searchKeyword } = getFormValues();
     if (searchKeyword === '') {
-      await loadRedemptions(1, pageSize);
+      await loadRedemptions(1, size);
       return;
     }
 
     setSearching(true);
     try {
       const res = await API.get(
-        `/api/redemption/search?keyword=${searchKeyword}&p=1&page_size=${pageSize}`,
+        `/api/redemption/search?keyword=${searchKeyword}&p=1&page_size=${size}`,
       );
       const { success, message, data } = res.data;
       if (success) {
@@ -184,13 +188,14 @@ export const useRedemptionsData = () => {
 
   // Handle page size change
   const handlePageSizeChange = (size) => {
+    localStorage.setItem(REDEMPTION_PAGE_SIZE_KEY, size + '');
     setPageSize(size);
     setActivePage(1);
     const { searchKeyword } = getFormValues();
     if (searchKeyword === '') {
       loadRedemptions(1, size);
     } else {
-      searchRedemptions();
+      searchRedemptions(size);
     }
   };
 
@@ -323,13 +328,21 @@ export const useRedemptionsData = () => {
   };
 
   // Initialize data loading
+  // 挂载时回读每页条数，并把回读值直接传给首次请求；
+  // 只 setState 不传值的话，请求仍会用默认 10 条，被后端回传的 page_size 打回。
+  // 依赖必须是 []：handlePageSizeChange 已经自己发请求，
+  // 依赖 [pageSize] 会让它再触发一次同样的请求。
   useEffect(() => {
-    loadRedemptions(1, pageSize)
+    const localPageSize =
+      parseInt(localStorage.getItem(REDEMPTION_PAGE_SIZE_KEY)) ||
+      ITEMS_PER_PAGE;
+    setPageSize(localPageSize);
+    loadRedemptions(1, localPageSize)
       .then()
       .catch((reason) => {
         showError(reason);
       });
-  }, [pageSize]);
+  }, []);
 
   return {
     // Data state

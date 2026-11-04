@@ -39,6 +39,9 @@ import CardTable from '../../common/ui/CardTable';
 
 const { Text, Paragraph } = Typography;
 
+const AUDIT_PAGE_SIZE_KEY = 'audit-page-size';
+const AUDIT_DEFAULT_PAGE_SIZE = 20;
+
 const AUDIT_CATEGORY_OPTIONS = [
   { value: 'login', label: '登录' },
   { value: 'security', label: '安全' },
@@ -68,7 +71,7 @@ const AuditTable = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activePage, setActivePage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(AUDIT_DEFAULT_PAGE_SIZE);
   const [logCount, setLogCount] = useState(0);
   const [formApi, setFormApi] = useState(null);
 
@@ -116,13 +119,21 @@ const AuditTable = () => {
     }
   };
 
+  // 挂载时回读每页条数，并把回读值直接传给首次请求；
+  // 只 setState 不传值的话，请求仍会用默认条数，被后端回传的 page_size 打回。
   useEffect(() => {
-    loadLogs(1, 20);
+    const localPageSize =
+      parseInt(localStorage.getItem(AUDIT_PAGE_SIZE_KEY)) ||
+      AUDIT_DEFAULT_PAGE_SIZE;
+    loadLogs(1, localPageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handlePageChange = (page) => loadLogs(page, pageSize);
-  const handlePageSizeChange = (size) => loadLogs(1, size);
+  const handlePageSizeChange = (size) => {
+    localStorage.setItem(AUDIT_PAGE_SIZE_KEY, size + '');
+    loadLogs(1, size);
+  };
 
   const columns = [
     {

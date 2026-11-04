@@ -178,6 +178,12 @@ func GetAllChannels(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取标签渠道失败，请稍后重试"})
 				return
 			}
+			if sortOptions.SortBy == model.ChannelSortByConcurrency {
+				// 并发数在 Redis 里，只能在标签分组内按实时并发内存排序
+				tagChannels = model.SortByConcurrencyDesc(tagChannels, concurrency.DimensionChannel,
+					func(channel *model.Channel) int { return channel.Id },
+					func(channel *model.Channel) int64 { return int64(channel.Id) }, 0, -1)
+			}
 			channelData = append(channelData, tagChannels...)
 		}
 	} else {
@@ -187,15 +193,31 @@ func GetAllChannels(c *gin.Context) {
 			return
 		}
 
-		err := sortOptions.Apply(buildChannelListQuery(groupFilter, statusFilter, typeFilter)).
-			Limit(pageInfo.GetPageSize()).
-			Offset(pageInfo.GetStartIdx()).
-			Omit("key").
-			Find(&channelData).Error
-		if err != nil {
-			common.SysError("failed to get channels: " + err.Error())
-			c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取渠道列表失败，请稍后重试"})
-			return
+		listQuery := sortOptions.Apply(buildChannelListQuery(groupFilter, statusFilter, typeFilter))
+		if sortOptions.SortBy == model.ChannelSortByConcurrency {
+			// 并发数存在 Redis 而不是数据库，无法下推成 ORDER BY：取全量后按实时并发内存排序再分页。
+			// 少了这个分支，Apply 会静默回落到 priority DESC，表现为并发排序“时灵时不灵”。
+			var all []*model.Channel
+			if err := listQuery.Omit("key").Find(&all).Error; err != nil {
+				common.SysError("failed to get channels: " + err.Error())
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取渠道列表失败，请稍后重试"})
+				return
+			}
+			channelData = model.SortByConcurrencyDesc(all, concurrency.DimensionChannel,
+				func(channel *model.Channel) int { return channel.Id },
+				func(channel *model.Channel) int64 { return int64(channel.Id) },
+				pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+		} else {
+			err := listQuery.
+				Limit(pageInfo.GetPageSize()).
+				Offset(pageInfo.GetStartIdx()).
+				Omit("key").
+				Find(&channelData).Error
+			if err != nil {
+				common.SysError("failed to get channels: " + err.Error())
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取渠道列表失败，请稍后重试"})
+				return
+			}
 		}
 	}
 
