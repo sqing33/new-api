@@ -28,6 +28,10 @@ import {
 } from '@douyinfe/semi-ui';
 import CompactModeToggle from '../../common/ui/CompactModeToggle';
 
+// 批量操作相关入口暂时隐藏：日常用不到，且占掉了工具栏的横向空间。
+// 需要恢复时把它改回 false 即可，代码与 state 都保留。
+const HIDE_BATCH_ACTIONS = true;
+
 const ChannelsActions = ({
   enableBatchDelete,
   batchDeleteChannels,
@@ -72,6 +76,7 @@ const ChannelsActions = ({
       <div className='flex flex-col md:flex-row justify-between gap-2'>
         {/* 左侧：批量操作按钮 */}
         <div className='flex flex-wrap md:flex-nowrap items-center gap-2 w-full md:w-auto order-2 md:order-1'>
+          {!HIDE_BATCH_ACTIONS && (
           <Button
             size='small'
             disabled={!enableBatchDelete}
@@ -87,7 +92,9 @@ const ChannelsActions = ({
           >
             {t('删除所选通道')}
           </Button>
+          )}
 
+          {!HIDE_BATCH_ACTIONS && (
           <Button
             size='small'
             disabled={!enableBatchDelete}
@@ -97,7 +104,9 @@ const ChannelsActions = ({
           >
             {t('批量设置标签')}
           </Button>
+          )}
 
+          {!HIDE_BATCH_ACTIONS && (
           <Dropdown
             size='small'
             trigger='click'
@@ -252,6 +261,7 @@ const ChannelsActions = ({
               {t('批量操作')}
             </Button>
           </Dropdown>
+          )}
 
           <CompactModeToggle
             compactMode={compactMode}
@@ -335,6 +345,7 @@ const ChannelsActions = ({
             />
           </div>
 
+          {!HIDE_BATCH_ACTIONS && (
           <div className='flex items-center justify-between w-full md:w-auto'>
             <Typography.Text strong className='mr-2'>
               {t('开启批量操作')}
@@ -348,6 +359,7 @@ const ChannelsActions = ({
               }}
             />
           </div>
+          )}
 
           <div className='flex items-center justify-between w-full md:w-auto'>
             <Typography.Text strong className='mr-2'>

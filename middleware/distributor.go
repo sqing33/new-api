@@ -199,7 +199,7 @@ func Distribute() func(c *gin.Context) {
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
-		trackChannelConcurrency(c)
+		trackChannelConcurrency(c, modelRequest.Model)
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)
@@ -215,7 +215,7 @@ func Distribute() func(c *gin.Context) {
 // The channel, user and token ids are all resolved before c.Next() runs, so a
 // single call covers every dimension. Release runs on a detached context so a
 // client disconnect cannot cancel the cleanup.
-func trackChannelConcurrency(c *gin.Context) {
+func trackChannelConcurrency(c *gin.Context, modelName string) {
 	if !common.RedisEnabled {
 		return
 	}
@@ -223,6 +223,11 @@ func trackChannelConcurrency(c *gin.Context) {
 		ChannelID: common.GetContextKeyInt(c, constant.ContextKeyChannelId),
 		UserID:    common.GetContextKeyInt(c, constant.ContextKeyUserId),
 		TokenID:   common.GetContextKeyInt(c, constant.ContextKeyTokenId),
+		// model/group 写进 sorted-set member，性能看板据此按维度拆分并发。
+		// model 由调用方传入：ContextKeyOriginalModel 要到 GenRelayInfo 才写入，
+		// 比这里晚；group 则在 TokenAuth/Distribute 早期就已就绪。
+		Model: modelName,
+		Group: common.GetContextKeyString(c, constant.ContextKeyUsingGroup),
 	}
 	requestID := concurrency.NewRequestID()
 	concurrency.Track(c.Request.Context(), dims, requestID)

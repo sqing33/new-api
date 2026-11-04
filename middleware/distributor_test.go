@@ -7,7 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/go-redis/redis/v8"
+
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/concurrency"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
@@ -275,4 +279,37 @@ func TestSharedEndpointRebindsToSelectedType61Plugin(t *testing.T) {
 	require.NoError(t, i18n.Init())
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
 	assert.Contains(t, noAvailableChannelMessage(c, "default", "task-model"), "alpha, beta")
+}
+
+// TestTrackChannelConcurrencyCarriesDimensions 锁定一个曾经的回归：
+// dims 里的 Model/Group 一度没有被填充，导致 Redis member 只有 requestID，
+// 性能看板无法按模型/分组拆分并发，采样表永远是空的。
+func TestTrackChannelConcurrencyCarriesDimensions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	server := miniredis.RunT(t)
+
+	previousRDB, previousEnabled := common.RDB, common.RedisEnabled
+	common.RDB = redis.NewClient(&redis.Options{Addr: server.Addr()})
+	common.RedisEnabled = true
+	t.Cleanup(func() {
+		common.RDB, common.RedisEnabled = previousRDB, previousEnabled
+	})
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	common.SetContextKey(c, constant.ContextKeyChannelId, 7)
+	common.SetContextKey(c, constant.ContextKeyUserId, 8)
+	common.SetContextKey(c, constant.ContextKeyTokenId, 9)
+	common.SetContextKey(c, constant.ContextKeyUsingGroup, "vip")
+
+	trackChannelConcurrency(c, "gpt-4o")
+
+	breakdown, err := concurrency.CountByDimension(concurrency.DimensionChannel, 7)
+	require.NoError(t, err)
+	assert.Equal(t, 1, breakdown["gpt-4o|vip"],
+		"member 必须带上 model|group，否则性能看板无法按维度拆分并发")
+
+	// 清理：释放函数已注册到 context，这里直接调用避免槽位残留
+	ReleaseChannelConcurrency(c)
 }

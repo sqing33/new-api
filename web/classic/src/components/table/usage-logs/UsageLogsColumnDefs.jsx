@@ -966,8 +966,9 @@ export const getLogsColumns = ({
       key: COLUMN_KEYS.ERROR,
       title: t('错误'),
       dataIndex: 'content',
-      fixed: 'right',
-      width: 200,
+      // 不固定在右侧：错误列内容长短差异大，固定列会挤占横向空间，
+      // 跟随表格一起横向滚动更易读
+      width: 240,
       render: (text, record) => {
         // 计费类日志（消费/退款）没有报错内容，交给「详情」列
         if (record.type === 2 || record.type === 6) {
