@@ -436,9 +436,29 @@ func (releasedAuditLog) TableName() string { return "logs" }
 // instance. They never drop databases or tables supplied through an environment variable.
 func newAuditTestDatabase(t *testing.T, kind, dsn string) (*gorm.DB, string) {
 	t.Helper()
+	return newAuditTestDatabaseWithOptions(t, kind, dsn, false)
+}
+
+// newAuditTestDatabaseWithOptions 是 newAuditTestDatabase 的可配置版本。
+//
+// immediateTxlock 只给「并发写必须严格串行化」的用例开启：缺了
+// BEGIN IMMEDIATE，先 SELECT 后写的并发事务会命中 SQLITE_BUSY_SNAPSHOT，
+// 这个错误 busy_timeout 覆盖不到，会立刻失败（实测表现为
+// "database is locked (5) (SQLITE_BUSY)"，期望 1 个赢家实际 0 个）。
+//
+// 不能全局开启：它让每个事务一开就抢写锁，会把包内其他测试互相阻塞，
+// 整包从 ~100s 退化到 10 分钟以上（CI 上直接被 "Too long with no output" 杀掉）。
+func newAuditTestDatabaseWithOptions(t *testing.T, kind, dsn string, immediateTxlock bool) (*gorm.DB, string) {
+	t.Helper()
 	if kind == "sqlite" {
 		path := t.TempDir() + "/audit.db"
-		db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+		// modernc 驱动忽略裸 _busy_timeout=，必须用 _pragma= 形式，
+		// 否则忙等停在默认 5s，并发写会直接报 SQLITE_BUSY。
+		pragmas := "?_pragma=busy_timeout(30000)&_pragma=journal_mode(WAL)"
+		if immediateTxlock {
+			pragmas += "&_txlock=immediate"
+		}
+		db, err := gorm.Open(sqlite.Open(path+pragmas), &gorm.Config{})
 		require.NoError(t, err)
 		return db, path
 	}

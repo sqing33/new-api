@@ -53,7 +53,12 @@ func setupSecurityEnrollmentTest(t *testing.T) (*model.User, service.AuthIdentit
 		dialect = "sqlite"
 	}
 	dsn := os.Getenv("TEST_" + strings.ToUpper(dialect) + "_DSN")
-	db, _ := newAuditTestDatabase(t, dialect, dsn)
+	// 安全相关的回归用例里有多处「并发写必须严格串行化」的场景
+	// （例如账号并发删除恰好一个赢家）。SQLite 下必须开 _txlock=immediate：
+	// 否则 BEGIN DEFERRED 的事务可能命中 SQLITE_BUSY_SNAPSHOT，而该错误
+	// 不受 busy_timeout 保护，会立刻失败，让断言随机崩掉。
+	// 这个开关只作用于安全测试自己的库，不影响包内其他用例。
+	db, _ := newAuditTestDatabaseWithOptions(t, dialect, dsn, true)
 	logDB, _ := newAuditTestDatabase(t, dialect, dsn)
 	db.Logger = logger.Default.LogMode(logger.Silent)
 	logDB.Logger = logger.Default.LogMode(logger.Silent)
