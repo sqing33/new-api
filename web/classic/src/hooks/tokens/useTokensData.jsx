@@ -146,7 +146,8 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     setTokens(payload.items || []);
     setTokenCount(payload.total || 0);
     setActivePage(payload.page || 1);
-    setPageSize(payload.page_size || pageSize);
+    // 不把后端回传的 page_size 写回 state：它只是回显请求参数，
+    // 缺失时还会回落成默认值，会把用户选的每页条数打回默认。
     setShowKeys({});
   };
 

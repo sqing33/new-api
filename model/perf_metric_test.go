@@ -29,6 +29,67 @@ func TestMigratePerfMetricUniqueIndexSQLite(t *testing.T) {
 	}
 	require.False(t, db.Migrator().HasIndex(&PerfMetric{}, "idx_perf_model_group_bucket"))
 	require.True(t, db.Migrator().HasIndex(&PerfMetric{}, "idx_perf_model_group_channel_bucket"))
+	// 当前索引必须覆盖 token_id，否则 upsert 的 ON CONFLICT 匹配不到约束
+	assert.True(t, indexCoversExactly(t, db, "perf_metrics", "idx_perf_model_group_channel_bucket", perfMetricUniqueIndexColumns))
+}
+
+// indexCoversExactly 是 indexCoversColumns 的测试包装。
+func indexCoversExactly(t *testing.T, db *gorm.DB, table string, indexName string, want []string) bool {
+	t.Helper()
+	ok, err := indexCoversColumns(db, table, indexName, want)
+	require.NoError(t, err)
+	return ok
+}
+
+// TestEnsureUniqueIndexRebuildsSameNameIndex 锁定本次线上故障的根因：
+// 索引名不变、只有列集变化时，GORM AutoMigrate 在 PostgreSQL/MySQL 上只新增列
+// 而保留旧索引，导致 upsert 的 ON CONFLICT 报 SQLSTATE 42P10、落库全部失败。
+// SQLite 上 AutoMigrate 会重建整张表，所以这个用例必须显式造出「旧索引仍在」
+// 的状态来验证重建逻辑本身。
+func TestEnsureUniqueIndexRebuildsSameNameIndex(t *testing.T) {
+	previousDB, previousLOGDB := DB, LOG_DB
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	DB = db
+	LOG_DB = db
+	t.Cleanup(func() {
+		DB, LOG_DB = previousDB, previousLOGDB
+	})
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	initCol()
+
+	// 造出「列已加、但唯一索引仍是旧四列」的库，正是线上 PostgreSQL 的状态
+	require.NoError(t, db.Exec("CREATE TABLE perf_metrics ("+
+		"id integer PRIMARY KEY AUTOINCREMENT, model_name text, `group` text, "+
+		"channel_name text, bucket_ts integer, token_id integer DEFAULT 0, token_name text, "+
+		"request_count integer DEFAULT 0, success_count integer DEFAULT 0, "+
+		"total_latency_ms integer DEFAULT 0, ttft_sum_ms integer DEFAULT 0, ttft_count integer DEFAULT 0, "+
+		"output_tokens integer DEFAULT 0, generation_ms integer DEFAULT 0)").Error)
+	require.NoError(t, db.Exec(
+		"CREATE UNIQUE INDEX idx_perf_model_group_channel_bucket ON perf_metrics (model_name, `group`, channel_name, bucket_ts)",
+	).Error)
+
+	// 迁移前：索引列集不含 token_id
+	require.False(t, indexCoversExactly(t, db, "perf_metrics", "idx_perf_model_group_channel_bucket", perfMetricUniqueIndexColumns))
+
+	require.NoError(t, migratePerfMetricUniqueIndex(db))
+	require.True(t, indexCoversExactly(t, db, "perf_metrics", "idx_perf_model_group_channel_bucket", perfMetricUniqueIndexColumns),
+		"迁移后索引必须覆盖 token_id")
+
+	// 修好之后，跨令牌的 upsert 才能各占一行
+	for _, tokenID := range []int{5, 6} {
+		require.NoError(t, UpsertPerfMetric(&PerfMetric{
+			ModelName: "gpt-test", Group: "default", ChannelName: "channel-a",
+			BucketTs: 1000, TokenId: tokenID, TokenName: "tok", RequestCount: 1,
+		}))
+	}
+	var count int64
+	require.NoError(t, db.Model(&PerfMetric{}).Where("token_id > 0").Count(&count).Error)
+	assert.Equal(t, int64(2), count)
+
+	// 幂等：重复迁移不再重建
+	require.NoError(t, migratePerfMetricUniqueIndex(db))
+	require.True(t, indexCoversExactly(t, db, "perf_metrics", "idx_perf_model_group_channel_bucket", perfMetricUniqueIndexColumns))
 }
 
 func TestUpsertPerfMetricAggregatesPerChannel(t *testing.T) {
@@ -138,13 +199,16 @@ func TestMigratePerfConcurrencyUniqueIndexSQLite(t *testing.T) {
 		"INSERT INTO perf_concurrency (model_name, `group`, channel_name, bucket_ts, max_concurrency, sum_concurrency, sample_count) "+
 			"VALUES ('gpt-test','default','channel-a',1000,3,6,2)").Error)
 
-	require.NoError(t, migratePerfConcurrencyUniqueIndex(db))
+	// 顺序必须是 AutoMigrate（加 token_id 列）在前、重建索引在后：
+	// 列还不存在时建索引会直接失败。
 	require.NoError(t, db.AutoMigrate(&PerfConcurrency{}))
 	require.True(t, db.Migrator().HasColumn(&PerfConcurrency{}, "token_id"))
+	require.NoError(t, migratePerfConcurrencyUniqueIndex(db))
+	require.True(t, indexCoversExactly(t, db, "perf_concurrency", "idx_perf_conc_bucket", perfConcurrencyUniqueIndexColumns))
 
 	// 迁移可重复执行，且历史行仍在
-	require.NoError(t, migratePerfConcurrencyUniqueIndex(db))
 	require.NoError(t, db.AutoMigrate(&PerfConcurrency{}))
+	require.NoError(t, migratePerfConcurrencyUniqueIndex(db))
 
 	// 同一 (模型, 分组, 渠道, 桶) 下两个不同令牌必须各占一行
 	for _, tokenID := range []int{5, 6} {

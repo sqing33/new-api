@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -34,16 +35,16 @@ func (PerfMetric) TableName() string {
 	return "perf_metrics"
 }
 
+// perfMetricUniqueIndexColumns 是当前唯一索引必须覆盖的列集（顺序无关）。
+// 列集一旦与它不符，upsert 的 ON CONFLICT 就找不到匹配约束（PostgreSQL 报
+// SQLSTATE 42P10，MySQL 报 3106），整条 flush 链路会静默失败。
+var perfMetricUniqueIndexColumns = []string{"model_name", "group", "channel_name", "bucket_ts", "token_id"}
+
 // perfMetricLegacyUniqueIndexes lists unique indexes left by previous schema
-// versions. They must be dropped before AutoMigrate creates the new four-column
-// unique index, otherwise (model_name, group, bucket_ts) still collides and
-// channel-level upserts would fail.
-// perfMetricLegacyUniqueIndexes 只列出「列集与当前定义不同」的旧索引名。
-//
-// 注意：不能把当前索引名 idx_perf_model_group_channel_bucket 也列进来——
-// 该名字对应的列集已随 token 维度扩展，AutoMigrate 建的正是新版本；
-// 把它当成 legacy 删掉会让唯一约束彻底失效。当前索引名相同但列集不同的
-// 情况由 GORM AutoMigrate 自行处理（SQLite 重建表、MySQL/PG 调整索引）。
+// versions whose names differ from the current one. They must be dropped before
+// AutoMigrate creates the current index.
+// perfMetricLegacyUniqueIndexes 只列出「名字与当前定义不同」的旧索引名；
+// 同名但列集不同的由 ensurePerfMetricUniqueIndex 负责重建。
 var perfMetricLegacyUniqueIndexes = []string{"idx_perf_model_group_bucket"}
 
 func migratePerfMetricUniqueIndex(db *gorm.DB) error {
@@ -51,19 +52,81 @@ func migratePerfMetricUniqueIndex(db *gorm.DB) error {
 		return fmt.Errorf("migrate perf metric unique index: database is nil")
 	}
 	migrator := db.Migrator()
-	if !migrator.HasTable(&PerfMetric{}) {
+	if migrator.HasTable(&PerfMetric{}) {
+		for _, indexName := range perfMetricLegacyUniqueIndexes {
+			if !migrator.HasIndex(&PerfMetric{}, indexName) {
+				continue
+			}
+			common.SysLog(fmt.Sprintf("dropping legacy perf_metrics unique index %q (%s)", indexName, db.Dialector.Name()))
+			if err := migrator.DropIndex(&PerfMetric{}, indexName); err != nil {
+				return fmt.Errorf("drop legacy perf metric index %q: %w", indexName, err)
+			}
+		}
+	}
+	return ensurePerfMetricUniqueIndex(db, "perf_metrics", "idx_perf_model_group_channel_bucket",
+		&PerfMetric{}, perfMetricUniqueIndexColumns)
+}
+
+// ensurePerfMetricUniqueIndex 保证唯一索引覆盖当前列集。
+//
+// 不能依赖 GORM AutoMigrate：索引名不变、只有列集变化时，PostgreSQL 与 MySQL
+// 都只新增列而保留旧索引（SQLite 因为重建整张表才碰巧正确），结果 upsert 的
+// ON CONFLICT 匹配不到约束，写入全部失败。这里显式比对列集并重建。
+func ensurePerfMetricUniqueIndex(db *gorm.DB, table string, indexName string, model any, wantColumns []string) error {
+	migrator := db.Migrator()
+	if !migrator.HasTable(model) {
 		return nil
 	}
-	for _, indexName := range perfMetricLegacyUniqueIndexes {
-		if !migrator.HasIndex(&PerfMetric{}, indexName) {
-			continue
+	if migrator.HasIndex(model, indexName) {
+		matched, err := indexCoversColumns(db, table, indexName, wantColumns)
+		if err != nil {
+			return err
 		}
-		common.SysLog(fmt.Sprintf("dropping legacy perf_metrics unique index %q (%s)", indexName, db.Dialector.Name()))
-		if err := migrator.DropIndex(&PerfMetric{}, indexName); err != nil {
-			return fmt.Errorf("drop legacy perf metric index %q: %w", indexName, err)
+		if matched {
+			return nil
+		}
+		common.SysLog(fmt.Sprintf("rebuilding %s unique index %q: column set changed (%s)", table, indexName, db.Dialector.Name()))
+		if err := migrator.DropIndex(model, indexName); err != nil {
+			return fmt.Errorf("drop outdated %s index %q: %w", table, indexName, err)
 		}
 	}
+	if err := migrator.CreateIndex(model, indexName); err != nil {
+		return fmt.Errorf("create %s index %q: %w", table, indexName, err)
+	}
 	return nil
+}
+
+// indexCoversColumns 判断已存在的索引是否覆盖期望的列集（顺序无关）。
+// 只在索引确实存在时调用；任何解析失败都按「不匹配」处理，触发重建，
+// 因为重建一个已经正确的索引是安全的（先删后建），而漏建会导致写入全挂。
+func indexCoversColumns(db *gorm.DB, table string, indexName string, wantColumns []string) (bool, error) {
+	columns, err := indexColumnNames(db, table, indexName)
+	if err != nil {
+		return false, err
+	}
+	if len(columns) != len(wantColumns) {
+		return false, nil
+	}
+	want := make(map[string]struct{}, len(wantColumns))
+	for _, column := range wantColumns {
+		want[normalizeIndexColumn(column)] = struct{}{}
+	}
+	for _, column := range columns {
+		if _, ok := want[normalizeIndexColumn(column)]; !ok {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// normalizeIndexColumn 去掉各数据库返回的列名引号与限定符，便于跨库比较。
+func normalizeIndexColumn(column string) string {
+	column = strings.TrimSpace(column)
+	column = strings.Trim(column, "\"`")
+	if idx := strings.LastIndex(column, "."); idx >= 0 {
+		column = column[idx+1:]
+	}
+	return strings.ToLower(strings.Trim(column, "\"`"))
 }
 
 func UpsertPerfMetric(metric *PerfMetric) error {
@@ -169,4 +232,33 @@ func PerfMetricStartTime(hours int) int64 {
 		hours = 24
 	}
 	return time.Now().Add(-time.Duration(hours) * time.Hour).Unix()
+}
+
+// indexColumnNames 读取一个已存在索引覆盖的列名，按方言分支查询。
+// 只在迁移期调用，不在请求路径上。
+func indexColumnNames(db *gorm.DB, table string, indexName string) ([]string, error) {
+	var columns []string
+	switch {
+	case common.UsingMainDatabase(common.DatabaseTypePostgreSQL):
+		// pg_index.indkey 是 int2vector，用 generate_subscripts 展开成行。
+		err := db.Raw(`SELECT a.attname
+			FROM pg_class t
+			JOIN pg_index i ON i.indrelid = t.oid
+			JOIN pg_class ic ON ic.oid = i.indexrelid
+			JOIN generate_subscripts(i.indkey, 1) AS s(k) ON true
+			JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[s.k]
+			WHERE t.relname = ? AND ic.relname = ?`, table, indexName).Scan(&columns).Error
+		return columns, err
+	case common.UsingMainDatabase(common.DatabaseTypeMySQL):
+		err := db.Raw(`SELECT column_name FROM information_schema.statistics
+			WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?
+			ORDER BY seq_in_index`, table, indexName).Scan(&columns).Error
+		return columns, err
+	default:
+		// SQLite 的 PRAGMA index_info 返回 (seqno, cid, name) 三列，必须显式选
+		// name，否则 Scan 到 []string 会因多余列报错。PRAGMA 不接受绑定参数，
+		// 只能拼接；table/index 名来自代码常量而非用户输入。
+		err := db.Raw(fmt.Sprintf("SELECT name FROM pragma_index_info(%q)", indexName)).Scan(&columns).Error
+		return columns, err
+	}
 }

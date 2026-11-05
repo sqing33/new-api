@@ -177,6 +177,41 @@ export const useChannelsData = () => {
     );
   }, []);
 
+  // 四个排序维度的启用状态。允许同时启用多个，实际生效的是按 sortOrder
+  // 排在最前面的那个（后端只能单列排序，见 buildChannelSortParam 注释）。
+  //
+  // 这些派生值必须声明在所有使用点之前：挂载 effect 与 reload effect 都依赖
+  // activeSort，同一函数作用域内提前引用会触发 TDZ（Cannot access before
+  // initialization），整个页面直接白屏。
+  const sortEnabled = {
+    plan_usage: planUsageSort,
+    concurrency: concurrencySort,
+    id: idSort,
+    name: nameSort,
+  };
+  const activeSort = pickActiveChannelSort(sortOrder, sortEnabled);
+  activeSortRef.current = activeSort;
+
+  const setNameSort = (value) => {
+    localStorage.setItem(CHANNEL_NAME_SORT_KEY, value + '');
+    setNameSortState(value);
+  };
+
+  const setConcurrencySort = (value) => {
+    localStorage.setItem(CHANNEL_CONCURRENCY_SORT_KEY, value + '');
+    setConcurrencySortState(value);
+  };
+
+  const setIdSortPersisted = (value) => {
+    localStorage.setItem('id-sort', value + '');
+    setIdSort(value);
+  };
+
+  const setPlanUsageSortPersisted = (value) => {
+    localStorage.setItem('plan-usage-sort', value + '');
+    setPlanUsageSort(value);
+  };
+
   // Model test states
   const [showModelTestModal, setShowModelTestModal] = useState(false);
   const [currentTestChannel, setCurrentTestChannel] = useState(null);
@@ -456,37 +491,6 @@ export const useChannelsData = () => {
       searchGroup: formValues.searchGroup || '',
       searchModel: formValues.searchModel || '',
     };
-  };
-
-  // 四个排序维度的启用状态。允许同时启用多个，实际生效的是按 sortOrder
-  // 排在最前面的那个（后端只能单列排序，见 buildChannelSortParam 注释）。
-  const sortEnabled = {
-    plan_usage: planUsageSort,
-    concurrency: concurrencySort,
-    id: idSort,
-    name: nameSort,
-  };
-  const activeSort = pickActiveChannelSort(sortOrder, sortEnabled);
-  activeSortRef.current = activeSort;
-
-  const setNameSort = (value) => {
-    localStorage.setItem(CHANNEL_NAME_SORT_KEY, value + '');
-    setNameSortState(value);
-  };
-
-  const setConcurrencySort = (value) => {
-    localStorage.setItem(CHANNEL_CONCURRENCY_SORT_KEY, value + '');
-    setConcurrencySortState(value);
-  };
-
-  const setIdSortPersisted = (value) => {
-    localStorage.setItem('id-sort', value + '');
-    setIdSort(value);
-  };
-
-  const setPlanUsageSortPersisted = (value) => {
-    localStorage.setItem('plan-usage-sort', value + '');
-    setPlanUsageSort(value);
   };
 
   // 排序优先级弹层里勾选/取消某个维度。

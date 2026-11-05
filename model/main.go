@@ -382,16 +382,6 @@ func migrateDB() error {
 	if err := migratePrefillGroupUniqueness(DB); err != nil {
 		return err
 	}
-	// AutoMigrate 创建新唯一索引前先移除旧的三列唯一索引,否则按渠道的
-	// upsert 仍会被 (model_name, group, bucket_ts) 冲突拦下。
-	if err := migratePerfMetricUniqueIndex(DB); err != nil {
-		return err
-	}
-	// 同理：perf_concurrency 的唯一键从四列扩到五列（加入 token_id），
-	// 必须先删掉同名旧索引，否则令牌粒度的采样行会与渠道粒度互相冲突。
-	if err := migratePerfConcurrencyUniqueIndex(DB); err != nil {
-		return err
-	}
 	// 老库里由内联 UNIQUE 生成的 <table>_<column>_key 约束,与 GORM
 	// MigrateColumnUnique 期望的 uni_<table>_<column> 名字不一致,会让
 	// AutoMigrate 直接报 42704;先改名再交给 AutoMigrate 删除。
@@ -468,6 +458,17 @@ func migrateDB() error {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
 		}
+	}
+	// 唯一索引的重建必须放在 AutoMigrate 之后：新列（例如 perf_metrics /
+	// perf_concurrency 的 token_id）由 AutoMigrate 添加，在那之前建索引会因
+	// 列不存在而失败。PostgreSQL 与 MySQL 的 AutoMigrate 在「索引名不变、列集
+	// 变化」时只加列不重建索引，必须在这里显式比对列集并重建，否则 upsert 的
+	// ON CONFLICT 匹配不到约束，整条落库链路会静默失败。
+	if err := migratePerfMetricUniqueIndex(DB); err != nil {
+		return err
+	}
+	if err := migratePerfConcurrencyUniqueIndex(DB); err != nil {
+		return err
 	}
 	return nil
 }

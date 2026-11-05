@@ -3,8 +3,6 @@ package model
 import (
 	"fmt"
 
-	"github.com/QuantumNous/new-api/common"
-
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -34,30 +32,18 @@ func (PerfConcurrency) TableName() string {
 	return "perf_concurrency"
 }
 
-// perfConcurrencyLegacyUniqueIndexes 列出旧版本的唯一索引名。加入 token_id
-// 之前，唯一键是四列；同名索引 idx_perf_conc_bucket 的列集已变，必须先删掉，
-// 否则 AutoMigrate 在 MySQL/PostgreSQL 上只会新增列而保留旧的唯一约束，
-// 导致同一 (模型, 分组, 渠道, 桶) 下不同令牌的行互相冲突。
-var perfConcurrencyLegacyUniqueIndexes = []string{"idx_perf_conc_bucket"}
+// perfConcurrencyUniqueIndexColumns 是当前唯一索引必须覆盖的列集（顺序无关）。
+var perfConcurrencyUniqueIndexColumns = []string{"model_name", "group", "channel_name", "bucket_ts", "token_id"}
 
+// migratePerfConcurrencyUniqueIndex 保证唯一索引覆盖当前列集。
+// 加入 token_id 之前唯一键是四列，且新旧索引同名，GORM AutoMigrate 在
+// PostgreSQL/MySQL 上只新增列而保留旧索引，必须显式比对列集后重建。
 func migratePerfConcurrencyUniqueIndex(db *gorm.DB) error {
 	if db == nil {
 		return fmt.Errorf("migrate perf concurrency unique index: database is nil")
 	}
-	migrator := db.Migrator()
-	if !migrator.HasTable(&PerfConcurrency{}) {
-		return nil
-	}
-	for _, indexName := range perfConcurrencyLegacyUniqueIndexes {
-		if !migrator.HasIndex(&PerfConcurrency{}, indexName) {
-			continue
-		}
-		common.SysLog(fmt.Sprintf("dropping legacy perf_concurrency unique index %q (%s)", indexName, db.Dialector.Name()))
-		if err := migrator.DropIndex(&PerfConcurrency{}, indexName); err != nil {
-			return fmt.Errorf("drop legacy perf concurrency index %q: %w", indexName, err)
-		}
-	}
-	return nil
+	return ensurePerfMetricUniqueIndex(db, "perf_concurrency", "idx_perf_conc_bucket",
+		&PerfConcurrency{}, perfConcurrencyUniqueIndexColumns)
 }
 
 // AvgConcurrency 返回桶内采样均值；没有采样时回退到峰值，避免除零。

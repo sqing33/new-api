@@ -910,7 +910,8 @@ export const useLogsData = ({
     if (success) {
       const newPageData = data.items;
       setActivePage(data.page);
-      setPageSize(data.page_size);
+      // 不要把后端回传的 page_size 写回 state：它只是回显请求参数，
+      // 缺失时还会回落成默认值，会把用户选的每页条数打回默认。
       setLogCount(data.total);
 
       setLogsFormat(newPageData);
@@ -930,7 +931,9 @@ export const useLogsData = ({
     localStorage.setItem('page-size', size + '');
     setPageSize(size);
     setActivePage(1);
-    loadLogs(activePage, size)
+    // 必须回到第 1 页：沿用当前页码会让 startIdx 超出新页大小，
+    // 例如第 5 页 / 每页 100 条切成每页 10 条时会直接翻到空页。
+    loadLogs(1, size)
       .then()
       .catch((reason) => {
         showError(reason);
