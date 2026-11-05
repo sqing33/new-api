@@ -43,6 +43,15 @@ import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
 import ParamOverrideEntry from '../../components/table/usage-logs/components/ParamOverrideEntry';
 
+// 每页条数的持久化键。与 /channel 共用同一个 key（两者的默认值与选项集相同），
+// 表现为「共享每页条数偏好」。
+const PAGE_SIZE_STORAGE_KEY = 'page-size';
+
+// 读持久化的每页条数。多个 effect 都要用它，且必须各自现读——
+// 在 effect 里捕获 pageSize 会拿到同一次渲染的初始值，导致用旧值发请求。
+const readPersistedPageSize = () =>
+  parseInt(localStorage.getItem(PAGE_SIZE_STORAGE_KEY)) || ITEMS_PER_PAGE;
+
 export const useLogsData = ({
   imageOnly = false,
   imageModelOptions = [],
@@ -928,7 +937,7 @@ export const useLogsData = ({
   };
 
   const handlePageSizeChange = async (size) => {
-    localStorage.setItem('page-size', size + '');
+    localStorage.setItem(PAGE_SIZE_STORAGE_KEY, size + '');
     setPageSize(size);
     setActivePage(1);
     // 必须回到第 1 页：沿用当前页码会让 startIdx 超出新页大小，
@@ -960,8 +969,7 @@ export const useLogsData = ({
   // Initialize data
   useEffect(() => {
     if (!canLoadLogs) return;
-    const localPageSize =
-      parseInt(localStorage.getItem('page-size')) || ITEMS_PER_PAGE;
+    const localPageSize = readPersistedPageSize();
     setPageSize(localPageSize);
     loadLogs(activePage, localPageSize)
       .then()
@@ -975,8 +983,14 @@ export const useLogsData = ({
     // 不再把全部生成模型回填到输入框：留空即表示不筛选，
     // 后端凭 image_only 已限定只看生成类模型
     setLogType(2);
+    // 必须重新读持久化的每页条数，不能用闭包里的 pageSize：
+    // 这个 effect 与上面的挂载 effect 在同一次渲染里触发，此时
+    // setPageSize 还没生效，闭包读到的是初始值 10。两条请求先后返回，
+    // 后到的那条（page_size=10）会覆盖正确结果——表现就是右下角显示
+    // 100 条、表格里却只有 10 条，刷新页面反复复现。
+    const localPageSize = readPersistedPageSize();
     setTimeout(() => {
-      loadLogs(1, pageSize, 2).catch((reason) => {
+      loadLogs(1, localPageSize, 2).catch((reason) => {
         showError(reason);
       });
     }, 0);
