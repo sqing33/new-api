@@ -108,13 +108,17 @@ const isPlanUsageFirst = (chain) => chain[0] === 'plan_usage';
 // - plan_usage 打头：页内排序，不下发后端参数
 // - id：走既有的 id_sort 布尔位，不进 sort_by
 // - 其余维度按链顺序拼进 sort_by（后端支持多级 ORDER BY）
+//
+// sort_order 只在单级排序时下发：多级排序里每一级有自己的自然方向
+// （名称升序、并发降序），后端会忽略全局方向，前端发了也是误导。
 const buildChannelSortParam = (chain) => {
   if (chain.length === 0 || isPlanUsageFirst(chain)) return '';
   const levels = chain.filter((key) => key !== 'plan_usage' && key !== 'id');
   if (levels.length === 0) return '';
-  // 名称是字典序，升序才符合直觉；并发降序（高的在前）更有用。
-  const order = levels.every((key) => key === 'name') ? 'asc' : 'desc';
-  return `&sort_by=${levels.join(',')}&sort_order=${order}`;
+  const sortBy = `&sort_by=${levels.join(',')}`;
+  if (levels.length > 1) return sortBy;
+  // 单级：名称升序（字典序 A→Z），其余降序（大的/新的在前）
+  return `${sortBy}&sort_order=${levels[0] === 'name' ? 'asc' : 'desc'}`;
 };
 
 // 排序链里是否用到了 ID 维度（决定 id_sort 布尔位）。

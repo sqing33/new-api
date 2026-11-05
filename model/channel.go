@@ -108,36 +108,73 @@ var channelSortColumns = map[string]string{
 	"test_time":     "test_time",
 }
 
-// sortLevels 把 SortBy 解析成有序、去重、长度受限的排序维度列表。
-// 并发维度最多出现一次（它不在数据库里，重复没有意义）。
-func (options ChannelSortOptions) sortLevels() []string {
+// channelSortAscending 声明各维度「自然的」排序方向。
+//
+// 排序链里的每一级各自使用自己的方向，而不是共用一个全局 sort_order：
+// 名称是字典序，升序（A→Z）才符合直觉；并发、ID、优先级都是「大的/新的在前」
+// 更有用。共用方向会让 name,concurrency 这种组合把名称排成 Z→A。
+//
+// 未列出的维度默认降序。
+var channelSortAscending = map[string]bool{
+	"name": true,
+}
+
+// sortLevel 是排序链上的一级：维度 + 该级自己的方向。
+type sortLevel struct {
+	column string
+	asc    bool
+}
+
+// isConcurrency 判断该级是否是并发维度（虚拟列，不在数据库里）。
+func (level sortLevel) isConcurrency() bool {
+	return level.column == ChannelSortByConcurrency
+}
+
+// sortLevels 把 SortBy 解析成有序、去重、长度受限的排序级列表。
+// 每级的方向优先取请求显式给出的 sort_order（仅当链长为 1 时才有意义），
+// 否则用该维度的自然方向。
+func (options ChannelSortOptions) sortLevels() []sortLevel {
 	if options.SortBy == "" {
 		return nil
 	}
-	levels := make([]string, 0, ChannelSortMaxLevels)
+	columns := make([]string, 0, ChannelSortMaxLevels)
 	seen := make(map[string]bool, ChannelSortMaxLevels)
 	for raw := range strings.SplitSeq(options.SortBy, ",") {
-		level := strings.ToLower(strings.TrimSpace(raw))
-		if level == "" || seen[level] {
+		column := strings.ToLower(strings.TrimSpace(raw))
+		if column == "" || seen[column] {
 			continue
 		}
-		if level != ChannelSortByConcurrency {
-			if _, ok := channelSortColumns[level]; !ok {
+		if column != ChannelSortByConcurrency {
+			if _, ok := channelSortColumns[column]; !ok {
 				continue
 			}
 		}
-		seen[level] = true
-		levels = append(levels, level)
-		if len(levels) == ChannelSortMaxLevels {
+		seen[column] = true
+		columns = append(columns, column)
+		if len(columns) == ChannelSortMaxLevels {
 			break
 		}
+	}
+
+	// 单级排序时尊重调用方显式指定的方向（前端「名称排序」按钮靠它升序）；
+	// 多级排序时各级用自然方向，否则一个全局方向会把某一级排反。
+	explicitAsc := options.SortOrder == "asc"
+	single := len(columns) == 1
+
+	levels := make([]sortLevel, 0, len(columns))
+	for _, column := range columns {
+		asc := channelSortAscending[column]
+		if single {
+			asc = explicitAsc
+		}
+		levels = append(levels, sortLevel{column: column, asc: asc})
 	}
 	return levels
 }
 
 // HasConcurrency 判断排序链里是否含并发维度。命中时必须走内存排序。
 func (options ChannelSortOptions) HasConcurrency() bool {
-	return slices.Contains(options.sortLevels(), ChannelSortByConcurrency)
+	return slices.ContainsFunc(options.sortLevels(), sortLevel.isConcurrency)
 }
 
 func NewChannelSortOptions(sortBy string, sortOrder string, idSort bool) ChannelSortOptions {
@@ -155,17 +192,17 @@ func NewChannelSortOptions(sortBy string, sortOrder string, idSort bool) Channel
 }
 
 func (options ChannelSortOptions) Apply(query *gorm.DB) *gorm.DB {
-	// 逐级追加 ORDER BY。并发维度跳过：它由 SortChannelsInMemory 处理，
-	// 这里的 SQL 排序只负责数据库列，内存排序会在之后按完整链重排。
+	// 逐级追加 ORDER BY，每级用它自己的方向。并发维度跳过：它由
+	// SortChannelsInMemory 处理，这里的 SQL 排序只负责数据库列。
 	applied := false
 	for _, level := range options.sortLevels() {
-		columnName, ok := channelSortColumns[level]
+		columnName, ok := channelSortColumns[level.column]
 		if !ok {
 			continue
 		}
 		query = query.Order(clause.OrderByColumn{
 			Column: clause.Column{Name: columnName},
-			Desc:   options.SortOrder != "asc",
+			Desc:   !level.asc,
 		})
 		applied = true
 	}
@@ -194,9 +231,9 @@ func (options ChannelSortOptions) Apply(query *gorm.DB) *gorm.DB {
 func SortChannelsInMemory(channels []*Channel, options ChannelSortOptions, startIdx int, num int) []*Channel {
 	levels := options.sortLevels()
 	if len(levels) == 0 {
-		levels = []string{"priority"}
+		// 无排序链时沿用列表默认：优先级降序
+		levels = []sortLevel{{column: "priority", asc: false}}
 	}
-	desc := options.SortOrder != "asc"
 
 	var counts map[int]int
 	if options.HasConcurrency() {
@@ -210,15 +247,16 @@ func SortChannelsInMemory(channels []*Channel, options ChannelSortOptions, start
 	sorted := make([]*Channel, len(channels))
 	copy(sorted, channels)
 	sort.SliceStable(sorted, func(i, j int) bool {
+		// 逐级比较，每级用它自己的方向：只有当某一级相等时才看下一级。
 		for _, level := range levels {
-			cmp := compareChannelsByLevel(sorted[i], sorted[j], level, counts)
+			cmp := compareChannelsByLevel(sorted[i], sorted[j], level.column, counts)
 			if cmp == 0 {
 				continue
 			}
-			if desc {
-				return cmp > 0
+			if level.asc {
+				return cmp < 0
 			}
-			return cmp < 0
+			return cmp > 0
 		}
 		return false
 	})
