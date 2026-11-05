@@ -18,21 +18,18 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useState } from 'react';
-import { Button, Checkbox, Popover, Typography } from '@douyinfe/semi-ui';
+import { Button, Popover, Typography } from '@douyinfe/semi-ui';
 import { IconSort } from '@douyinfe/semi-icons';
 
 // 渠道列表的排序入口：4 个维度收进一个弹层，拖拽顺序即优先级。
 //
-// 为什么「可以勾多个但只生效一个」：后端 ChannelSortOptions.SortBy 是单值，
-// 只能下发一个 ORDER BY；而套餐用量是纯前端页内排序，与后端排序叠加会产生
-// 「页内一个序、页间另一个序」的撕裂结果。所以勾选多个时，按拖拽顺序取第一个
-// 启用的维度，其余静默忽略，并在弹层底部显式说明当前生效的是哪一个。
+// 排序完全由顺序决定，没有勾选开关：排在前 CHANNEL_SORT_APPLY_COUNT 个的维度
+// 真正参与排序（多级 ORDER BY），后面的仅作为候选。当前生效的那几行用灰色背景
+// 标出，所以顺序本身就是「是否启用」的唯一表达。
 const ChannelSortPriorityPopover = ({
   order,
   items,
-  enabled,
-  activeKey,
-  onToggle,
+  applyCount,
   onReorder,
   t,
 }) => {
@@ -74,16 +71,14 @@ const ChannelSortPriorityPopover = ({
     resetDragState();
   };
 
-  const enabledCount = order.filter((key) => enabled[key]).length;
-  const activeLabel = activeKey ? items[activeKey].label : t('无');
-
   const content = (
     <div className='p-2 w-[240px]'>
       <div className='text-xs text-[var(--semi-color-text-2)] mb-2'>
         {t('拖动调整优先级')}
       </div>
       <div className='flex flex-col'>
-        {order.map((key) => {
+        {order.map((key, index) => {
+          const isApplied = index < applyCount;
           const isDragTarget = dragOverKey === key && draggedKey !== key;
           return (
             <div
@@ -95,8 +90,9 @@ const ChannelSortPriorityPopover = ({
               onDragEnd={resetDragState}
               className='flex items-center gap-2 px-2 py-1.5 rounded cursor-move select-none'
               style={{
-                background: enabled[key]
-                  ? 'var(--semi-color-fill-0)'
+                // 生效的维度用灰色背景标出，顺序即优先级
+                background: isApplied
+                  ? 'var(--semi-color-fill-1)'
                   : 'transparent',
                 borderTop:
                   isDragTarget && dragOverPosition === 'before'
@@ -108,11 +104,20 @@ const ChannelSortPriorityPopover = ({
                     : '2px solid transparent',
               }}
             >
-              <Checkbox
-                checked={!!enabled[key]}
-                onChange={(checked) => onToggle(key, checked)}
-              />
-              <span className='text-sm'>{t(items[key].label)}</span>
+              <span className='text-xs text-[var(--semi-color-text-2)] w-3 tabular-nums'>
+                {index + 1}
+              </span>
+              <span
+                className='text-sm'
+                style={{
+                  fontWeight: isApplied ? 600 : 400,
+                  color: isApplied
+                    ? 'var(--semi-color-text-0)'
+                    : 'var(--semi-color-text-2)',
+                }}
+              >
+                {t(items[key].label)}
+              </span>
             </div>
           );
         })}
@@ -121,15 +126,11 @@ const ChannelSortPriorityPopover = ({
         {t('当前生效')}
         {': '}
         <span className='text-[var(--semi-color-text-0)]'>
-          {t(activeLabel)}
+          {order
+            .slice(0, applyCount)
+            .map((key) => t(items[key].label))
+            .join(' → ')}
         </span>
-        {enabledCount > 1 && (
-          <span>
-            {'（'}
-            {t('其余已忽略')}
-            {'）'}
-          </span>
-        )}
       </div>
     </div>
   );
@@ -143,19 +144,10 @@ const ChannelSortPriorityPopover = ({
       content={content}
       showArrow
     >
-      <Button
-        icon={<IconSort />}
-        size='small'
-        theme={activeKey ? 'solid' : 'borderless'}
-        type={activeKey ? 'primary' : 'tertiary'}
-      >
+      <Button icon={<IconSort />} size='small' theme='borderless' type='tertiary'>
         <Typography.Text
           className='text-xs'
-          style={{
-            color: activeKey
-              ? 'var(--semi-color-bg-0)'
-              : 'var(--semi-color-text-1)',
-          }}
+          style={{ color: 'var(--semi-color-text-1)' }}
         >
           {t('排序优先级')}
         </Typography.Text>

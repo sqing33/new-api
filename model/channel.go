@@ -1,11 +1,14 @@
 package model
 
 import (
+	"cmp"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 
@@ -76,15 +79,25 @@ type ChannelInfo struct {
 	MultiKeyMode           constant.MultiKeyMode `json:"multi_key_mode"`
 }
 
+// ChannelSortOptions 描述渠道列表的多级排序链。
+//
+// SortBy 允许携带多级排序（前端拖动优先级后取前若干个维度），Apply 会按顺序
+// 依次追加 ORDER BY。并发维度不在数据库里，无法下推，命中它时由
+// SortChannelsInMemory 接管内存排序。
 type ChannelSortOptions struct {
+	// SortBy 是逗号分隔的排序链，例如 "name,concurrency"。为空表示不指定。
 	SortBy    string
 	SortOrder string
 	IDSort    bool
 }
 
 // ChannelSortByConcurrency 是虚拟排序列：并发数存在 Redis 而非数据库，
-// 命中它时改走内存排序，见 SortByConcurrencyDesc。
+// 命中它时改走内存排序，见 SortChannelsInMemory。
 const ChannelSortByConcurrency = "concurrency"
+
+// ChannelSortMaxLevels 限制排序链长度，与前端「取优先级前 N 个」一致，
+// 避免恶意请求构造超长 ORDER BY。
+const ChannelSortMaxLevels = 2
 
 var channelSortColumns = map[string]string{
 	"id":            "id",
@@ -95,15 +108,41 @@ var channelSortColumns = map[string]string{
 	"test_time":     "test_time",
 }
 
+// sortLevels 把 SortBy 解析成有序、去重、长度受限的排序维度列表。
+// 并发维度最多出现一次（它不在数据库里，重复没有意义）。
+func (options ChannelSortOptions) sortLevels() []string {
+	if options.SortBy == "" {
+		return nil
+	}
+	levels := make([]string, 0, ChannelSortMaxLevels)
+	seen := make(map[string]bool, ChannelSortMaxLevels)
+	for raw := range strings.SplitSeq(options.SortBy, ",") {
+		level := strings.ToLower(strings.TrimSpace(raw))
+		if level == "" || seen[level] {
+			continue
+		}
+		if level != ChannelSortByConcurrency {
+			if _, ok := channelSortColumns[level]; !ok {
+				continue
+			}
+		}
+		seen[level] = true
+		levels = append(levels, level)
+		if len(levels) == ChannelSortMaxLevels {
+			break
+		}
+	}
+	return levels
+}
+
+// HasConcurrency 判断排序链里是否含并发维度。命中时必须走内存排序。
+func (options ChannelSortOptions) HasConcurrency() bool {
+	return slices.Contains(options.sortLevels(), ChannelSortByConcurrency)
+}
+
 func NewChannelSortOptions(sortBy string, sortOrder string, idSort bool) ChannelSortOptions {
 	normalizedSortBy := strings.ToLower(strings.TrimSpace(sortBy))
 	normalizedSortOrder := strings.ToLower(strings.TrimSpace(sortOrder))
-	if normalizedSortBy != ChannelSortByConcurrency {
-		if _, ok := channelSortColumns[normalizedSortBy]; !ok {
-			normalizedSortBy = ""
-			normalizedSortOrder = ""
-		}
-	}
 	if normalizedSortOrder != "asc" {
 		normalizedSortOrder = "desc"
 	}
@@ -116,11 +155,22 @@ func NewChannelSortOptions(sortBy string, sortOrder string, idSort bool) Channel
 }
 
 func (options ChannelSortOptions) Apply(query *gorm.DB) *gorm.DB {
-	if columnName, ok := channelSortColumns[options.SortBy]; ok {
-		return query.Order(clause.OrderByColumn{
+	// 逐级追加 ORDER BY。并发维度跳过：它由 SortChannelsInMemory 处理，
+	// 这里的 SQL 排序只负责数据库列，内存排序会在之后按完整链重排。
+	applied := false
+	for _, level := range options.sortLevels() {
+		columnName, ok := channelSortColumns[level]
+		if !ok {
+			continue
+		}
+		query = query.Order(clause.OrderByColumn{
 			Column: clause.Column{Name: columnName},
 			Desc:   options.SortOrder != "asc",
 		})
+		applied = true
+	}
+	if applied {
+		return query
 	}
 	if options.IDSort {
 		return query.Order(clause.OrderByColumn{
@@ -132,6 +182,88 @@ func (options ChannelSortOptions) Apply(query *gorm.DB) *gorm.DB {
 		Column: clause.Column{Name: "priority"},
 		Desc:   true,
 	})
+}
+
+// SortChannelsInMemory 按完整排序链在内存里重排渠道并分页。
+//
+// 并发数来自 Redis，无法用 SQL ORDER BY，因此只要排序链里出现并发维度，
+// 就必须取出全部候选行后在内存里按链逐级比较。渠道数量在管理员列表场景
+// 有限，全量取行可接受。
+//
+// 不含并发维度时调用方应直接用 Apply 下推 SQL，不要走这里。
+func SortChannelsInMemory(channels []*Channel, options ChannelSortOptions, startIdx int, num int) []*Channel {
+	levels := options.sortLevels()
+	if len(levels) == 0 {
+		levels = []string{"priority"}
+	}
+	desc := options.SortOrder != "asc"
+
+	var counts map[int]int
+	if options.HasConcurrency() {
+		ids := make([]int, 0, len(channels))
+		for _, channel := range channels {
+			ids = append(ids, channel.Id)
+		}
+		counts = concurrency.BatchCount(concurrency.DimensionChannel, ids)
+	}
+
+	sorted := make([]*Channel, len(channels))
+	copy(sorted, channels)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		for _, level := range levels {
+			cmp := compareChannelsByLevel(sorted[i], sorted[j], level, counts)
+			if cmp == 0 {
+				continue
+			}
+			if desc {
+				return cmp > 0
+			}
+			return cmp < 0
+		}
+		return false
+	})
+
+	if startIdx >= len(sorted) {
+		return []*Channel{}
+	}
+	end := len(sorted)
+	if num >= 0 && startIdx+num < end {
+		end = startIdx + num
+	}
+	return sorted[startIdx:end]
+}
+
+// compareChannelsByLevel 返回 a 相对 b 的大小（>0 表示 a 更大）。
+// counts 为 nil 时表示排序链不含并发维度。
+func compareChannelsByLevel(a *Channel, b *Channel, level string, counts map[int]int) int {
+	if level == ChannelSortByConcurrency {
+		if counts == nil {
+			return 0
+		}
+		return counts[a.Id] - counts[b.Id]
+	}
+	switch level {
+	case "id":
+		return a.Id - b.Id
+	case "name":
+		return strings.Compare(a.Name, b.Name)
+	case "balance":
+		return cmp.Compare(a.Balance, b.Balance)
+	case "response_time":
+		return cmp.Compare(a.ResponseTime, b.ResponseTime)
+	case "test_time":
+		return cmp.Compare(a.TestTime, b.TestTime)
+	default:
+		// Priority 是 *int64，nil 视作 0（与数据库 default:0 一致）
+		return cmp.Compare(channelPriority(a), channelPriority(b))
+	}
+}
+
+func channelPriority(channel *Channel) int64 {
+	if channel.Priority == nil {
+		return 0
+	}
+	return *channel.Priority
 }
 
 func resolveChannelSortOptions(idSort bool, sortOptions []ChannelSortOptions) ChannelSortOptions {
@@ -452,7 +584,7 @@ func GetAllChannels(startIdx int, num int, selectAll bool, idSort bool, sortOpti
 	var channels []*Channel
 	var err error
 	order := resolveChannelSortOptions(idSort, sortOptions)
-	if order.SortBy == ChannelSortByConcurrency {
+	if order.HasConcurrency() {
 		// 并发数在 Redis 里，先取全量再内存排序分页
 		query := DB
 		if !selectAll {
@@ -463,13 +595,9 @@ func GetAllChannels(startIdx int, num int, selectAll bool, idSort bool, sortOpti
 			return nil, err
 		}
 		if selectAll {
-			return SortByConcurrencyDesc(all, concurrency.DimensionChannel,
-				func(c *Channel) int { return c.Id },
-				func(c *Channel) int64 { return int64(c.Id) }, 0, -1), nil
+			return SortChannelsInMemory(all, order, 0, -1), nil
 		}
-		return SortByConcurrencyDesc(all, concurrency.DimensionChannel,
-			func(c *Channel) int { return c.Id },
-			func(c *Channel) int64 { return int64(c.Id) }, startIdx, num), nil
+		return SortChannelsInMemory(all, order, startIdx, num), nil
 	}
 	if selectAll {
 		err = order.Apply(DB).Find(&channels).Error
@@ -486,14 +614,12 @@ func GetChannelsByTag(tag string, idSort bool, selectAll bool, sortOptions ...Ch
 	if !selectAll {
 		query = query.Omit("key")
 	}
-	if order.SortBy == ChannelSortByConcurrency {
+	if order.HasConcurrency() {
 		var all []*Channel
 		if err := query.Find(&all).Error; err != nil {
 			return nil, err
 		}
-		return SortByConcurrencyDesc(all, concurrency.DimensionChannel,
-			func(c *Channel) int { return c.Id },
-			func(c *Channel) int64 { return int64(c.Id) }, 0, -1), nil
+		return SortChannelsInMemory(all, order, 0, -1), nil
 	}
 	err := query.Find(&channels).Error
 	return channels, err
@@ -525,14 +651,12 @@ func SearchChannels(keyword string, group string, model string, idSort bool, sor
 	baseQuery = ApplyChannelGroupFilter(baseQuery.Where(whereClause, args...), group)
 
 	// 执行查询
-	if order.SortBy == ChannelSortByConcurrency {
+	if order.HasConcurrency() {
 		var all []*Channel
 		if err := order.Apply(baseQuery).Find(&all).Error; err != nil {
 			return nil, err
 		}
-		return SortByConcurrencyDesc(all, concurrency.DimensionChannel,
-			func(c *Channel) int { return c.Id },
-			func(c *Channel) int64 { return int64(c.Id) }, 0, -1), nil
+		return SortChannelsInMemory(all, order, 0, -1), nil
 	}
 	err := order.Apply(baseQuery).Find(&channels).Error
 	if err != nil {

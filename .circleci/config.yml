@@ -1,0 +1,205 @@
+version: 2.1
+
+# ============================================================
+# new-api — 主应用镜像构建
+#
+# 结构照搬 social-monitor（ghcr.io/sqing33/social-monitor 的
+# .circleci/config.yml）的单 amd64 方案，而它又是从 memex 的
+# 双架构方案裁剪而来：
+#   - 部署目标是 NAS 上的 x86_64 机器（实测 uname -m = x86_64），
+#     多架构只会让构建时间翻倍却用不上。
+#   - memex 那套 amd64/arm64 双 job 并行 + manifest 合并的收益在这里
+#     不成立，但 digest 校验、构建后反查 label 这两点保留。
+#
+# 流程：build-main-amd64 推 :latest-amd64 与 :sha-xxxxxxx 并记录 digest，
+# verify-and-tag 反查远端镜像的架构/OS/label，确认无误后才把 :latest
+# 指过去——latest 只在校验通过后移动，不会停在一个坏镜像上。
+#
+# 与 GitHub Actions 并存：
+#   - .github/workflows/docker-image.yml 保留，仍是 workflow_dispatch
+#     手动触发，用于手动补构建；镜像的常规产出路径是本文件。
+#
+# 凭据来自 CircleCI 组织级 Context `ghcr`（与 memex / social-monitor 同名）：
+#   GHCR_USERNAME / GHCR_TOKEN —— 推 ghcr.io/sqing33/new-api。
+#   两个 build job 各挂 `context: ghcr`；validate-main 不需要凭据，不挂。
+#   轮换 token 只改 context 一处，所有挂它的项目一起生效。
+# ============================================================
+
+executors:
+  # 门禁用官方 Go executor：只编译和跑测试，不构建镜像，资源开销最小。
+  go:
+    docker:
+      - image: cimg/go:1.25
+    working_directory: ~/project
+
+jobs:
+  # ------------------------------------------------------------
+  # 门禁。任一失败都不会进入构建。
+  # 注意：AGENTS.md 明确禁止执行任何 Claude 相关测试，
+  # 这里只跑与 Claude 无关的包。
+  # ------------------------------------------------------------
+  validate-main:
+    executor: go
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v1-{{ checksum "go.sum" }}
+      - run:
+          name: go vet + go test
+          command: |
+            set -euo pipefail
+            go version
+            # relaykit 是 replace 引用的本地子模块，go vet ./... 不会进去，
+            # 它的独立性由下面单独的 GOWORK=off 构建保证。
+            go build ./...
+            go vet ./model/ ./controller/ ./middleware/ ./pkg/... ./common/...
+            # 明确排除 relay/channel/claude/：项目约定禁止跑 Claude 相关测试
+            go test ./model/ ./controller/ ./middleware/ ./common/... \
+                    ./pkg/... ./setting/ ./service/...
+      - save_cache:
+          key: go-mod-v1-{{ checksum "go.sum" }}
+          paths:
+            - /home/circleci/go/pkg/mod
+      - run:
+          name: relaykit 独立构建
+          command: |
+            set -euo pipefail
+            cd relaykit && GOWORK=off go build ./...
+
+  # ------------------------------------------------------------
+  # amd64 镜像构建。
+  # resource_class: large —— 镜像内含完整前端构建（bun + vite，
+  # Node 堆上限已提到 6G）与 Go 编译，默认 medium 容易 OOM。
+  # ------------------------------------------------------------
+  build-main-amd64:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large
+    environment:
+      IMAGE_REPO: ghcr.io/sqing33/new-api
+    steps:
+      - checkout
+      - run:
+          name: 构建主应用 amd64
+          command: |
+            set -euo pipefail
+            : "${GHCR_USERNAME:?GHCR_USERNAME 未配置}"
+            : "${GHCR_TOKEN:?GHCR_TOKEN 未配置}"
+            command -v jq >/dev/null
+
+            SHORT_SHA="$(printf '%s' "$CIRCLE_SHA1" | cut -c1-7)"
+            echo "本次提交 ${CIRCLE_SHA1}，sha tag = sha-${SHORT_SHA}"
+
+            printf '%s' "$GHCR_TOKEN" \
+              | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+            docker buildx create --name circleci-builder --driver docker-container --use
+            docker buildx inspect --bootstrap
+
+            METADATA_FILE=/tmp/build-metadata-amd64.json
+            WORK_DIR=/tmp/workspace
+            mkdir -p "$WORK_DIR"
+
+            # builder-classic 是前端构建阶段，其产物会被 embed 进 Go 二进制。
+            # 该阶段不进缓存：层缓存曾把旧 dist 打进新镜像（源码改了但
+            # bun build 层仍命中），GHA 那边也是这么处理的。
+            docker buildx build \
+              --provenance=false \
+              --sbom=false \
+              --platform linux/amd64 \
+              --tag "${IMAGE_REPO}:latest-amd64" \
+              --tag "${IMAGE_REPO}:sha-${SHORT_SHA}" \
+              --label "org.opencontainers.image.revision=${CIRCLE_SHA1}" \
+              --label "io.ci.workflow-id=${CIRCLE_WORKFLOW_ID}" \
+              --metadata-file "$METADATA_FILE" \
+              --cache-from "type=registry,ref=${IMAGE_REPO}:buildcache" \
+              --cache-to "type=registry,ref=${IMAGE_REPO}:buildcache,mode=max" \
+              --no-cache-filters builder-classic \
+              --push .
+
+            DIGEST="$(jq -er '."containerimage.digest"' "$METADATA_FILE")"
+            [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+            printf '%s\n' "$DIGEST" > "$WORK_DIR/digest-amd64.txt"
+      - persist_to_workspace:
+          root: /tmp/workspace
+          paths:
+            - digest-amd64.txt
+
+  # ------------------------------------------------------------
+  # 反查刚推上去的镜像：确认架构、OS 和两个 label 真的落在远端。
+  # 命令没报错不等于推上去的东西是对的，所以这一步是必要的。
+  # 单架构下无需 manifest 合并，此 job 只做校验并把 latest 指过去。
+  # ------------------------------------------------------------
+  verify-and-tag:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: medium
+    environment:
+      IMAGE_REPO: ghcr.io/sqing33/new-api
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - run:
+          name: 校验本次 digest 并把 latest 指向它
+          command: |
+            set -euo pipefail
+            : "${GHCR_USERNAME:?GHCR_USERNAME 未配置}"
+            : "${GHCR_TOKEN:?GHCR_TOKEN 未配置}"
+            command -v jq >/dev/null
+
+            AMD64_DIGEST="$(tr -d '[:space:]' < /tmp/workspace/digest-amd64.txt)"
+            [[ "$AMD64_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+            printf '%s' "$GHCR_TOKEN" \
+              | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+            docker buildx create --name circleci-builder --driver docker-container --use
+            docker buildx inspect --bootstrap
+
+            docker buildx imagetools inspect "${IMAGE_REPO}@${AMD64_DIGEST}" --format '{{json .Image}}' \
+              | jq -e \
+                  --arg architecture amd64 \
+                  --arg revision "$CIRCLE_SHA1" \
+                  --arg workflow_id "$CIRCLE_WORKFLOW_ID" \
+                  '.architecture == $architecture
+                   and .os == "linux"
+                   and .config.Labels["org.opencontainers.image.revision"] == $revision
+                   and .config.Labels["io.ci.workflow-id"] == $workflow_id'
+
+            # 单架构：把 latest 直接指向本次构建的 manifest，避免 latest 停在旧提交
+            docker buildx imagetools create \
+              "${IMAGE_REPO}@${AMD64_DIGEST}" \
+              --tag "${IMAGE_REPO}:latest"
+            docker buildx imagetools inspect "${IMAGE_REPO}:latest"
+
+workflows:
+  version: 2
+  main-image:
+    jobs:
+      - validate-main:
+          filters:
+            branches:
+              only:
+                - main
+            tags:
+              ignore:
+                - /.*/
+      - build-main-amd64:
+          context: ghcr
+          requires: [validate-main]
+          filters:
+            branches:
+              only:
+                - main
+            tags:
+              ignore:
+                - /.*/
+      - verify-and-tag:
+          context: ghcr
+          requires: [validate-main, build-main-amd64]
+          filters:
+            branches:
+              only:
+                - main
+            tags:
+              ignore:
+                - /.*/

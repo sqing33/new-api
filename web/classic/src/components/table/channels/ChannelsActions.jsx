@@ -28,6 +28,7 @@ import {
 } from '@douyinfe/semi-ui';
 import CompactModeToggle from '../../common/ui/CompactModeToggle';
 import ChannelSortPriorityPopover from './ChannelSortPriorityPopover';
+import { CHANNEL_SORT_APPLY_COUNT } from '../../../hooks/channels/useChannelsData';
 
 // 排序维度的展示名。key 与 useChannelsData 里的 sortOrder 元素一一对应。
 const SORT_DIMENSION_ITEMS = {
@@ -58,9 +59,6 @@ const ChannelsActions = ({
   compactMode,
   setCompactMode,
   sortOrder,
-  sortEnabled,
-  activeSort,
-  toggleSortDimension,
   reorderSortDimensions,
   setEnableBatchDelete,
   enableTagMode,
@@ -282,9 +280,7 @@ const ChannelsActions = ({
           <ChannelSortPriorityPopover
             order={sortOrder}
             items={SORT_DIMENSION_ITEMS}
-            enabled={sortEnabled}
-            activeKey={activeSort}
-            onToggle={toggleSortDimension}
+            applyCount={CHANNEL_SORT_APPLY_COUNT}
             onReorder={reorderSortDimensions}
             t={t}
           />
