@@ -298,16 +298,31 @@ const ModelPerformanceSheet = ({
     {
       title: t('令牌'),
       dataIndex: 'token_id',
-      width: 160,
+      width: 200,
       render: (tokenId, record) => {
-        // 后端已按角色过滤：管理员看到全部用户的令牌，普通用户只看自己的。
-        // 名称缺失时回退到 #id，历史行（token_id=0）显示「未知令牌」。
+        // 后端已按角色过滤：管理员看到全部用户的令牌（并带上归属用户名），
+        // 普通用户只看自己的。名称缺失时回退到 #id，历史行（token_id=0）
+        // 显示「未知令牌」。
         const label =
           record?.token_name || (tokenId > 0 ? `#${tokenId}` : t('未知令牌'));
+        const owner = record?.owner_name;
         return (
-          <Text className='text-xs' ellipsis={{ showTooltip: true }}>
-            {label}
-          </Text>
+          <span className='inline-flex items-baseline text-xs max-w-full'>
+            <Text className='text-xs' ellipsis={{ showTooltip: !owner }}>
+              {label}
+            </Text>
+            {owner && (
+              // 归属用户名连同 @ 一起用灰色：它是辅助信息，且能与令牌名
+              // 视觉分层，长名字被截断时也能看出哪部分是归属。
+              <span
+                className='ml-0.5 truncate'
+                style={{ color: 'var(--semi-color-text-2)' }}
+                title={`${label}@${owner}`}
+              >
+                @{owner}
+              </span>
+            )}
+          </span>
         );
       },
     },

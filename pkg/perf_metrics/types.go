@@ -63,8 +63,11 @@ type ChannelResult struct {
 
 // TokenResult 是按令牌维度聚合的指标，与 ChannelResult 同构。
 type TokenResult struct {
-	TokenId        int           `json:"token_id"`
-	TokenName      string        `json:"token_name"`
+	TokenId   int    `json:"token_id"`
+	TokenName string `json:"token_name"`
+	// OwnerName 是令牌归属用户的用户名。管理员看全部用户的令牌时才有值，
+	// 用于区分「不同用户的同名令牌」；普通用户只看自己的令牌，此字段为空。
+	OwnerName      string        `json:"owner_name,omitempty"`
 	AvgTtftMs      int64         `json:"avg_ttft_ms"`
 	AvgLatencyMs   int64         `json:"avg_latency_ms"`
 	SuccessRate    float64       `json:"success_rate"`

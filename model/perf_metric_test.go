@@ -258,3 +258,47 @@ func TestMigratePerfConcurrencyUniqueIndexSQLite(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, 2, token6.MaxConcurrency)
 }
+
+// TestGetTokenOwnershipsJoinsOwnerName 锁定归属用户名的取法：
+// 通过 LEFT JOIN 一次取出，且用户已删除时 OwnerName 为空而查询不报错
+// （性能指标的生命周期比令牌和用户都长）。
+func TestGetTokenOwnershipsJoinsOwnerName(t *testing.T) {
+	previousDB, previousLOGDB := DB, LOG_DB
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	DB = db
+	LOG_DB = db
+	t.Cleanup(func() {
+		DB, LOG_DB = previousDB, previousLOGDB
+	})
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	initCol()
+
+	require.NoError(t, db.AutoMigrate(&User{}, &Token{}))
+
+	require.NoError(t, db.Create(&User{Id: 1, Username: "alice", AffCode: "aff1"}).Error)
+	require.NoError(t, db.Create(&User{Id: 2, Username: "爱其实很简单", AffCode: "aff2"}).Error)
+	require.NoError(t, db.Create(&Token{Id: 10, UserId: 1, Name: "zcode", Key: "k1"}).Error)
+	require.NoError(t, db.Create(&Token{Id: 11, UserId: 2, Name: "AstrBot", Key: "k2"}).Error)
+	// 令牌 12 的归属用户不存在：LEFT JOIN 应容忍，OwnerName 为空
+	require.NoError(t, db.Create(&Token{Id: 12, UserId: 999, Name: "orphan", Key: "k3"}).Error)
+
+	ownerships, err := GetTokenOwnerships([]int{10, 11, 12})
+	require.NoError(t, err)
+	require.Len(t, ownerships, 3)
+
+	assert.Equal(t, "alice", ownerships[10].OwnerName)
+	assert.Equal(t, 1, ownerships[10].UserId)
+	assert.Equal(t, "zcode", ownerships[10].Name)
+
+	// 中文用户名必须原样返回
+	assert.Equal(t, "爱其实很简单", ownerships[11].OwnerName)
+
+	assert.Equal(t, "", ownerships[12].OwnerName, "用户不存在时 OwnerName 为空")
+	assert.Equal(t, 999, ownerships[12].UserId, "UserId 仍要保留以便权限过滤")
+
+	// 空 id 列表直接返回空 map，不发查询
+	empty, err := GetTokenOwnerships(nil)
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+}

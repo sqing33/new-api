@@ -605,27 +605,44 @@ type TokenOwnership struct {
 	Id     int
 	UserId int
 	Name   string
+	// OwnerName 是归属用户的用户名。管理员看全部用户的令牌时用它区分
+	// 不同用户的同名令牌；用户被删除后为空。
+	OwnerName string
 }
 
 // GetTokenOwnerships loads ownership for the given token ids, including
 // soft-deleted tokens: performance metrics outlive the token itself, and the
 // historical rows still need a name and an owner to be scoped correctly.
-// GetTokenOwnerships 按 id 批量取令牌归属与名称，包含已软删除的令牌——
-// 性能指标的生命周期比令牌长，历史行仍需要一个名称和归属才能正确过滤。
+// GetTokenOwnerships 按 id 批量取令牌归属、名称与归属用户名，包含已软删除的
+// 令牌——性能指标的生命周期比令牌长，历史行仍需要一个名称和归属才能正确过滤。
+//
+// 用户名通过 LEFT JOIN 一次取出：令牌指标表可能有几十行，逐个调
+// GetUsernameById 会发几十次查询。LEFT JOIN 而非 INNER 是为了容忍用户已删除。
 func GetTokenOwnerships(ids []int) (map[int]TokenOwnership, error) {
 	result := make(map[int]TokenOwnership, len(ids))
 	if len(ids) == 0 {
 		return result, nil
 	}
-	var tokens []Token
+	var rows []struct {
+		Id        int
+		UserId    int
+		Name      string
+		OwnerName *string
+	}
 	if err := DB.Unscoped().
-		Select("id", "user_id", "name").
-		Where("id IN ?", ids).
-		Find(&tokens).Error; err != nil {
+		Table("tokens").
+		Select("tokens.id, tokens.user_id, tokens.name, users.username AS owner_name").
+		Joins("LEFT JOIN users ON users.id = tokens.user_id").
+		Where("tokens.id IN ?", ids).
+		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-	for _, token := range tokens {
-		result[token.Id] = TokenOwnership{Id: token.Id, UserId: token.UserId, Name: token.Name}
+	for _, row := range rows {
+		ownership := TokenOwnership{Id: row.Id, UserId: row.UserId, Name: row.Name}
+		if row.OwnerName != nil {
+			ownership.OwnerName = *row.OwnerName
+		}
+		result[row.Id] = ownership
 	}
 	return result, nil
 }

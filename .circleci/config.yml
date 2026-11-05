@@ -50,6 +50,17 @@ jobs:
           command: |
             set -euo pipefail
             go version
+
+            # main.go 用 //go:embed web/classic/dist 嵌入前端产物，而 dist 被
+            # .gitignore 排除，CI 上 checkout 后并不存在，go build 会直接报
+            # "pattern web/classic/dist: no matching files found"。
+            #
+            # 这里只放一个占位 index.html：门禁的目的是验证 Go 代码，
+            # 真实前端产物由 build-main-amd64 的 Docker 构建负责，
+            # 不值得为此在门禁里多跑几分钟 bun build。
+            mkdir -p web/classic/dist
+            printf '<!doctype html><title>placeholder</title>\n' > web/classic/dist/index.html
+
             # relaykit 是 replace 引用的本地子模块，go vet ./... 不会进去，
             # 它的独立性由下面单独的 GOWORK=off 构建保证。
             go build ./...

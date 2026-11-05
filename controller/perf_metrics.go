@@ -82,7 +82,7 @@ func GetPerfMetrics(c *gin.Context) {
 }
 
 // scopePerfTokenResults 下发令牌维度指标前做权限收敛:
-// 管理员保留全部行并补全真实令牌名;普通用户只保留自己的令牌,
+// 管理员保留全部行并补全真实令牌名与归属用户名;普通用户只保留自己的令牌,
 // 名称为空的历史行统一显示为「未知令牌」。
 func scopePerfTokenResults(tokens []perfmetrics.TokenResult, role int, userId int) []perfmetrics.TokenResult {
 	if len(tokens) == 0 {
@@ -102,14 +102,20 @@ func scopePerfTokenResults(tokens []perfmetrics.TokenResult, role int, userId in
 		return nil
 	}
 
+	isAdmin := role >= common.RoleAdminUser
 	scoped := make([]perfmetrics.TokenResult, 0, len(tokens))
 	for _, token := range tokens {
 		ownership, known := ownerships[token.TokenId]
-		if role < common.RoleAdminUser && (!known || ownership.UserId != userId) {
+		if !isAdmin && (!known || ownership.UserId != userId) {
 			continue
 		}
 		if token.TokenName == "" && known {
 			token.TokenName = ownership.Name
+		}
+		// 归属用户名只下发给管理员:普通用户只看自己的令牌,带上用户名是冗余,
+		// 而且会让「自己的令牌」这一视图凭空多出别人的账号信息。
+		if isAdmin && known {
+			token.OwnerName = ownership.OwnerName
 		}
 		scoped = append(scoped, token)
 	}
