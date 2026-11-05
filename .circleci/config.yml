@@ -37,6 +37,11 @@ jobs:
   # 门禁。任一失败都不会进入构建。
   # 注意：AGENTS.md 明确禁止执行任何 Claude 相关测试，
   # 这里只跑与 Claude 无关的包。
+  #
+  # 缓存说明：GOCACHE（编译产物）比 pkg/mod（依赖源码）更关键。
+  # 只缓存 pkg/mod 时，冷启动要从零编译几百个依赖包，实测占掉门禁
+  # 180s 里的绝大部分；缓存 GOCACHE 后只跑增量编译 + 测试。
+  # 缓存 key 用 go.sum 校验和：依赖不变就复用，变了自动失效。
   # ------------------------------------------------------------
   validate-main:
     executor: go
@@ -44,7 +49,8 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-mod-v1-{{ checksum "go.sum" }}
+            - go-build-v2-{{ checksum "go.sum" }}
+            - go-build-v2-
       - run:
           name: go vet + go test
           command: |
@@ -63,15 +69,21 @@ jobs:
 
             # relaykit 是 replace 引用的本地子模块，go vet ./... 不会进去，
             # 它的独立性由下面单独的 GOWORK=off 构建保证。
-            go build ./...
+            #
+            # 不跑完整的 go build ./...：go vet 与 go test 都会自己编译，
+            # 多跑一遍只是把同样的编译做两次。但 main 包必须单独构建一次
+            # —— 只有它含 //go:embed，vet/test 都不覆盖它，缺了占位
+            # index.html 时的 embed 失败就没人发现。
+            go build .
             go vet ./model/ ./controller/ ./middleware/ ./pkg/... ./common/...
             # 明确排除 relay/channel/claude/：项目约定禁止跑 Claude 相关测试
             go test ./model/ ./controller/ ./middleware/ ./common/... \
                     ./pkg/... ./setting/ ./service/...
       - save_cache:
-          key: go-mod-v1-{{ checksum "go.sum" }}
+          key: go-build-v2-{{ checksum "go.sum" }}
           paths:
             - /home/circleci/go/pkg/mod
+            - /home/circleci/.cache/go-build
       - run:
           name: relaykit 独立构建
           command: |
