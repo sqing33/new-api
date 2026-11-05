@@ -438,7 +438,15 @@ func newAuditTestDatabase(t *testing.T, kind, dsn string) (*gorm.DB, string) {
 	t.Helper()
 	if kind == "sqlite" {
 		path := t.TempDir() + "/audit.db"
-		db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+		// 必须走 NormalizeSQLiteDSN 注入 busy_timeout(30000) / WAL /
+		// _txlock=immediate，裸 DSN 下并发写会直接失败：
+		//   - modernc 驱动忽略裸 _busy_timeout=，忙等仍是 SQLite 默认 5s
+		//   - 缺 BEGIN IMMEDIATE 时，先 SELECT 后写的并发事务会命中
+		//     SQLITE_BUSY_SNAPSHOT，busy handler 覆盖不到，立刻失败
+		// 见 common/database.go 里 SQLitePath 上方的说明。
+		// CI 上 TestSecurityAccountDeletionConcurrentRequestsHaveOneWinner
+		// 正是因此随机失败（日志为 "database is locked (5) (SQLITE_BUSY)"）。
+		db, err := gorm.Open(sqlite.Open(common.NormalizeSQLiteDSN(path)), &gorm.Config{})
 		require.NoError(t, err)
 		return db, path
 	}
