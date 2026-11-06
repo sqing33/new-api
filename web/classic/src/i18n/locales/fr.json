@@ -4516,5 +4516,17 @@
   "排序优先级": "Priorité de tri",
   "当前生效": "Actif",
   "其余已忽略": "les autres sont ignorés",
-  "拖动调整优先级": "Glisser pour réordonner"
+  "拖动调整优先级": "Glisser pour réordonner",
+  "自动刷新": "Rafraîchissement automatique",
+  "让管理页的数据定时自动更新，无需手动点击查询": "Met à jour les données des pages d’administration à intervalle régulier, sans avoir à cliquer sur Requête",
+  "启用自动刷新": "Activer le rafraîchissement automatique",
+  "开启后，清荫日志、使用日志、令牌管理、渠道管理四个页面会定时自动刷新数据。": "Une fois activé, les pages Journaux d’images, Journaux d’utilisation, Jetons et Canaux actualisent leurs données automatiquement.",
+  "刷新间隔": "Intervalle de rafraîchissement",
+  "间隔越短数据越实时，但会给后端带来更多查询压力。多个管理员同时开启时压力会成倍增加。": "Un intervalle court donne des données plus fraîches mais sollicite davantage le serveur. La charge est multipliée si plusieurs administrateurs l’activent en même temps.",
+  "5 秒（实时）": "5 secondes (direct)",
+  "10 秒": "10 secondes",
+  "30 秒": "30 secondes",
+  "1 分钟": "1 minute",
+  "5 分钟": "5 minutes",
+  "提示：自动刷新会保持当前页码与筛选条件，页面切到后台时会自动暂停；修改后需要刷新页面才会生效。": "Remarque : le rafraîchissement automatique conserve la page et les filtres courants, et se met en pause lorsque l’onglet passe en arrière-plan. Les modifications prennent effet après rechargement de la page."
 }

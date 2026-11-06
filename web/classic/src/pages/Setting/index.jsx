@@ -34,6 +34,7 @@ import {
   CreditCard,
   Server,
   Activity,
+  RefreshCw,
 } from 'lucide-react';
 
 import SystemSetting from '../../components/settings/SystemSetting';
@@ -49,6 +50,7 @@ import DrawingSetting from '../../components/settings/DrawingSetting';
 import PaymentSetting from '../../components/settings/PaymentSetting';
 import ModelDeploymentSetting from '../../components/settings/ModelDeploymentSetting';
 import PerformanceSetting from '../../components/settings/PerformanceSetting';
+import AutoRefreshSetting from '../../components/settings/AutoRefreshSetting';
 
 const Setting = () => {
   const { t } = useTranslation();
@@ -157,6 +159,16 @@ const Setting = () => {
       ),
       content: <PerformanceSetting />,
       itemKey: 'performance',
+    });
+    panes.push({
+      tab: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <RefreshCw size={18} />
+          {t('自动刷新')}
+        </span>
+      ),
+      content: <AutoRefreshSetting />,
+      itemKey: 'auto-refresh',
     });
     panes.push({
       tab: (

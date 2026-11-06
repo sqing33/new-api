@@ -4645,5 +4645,17 @@
   "排序优先级": "Sort priority",
   "当前生效": "Active",
   "其余已忽略": "others ignored",
-  "拖动调整优先级": "Drag to reorder"
+  "拖动调整优先级": "Drag to reorder",
+  "自动刷新": "Auto Refresh",
+  "让管理页的数据定时自动更新，无需手动点击查询": "Update management page data on a timer, no need to click query manually",
+  "启用自动刷新": "Enable auto refresh",
+  "开启后，清荫日志、使用日志、令牌管理、渠道管理四个页面会定时自动刷新数据。": "When enabled, the Image Logs, Usage Logs, Token and Channel pages refresh their data automatically.",
+  "刷新间隔": "Refresh interval",
+  "间隔越短数据越实时，但会给后端带来更多查询压力。多个管理员同时开启时压力会成倍增加。": "A shorter interval means fresher data but more load on the backend. The load multiplies when several admins enable it at once.",
+  "5 秒（实时）": "5 seconds (live)",
+  "10 秒": "10 seconds",
+  "30 秒": "30 seconds",
+  "1 分钟": "1 minute",
+  "5 分钟": "5 minutes",
+  "提示：自动刷新会保持当前页码与筛选条件，页面切到后台时会自动暂停；修改后需要刷新页面才会生效。": "Note: auto refresh keeps the current page and filters, and pauses while the tab is in the background. Changes take effect after reloading the page."
 }

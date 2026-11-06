@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@douyinfe/semi-ui';
 import {
@@ -41,6 +41,8 @@ import {
 } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
+import { useAutoRefresh } from '../common/useAutoRefresh';
+import { useAutoRefreshSetting } from '../common/useAutoRefreshSetting';
 import ParamOverrideEntry from '../../components/table/usage-logs/components/ParamOverrideEntry';
 
 // 每页条数的持久化键。与 /channel 共用同一个 key（两者的默认值与选项集相同），
@@ -848,7 +850,13 @@ export const useLogsData = ({
   };
 
   // Load logs function
-  const loadLogs = async (startIdx, pageSize, customLogType = null) => {
+  // silent=true 用于自动刷新：不显示 loading 骨架、不弹错误 toast。
+  const loadLogs = async (
+    startIdx,
+    pageSize,
+    customLogType = null,
+    silent = false,
+  ) => {
     if (!canLoadLogs) {
       setLogs([]);
       setExpandData({});
@@ -857,7 +865,9 @@ export const useLogsData = ({
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!silent) {
+      setLoading(true);
+    }
 
     let url = '';
     const {
@@ -914,7 +924,9 @@ export const useLogsData = ({
         request_id,
       })}`;
     }
-    const res = await API.get(url);
+    // 静默模式走 skipErrorHandler：请求失败时不让 axios 拦截器弹全局 toast，
+    // 否则每 5 秒失败一次就会弹一次。
+    const res = await API.get(url, { skipErrorHandler: silent });
     const { success, message, data } = res.data;
     if (success) {
       const newPageData = data.items;
@@ -924,10 +936,12 @@ export const useLogsData = ({
       setLogCount(data.total);
 
       setLogsFormat(newPageData);
-    } else {
+    } else if (!silent) {
       showError(message);
     }
-    setLoading(false);
+    if (!silent) {
+      setLoading(false);
+    }
   };
 
   // Page handlers
@@ -955,6 +969,31 @@ export const useLogsData = ({
     handleEyeClick();
     await loadLogs(1, pageSize);
   };
+
+  // 自动刷新专用：保持当前页码与筛选条件，静默拉数据。
+  // 不能复用 refresh()——它会把页码重置到第 1 页，用户翻到第 3 页就被弹回来了。
+  // 统计区（handleEyeClick）不在自动刷新范围内：那是额度/令牌汇总，
+  // 每 5 秒重拉一次统计接口纯属浪费。
+  //
+  // loadLogs 每次渲染都会重建（它闭包了 canLoadLogs / formApi 等 state），
+  // 直接把它塞进 useCallback 的依赖会让回调每次渲染都变，定时器被反复重建、
+  // 等于永远等不到下一次触发。所以用 ref 持有最新的 loadLogs，
+  // 回调本身只依赖真正需要的 activePage / pageSize。
+  const loadLogsRef = useRef(loadLogs);
+  loadLogsRef.current = loadLogs;
+
+  const refreshSilently = useCallback(async () => {
+    await loadLogsRef.current(activePage, pageSize, null, true);
+  }, [activePage, pageSize]);
+
+  const autoRefresh = useAutoRefreshSetting();
+  useAutoRefresh({
+    // canLoadLogs 为 false 时页面本来就没数据可拉（比如生图页还没配生成模型），
+    // 这时轮询只会反复清空列表并把页码重置成 1，没有意义。
+    enabled: autoRefresh.enabled && canLoadLogs,
+    intervalMs: autoRefresh.intervalMs,
+    onRefresh: refreshSilently,
+  });
 
   // Copy text function
   const copyText = async (e, text) => {

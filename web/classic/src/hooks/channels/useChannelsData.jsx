@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   API,
@@ -35,6 +35,8 @@ import {
 } from '../../constants';
 import { useIsMobile } from '../common/useIsMobile';
 import { useTableCompactMode } from '../common/useTableCompactMode';
+import { useAutoRefresh } from '../common/useAutoRefresh';
+import { useAutoRefreshSetting } from '../common/useAutoRefreshSetting';
 import { useChannelUpstreamUpdates } from './useChannelUpstreamUpdates';
 import { useChannelUpstreamPricing } from './useChannelUpstreamPricing';
 import { parseUpstreamUpdateMeta } from './upstreamUpdateUtils';
@@ -472,31 +474,40 @@ export const useChannelsData = () => {
     enableTagMode,
     typeKey = activeTypeKey,
     statusF,
+    silent = false,
   ) => {
     if (statusF === undefined) statusF = statusFilter;
 
     const { searchKeyword, searchGroup, searchModel } = getFormValues();
     if (searchKeyword !== '' || searchGroup !== '' || searchModel !== '') {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       await searchChannels(
         enableTagMode,
         typeKey,
         statusF,
         page,
         pageSize,
+        silent,
       );
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
       return;
     }
 
     const reqId = ++requestCounter.current;
-    setLoading(true);
+    if (!silent) {
+      setLoading(true);
+    }
     const typeParam = typeKey !== 'all' ? `&type=${typeKey}` : '';
     const statusParam = statusF !== 'all' ? `&status=${statusF}` : '';
     const sortChain = activeSortRef.current;
     const sortParam = buildChannelSortParam(sortChain);
     const res = await API.get(
       `/api/channel/?p=${page}&page_size=${pageSize}&id_sort=${chainUsesIdSort(sortChain)}&tag_mode=${enableTagMode}${typeParam}${statusParam}${sortParam}`,
+      { skipErrorHandler: silent },
     );
 
     if (res === undefined || reqId !== requestCounter.current) {
@@ -515,22 +526,28 @@ export const useChannelsData = () => {
       }
       setChannelFormat(items, enableTagMode);
       setChannelCount(total);
-    } else {
+    } else if (!silent) {
       showError(message);
     }
-    setLoading(false);
+    if (!silent) {
+      setLoading(false);
+    }
   };
 
   // Search channels
+  // silent=true 用于自动刷新：不显示 searching 状态、不弹错误 toast。
   const searchChannels = async (
     enableTagMode,
     typeKey = activeTypeKey,
     statusF = statusFilter,
     page = 1,
     pageSz = pageSize,
+    silent = false,
   ) => {
     const { searchKeyword, searchGroup, searchModel } = getFormValues();
-    setSearching(true);
+    if (!silent) {
+      setSearching(true);
+    }
     try {
       if (searchKeyword === '' && searchGroup === '' && searchModel === '') {
         await loadChannels(
@@ -539,6 +556,7 @@ export const useChannelsData = () => {
           enableTagMode,
           typeKey,
           statusF,
+          silent,
         );
         return;
       }
@@ -549,6 +567,7 @@ export const useChannelsData = () => {
       const sortParam = buildChannelSortParam(sortChain);
       const res = await API.get(
         `/api/channel/search?keyword=${searchKeyword}&group=${searchGroup}&model=${searchModel}&id_sort=${chainUsesIdSort(sortChain)}&tag_mode=${enableTagMode}&p=${page}&page_size=${pageSz}${typeParam}${statusParam}${sortParam}`,
+        { skipErrorHandler: silent },
       );
       const { success, message, data } = res.data;
       if (success) {
@@ -561,11 +580,13 @@ export const useChannelsData = () => {
         setChannelFormat(items, enableTagMode);
         setChannelCount(total);
         setActivePage(page);
-      } else {
+      } else if (!silent) {
         showError(message);
       }
     } finally {
-      setSearching(false);
+      if (!silent) {
+        setSearching(false);
+      }
     }
   };
 
@@ -584,6 +605,47 @@ export const useChannelsData = () => {
       );
     }
   };
+
+  // 自动刷新专用：保持当前页码与筛选条件，静默拉数据。
+  //
+  // loadChannels / searchChannels 每次渲染都会重建（闭包了 getFormValues
+  // 等 state），用 ref 持有最新的版本，回调本身只依赖真正需要的
+  // activePage / pageSize 等，否则依赖数组每次渲染都变、定时器被反复
+  // 重建，等于永远等不到下一次触发。
+  const loadChannelsRef = useRef(loadChannels);
+  const searchChannelsRef = useRef(searchChannels);
+  loadChannelsRef.current = loadChannels;
+  searchChannelsRef.current = searchChannels;
+
+  const refreshSilently = useCallback(async () => {
+    const { searchKeyword, searchGroup, searchModel } = getFormValues();
+    if (searchKeyword === '' && searchGroup === '' && searchModel === '') {
+      await loadChannelsRef.current(
+        activePage,
+        pageSize,
+        enableTagMode,
+        activeTypeKey,
+        statusFilter,
+        true,
+      );
+    } else {
+      await searchChannelsRef.current(
+        enableTagMode,
+        activeTypeKey,
+        statusFilter,
+        activePage,
+        pageSize,
+        true,
+      );
+    }
+  }, [activePage, pageSize, enableTagMode, activeTypeKey, statusFilter]);
+
+  const autoRefresh = useAutoRefreshSetting();
+  useAutoRefresh({
+    enabled: autoRefresh.enabled,
+    intervalMs: autoRefresh.intervalMs,
+    onRefresh: refreshSilently,
+  });
 
   const upstreamUpdates = useChannelUpstreamUpdates({ t, refresh });
   const upstreamPricing = useChannelUpstreamPricing({ t, refresh });

@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/oauth"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/auto_refresh_setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
@@ -46,6 +47,7 @@ func GetStatus(c *gin.Context) {
 	defer common.OptionMapRWMutex.RUnlock()
 
 	legalSetting := system_setting.GetLegalSettings()
+	autoRefreshSetting := auto_refresh_setting.GetAutoRefreshSetting()
 
 	data := gin.H{
 		"version":                     common.Version,
@@ -125,6 +127,11 @@ func GetStatus(c *gin.Context) {
 		"user_agreement_enabled":      legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
+
+		// 管理页自动刷新。/api/option/ 只有 root 能读，而令牌管理与两个日志页
+		// 所有登录用户可见，所以配置必须经这里下发。
+		"auto_refresh_enabled":          autoRefreshSetting.Enabled,
+		"auto_refresh_interval_seconds": autoRefreshSetting.IntervalSeconds,
 	}
 
 	// 根据启用状态注入可选内容

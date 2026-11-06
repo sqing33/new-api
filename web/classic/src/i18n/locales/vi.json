@@ -5028,5 +5028,17 @@
   "排序优先级": "Ưu tiên sắp xếp",
   "当前生效": "Đang áp dụng",
   "其余已忽略": "các mục khác bị bỏ qua",
-  "拖动调整优先级": "Kéo để sắp xếp lại"
+  "拖动调整优先级": "Kéo để sắp xếp lại",
+  "自动刷新": "Tự động làm mới",
+  "让管理页的数据定时自动更新，无需手动点击查询": "Tự động cập nhật dữ liệu trang quản trị theo chu kỳ, không cần bấm Truy vấn",
+  "启用自动刷新": "Bật tự động làm mới",
+  "开启后，清荫日志、使用日志、令牌管理、渠道管理四个页面会定时自动刷新数据。": "Khi bật, các trang Nhật ký hình ảnh, Nhật ký sử dụng, Token và Kênh sẽ tự động làm mới dữ liệu.",
+  "刷新间隔": "Khoảng thời gian làm mới",
+  "间隔越短数据越实时，但会给后端带来更多查询压力。多个管理员同时开启时压力会成倍增加。": "Khoảng thời gian càng ngắn dữ liệu càng mới, nhưng càng gây tải cho máy chủ. Khi nhiều quản trị viên cùng bật, tải sẽ nhân lên.",
+  "5 秒（实时）": "5 giây (trực tiếp)",
+  "10 秒": "10 giây",
+  "30 秒": "30 giây",
+  "1 分钟": "1 phút",
+  "5 分钟": "5 phút",
+  "提示：自动刷新会保持当前页码与筛选条件，页面切到后台时会自动暂停；修改后需要刷新页面才会生效。": "Lưu ý: tự động làm mới giữ nguyên trang và bộ lọc hiện tại, và tạm dừng khi tab chuyển sang nền. Thay đổi có hiệu lực sau khi tải lại trang."
 }

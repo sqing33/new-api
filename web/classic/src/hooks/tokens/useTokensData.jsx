@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@douyinfe/semi-ui';
 import {
@@ -29,6 +29,8 @@ import {
 } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
+import { useAutoRefresh } from '../common/useAutoRefresh';
+import { useAutoRefreshSetting } from '../common/useAutoRefreshSetting';
 import {
   fetchTokenKey as fetchTokenKeyById,
   fetchTokenKeysBatch,
@@ -142,29 +144,40 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   };
 
   // Sync page data from API response
-  const syncPageData = (payload) => {
+  // 静默模式（自动刷新）保留展开的密钥：setShowKeys({}) 会把用户展开的
+  // 密钥全部收起来，5 秒一次的话根本没法看。
+  const syncPageData = (payload, silent = false) => {
     setTokens(payload.items || []);
     setTokenCount(payload.total || 0);
     setActivePage(payload.page || 1);
     // 不把后端回传的 page_size 写回 state：它只是回显请求参数，
     // 缺失时还会回落成默认值，会把用户选的每页条数打回默认。
-    setShowKeys({});
+    if (!silent) {
+      setShowKeys({});
+    }
   };
 
   // Load tokens function
-  const loadTokens = async (page = 1, size = pageSize) => {
-    setLoading(true);
-    setSearchMode(false);
+  // silent=true 用于自动刷新：不显示 loading 骨架、不弹错误 toast、
+  // 不重置搜索态与展开的密钥。
+  const loadTokens = async (page = 1, size = pageSize, silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setSearchMode(false);
+    }
     const res = await API.get(
       `/api/token/?p=${page}&size=${size}${buildTokenSortParam()}`,
+      { skipErrorHandler: silent },
     );
     const { success, message, data } = res.data;
     if (success) {
-      syncPageData(data);
-    } else {
+      syncPageData(data, silent);
+    } else if (!silent) {
       showError(message);
     }
-    setLoading(false);
+    if (!silent) {
+      setLoading(false);
+    }
   };
 
   // Refresh function
@@ -357,7 +370,8 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   };
 
   // Search tokens function
-  const searchTokens = async (page = 1, size = pageSize) => {
+  // silent=true 用于自动刷新：不显示 searching 状态、不弹错误 toast。
+  const searchTokens = async (page = 1, size = pageSize, silent = false) => {
     const normalizedPage = Number.isInteger(page) && page > 0 ? page : 1;
     const normalizedSize =
       Number.isInteger(size) && size > 0 ? size : pageSize;
@@ -365,22 +379,54 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     const { searchKeyword, searchToken } = getFormValues();
     if (searchKeyword === '' && searchToken === '') {
       setSearchMode(false);
-      await loadTokens(1);
+      await loadTokens(1, normalizedSize, silent);
       return;
     }
-    setSearching(true);
+    if (!silent) {
+      setSearching(true);
+    }
     const res = await API.get(
       `/api/token/search?keyword=${encodeURIComponent(searchKeyword)}&token=${encodeURIComponent(searchToken)}&p=${normalizedPage}&size=${normalizedSize}${buildTokenSortParam()}`,
+      { skipErrorHandler: silent },
     );
     const { success, message, data } = res.data;
     if (success) {
       setSearchMode(true);
-      syncPageData(data);
-    } else {
+      syncPageData(data, silent);
+    } else if (!silent) {
       showError(message);
     }
-    setSearching(false);
+    if (!silent) {
+      setSearching(false);
+    }
   };
+
+  // 自动刷新专用：保持当前页码与搜索态，静默拉数据。
+  // 不能复用 refresh()——它会 setSelectedKeys([])，每 5 秒清空一次勾选，
+  // 批量操作就没法做了。
+  //
+  // loadTokens / searchTokens 每次渲染都会重建（闭包了 formApi 等 state），
+  // 用 ref 持有最新的版本，回调本身只依赖真正需要的 activePage / pageSize，
+  // 否则依赖数组每次渲染都变、定时器被反复重建，等于永远等不到下一次触发。
+  const loadTokensRef = useRef(loadTokens);
+  const searchTokensRef = useRef(searchTokens);
+  loadTokensRef.current = loadTokens;
+  searchTokensRef.current = searchTokens;
+
+  const refreshSilently = useCallback(async () => {
+    if (searchMode) {
+      await searchTokensRef.current(activePage, pageSize, true);
+    } else {
+      await loadTokensRef.current(activePage, pageSize, true);
+    }
+  }, [activePage, pageSize, searchMode]);
+
+  const autoRefresh = useAutoRefreshSetting();
+  useAutoRefresh({
+    enabled: autoRefresh.enabled,
+    intervalMs: autoRefresh.intervalMs,
+    onRefresh: refreshSilently,
+  });
 
   // Sort tokens function
   const sortToken = (key) => {
