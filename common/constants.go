@@ -217,6 +217,10 @@ const (
 	RoleRootUser   = 100
 )
 
+// DefaultRootGroup 是超级管理员默认所属的分组。该分组默认受保护，
+// 仅本组用户可用，管理员可把指定用户显式指派进来。
+const DefaultRootGroup = "Admin"
+
 func IsValidateRole(role int) bool {
 	return role == RoleGuestUser || role == RoleCommonUser || role == RoleAdminUser || role == RoleRootUser
 }

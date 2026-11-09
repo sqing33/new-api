@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   API,
@@ -25,6 +25,7 @@ import {
   showSuccess,
   renderQuota,
   getCurrencyConfig,
+  isRoot,
 } from '../../../../helpers';
 import {
   quotaToDisplayAmount,
@@ -71,6 +72,7 @@ const EditUserModal = (props) => {
   const [adjustLoading, setAdjustLoading] = useState(false);
   const isMobile = useIsMobile();
   const [groupOptions, setGroupOptions] = useState([]);
+  const [protectedGroups, setProtectedGroups] = useState(new Set());
   const [bindingModalVisible, setBindingModalVisible] = useState(false);
   const formApiRef = useRef(null);
   const [showAdjustQuotaRaw, setShowAdjustQuotaRaw] = useState(false);
@@ -100,10 +102,21 @@ const EditUserModal = (props) => {
     try {
       let res = await API.get(`/api/group/`);
       setGroupOptions(res.data.data.map((g) => ({ label: g, value: g })));
+      setProtectedGroups(new Set(res.data.protected_groups || []));
     } catch (e) {
       showError(e.message);
     }
   };
+
+  // 受保护分组仅超级管理员可以指派，其他管理员在下拉里看不到；
+  // 正在编辑用户当前所在的分组始终保留，避免回显丢失。
+  const visibleGroupOptions = useMemo(() => {
+    if (isRoot()) return groupOptions;
+    return groupOptions.filter(
+      (option) =>
+        !protectedGroups.has(option.value) || option.value === inputs.group,
+    );
+  }, [groupOptions, protectedGroups, inputs.group]);
 
   const handleCancel = () => props.handleClose();
 
@@ -361,7 +374,7 @@ const EditUserModal = (props) => {
                           field='group'
                           label={t('分组')}
                           placeholder={t('请选择分组')}
-                          optionList={groupOptions}
+                          optionList={visibleGroupOptions}
                           allowAdditions
                           search
                           rules={[{ required: true, message: t('请选择分组') }]}

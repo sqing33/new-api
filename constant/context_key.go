@@ -58,6 +58,9 @@ const (
 	ContextKeyUserGroup   ContextKey = "user_group"
 	ContextKeyUsingGroup  ContextKey = "group"
 	ContextKeyUserName    ContextKey = "username"
+	// ContextKeyUserRole 是 relay 路径上的用户角色。后台鉴权使用 c.Set("role", ...)，
+	// 两条链路不要混用，避免同名键语义不一致。
+	ContextKeyUserRole ContextKey = "user_role"
 
 	ContextKeyLocalCountTokens ContextKey = "local_count_tokens"
 

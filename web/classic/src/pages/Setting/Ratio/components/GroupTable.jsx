@@ -25,13 +25,15 @@ function parseJSON(str, fallback) {
   }
 }
 
-function buildRows(groupRatioStr, userUsableGroupsStr) {
+function buildRows(groupRatioStr, userUsableGroupsStr, groupProtectedStr) {
   const ratioMap = parseJSON(groupRatioStr, {});
   const usableMap = parseJSON(userUsableGroupsStr, {});
+  const protectedMap = parseJSON(groupProtectedStr, {});
 
   const allNames = new Set([
     ...Object.keys(ratioMap),
     ...Object.keys(usableMap),
+    ...Object.keys(protectedMap),
   ]);
 
   return Array.from(allNames).map((name) => ({
@@ -40,12 +42,14 @@ function buildRows(groupRatioStr, userUsableGroupsStr) {
     ratio: ratioMap[name] ?? 1,
     selectable: name in usableMap,
     description: usableMap[name] ?? '',
+    protected: protectedMap[name] === true,
   }));
 }
 
 export function serializeGroupTable(rows) {
   const groupRatio = {};
   const userUsableGroups = {};
+  const groupProtected = {};
 
   rows.forEach((row) => {
     if (!row.name) return;
@@ -53,19 +57,32 @@ export function serializeGroupTable(rows) {
     if (row.selectable) {
       userUsableGroups[row.name] = row.description;
     }
+    if (row.protected) {
+      groupProtected[row.name] = true;
+    }
   });
 
   return {
     GroupRatio: JSON.stringify(groupRatio, null, 2),
     UserUsableGroups: JSON.stringify(userUsableGroups, null, 2),
+    'group_ratio_setting.group_protected': JSON.stringify(
+      groupProtected,
+      null,
+      2,
+    ),
   };
 }
 
-export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
+export default function GroupTable({
+  groupRatio,
+  userUsableGroups,
+  groupProtected,
+  onChange,
+}) {
   const { t } = useTranslation();
 
   const [rows, setRows] = useState(() =>
-    buildRows(groupRatio, userUsableGroups),
+    buildRows(groupRatio, userUsableGroups, groupProtected),
   );
 
   // Use functional setRows to keep updateRow/addRow/removeRow referentially
@@ -108,6 +125,7 @@ export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
           ratio: 1,
           selectable: true,
           description: '',
+          protected: false,
         },
       ];
     });
@@ -180,6 +198,21 @@ export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
             checked={record.selectable}
             onChange={(e) =>
               updateRow(record._id, 'selectable', e.target.checked)
+            }
+          />
+        ),
+      },
+      {
+        title: t('受保护'),
+        dataIndex: 'protected',
+        key: 'protected',
+        width: 90,
+        align: 'center',
+        render: (_, record) => (
+          <Checkbox
+            checked={record.protected}
+            onChange={(e) =>
+              updateRow(record._id, 'protected', e.target.checked)
             }
           />
         ),

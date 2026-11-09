@@ -45,6 +45,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import GroupTable from './components/GroupTable';
 import AutoGroupList from './components/AutoGroupList';
+import UserGroupRatioList from './components/UserGroupRatioList';
 import GroupGroupRatioRules from './components/GroupGroupRatioRules';
 import GroupSpecialUsableRules from './components/GroupSpecialUsableRules';
 
@@ -55,6 +56,8 @@ const OPTION_KEYS = [
   'UserUsableGroups',
   'GroupGroupRatio',
   'group_ratio_setting.group_special_usable_group',
+  'group_ratio_setting.group_protected',
+  'group_ratio_setting.group_user_ratio',
   'AutoGroups',
   'DefaultUseAutoGroup',
 ];
@@ -79,6 +82,8 @@ export default function GroupRatioSettings(props) {
     UserUsableGroups: '',
     GroupGroupRatio: '',
     'group_ratio_setting.group_special_usable_group': '',
+    'group_ratio_setting.group_protected': '',
+    'group_ratio_setting.group_user_ratio': '',
     AutoGroups: '',
     DefaultUseAutoGroup: false,
   });
@@ -155,11 +160,27 @@ export default function GroupRatioSettings(props) {
   }, [props.options]);
 
   const handleGroupTableChange = useCallback(
-    ({ GroupRatio, UserUsableGroups }) => {
-      setInputs((prev) => ({ ...prev, GroupRatio, UserUsableGroups }));
+    ({
+      GroupRatio,
+      UserUsableGroups,
+      'group_ratio_setting.group_protected': groupProtected,
+    }) => {
+      setInputs((prev) => ({
+        ...prev,
+        GroupRatio,
+        UserUsableGroups,
+        'group_ratio_setting.group_protected': groupProtected,
+      }));
     },
     [],
   );
+
+  const handleUserGroupRatioChange = useCallback((value) => {
+    setInputs((prev) => ({
+      ...prev,
+      'group_ratio_setting.group_user_ratio': value,
+    }));
+  }, []);
 
   const handleAutoGroupsChange = useCallback((value) => {
     setInputs((prev) => ({ ...prev, AutoGroups: value }));
@@ -188,7 +209,20 @@ export default function GroupRatioSettings(props) {
           key={`gt_${dv}`}
           groupRatio={inputs.GroupRatio}
           userUsableGroups={inputs.UserUsableGroups}
+          groupProtected={inputs['group_ratio_setting.group_protected']}
           onChange={handleGroupTableChange}
+        />
+      </Form.Section>
+
+      <Form.Section text={t('用户分组折扣')}>
+        <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 12 }}>
+          {t('按用户身份设置折扣系数，对该分组用户的全部模型生效，与令牌分组倍率相乘。例如 vip 填 0.8 表示该分组用户所有模型打八折')}
+        </Text>
+        <UserGroupRatioList
+          key={`ugr_${dv}`}
+          value={inputs['group_ratio_setting.group_user_ratio']}
+          groupNames={groupNames}
+          onChange={handleUserGroupRatioChange}
         />
       </Form.Section>
 
@@ -363,6 +397,60 @@ export default function GroupRatioSettings(props) {
                 setInputs((prev) => ({
                   ...prev,
                   'group_ratio_setting.group_special_usable_group': value,
+                }))
+              }
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={24} sm={16}>
+            <Form.TextArea
+              label={t('受保护分组')}
+              placeholder={t('为一个 JSON 文本')}
+              extraText={t(
+                '键为分组名称，值为 true 表示该分组受保护。受保护分组仅本组用户可用，其他分组的用户无法创建该分组的令牌，也无法通过自动分组路由到该分组。超级管理员不受限制，且可把指定用户指派进受保护分组',
+              )}
+              field={'group_ratio_setting.group_protected'}
+              autosize={{ minRows: 4, maxRows: 10 }}
+              trigger='blur'
+              stopValidateWithError
+              rules={[
+                {
+                  validator: (rule, value) => verifyJSON(value),
+                  message: t('不是合法的 JSON 字符串'),
+                },
+              ]}
+              onChange={(value) =>
+                setInputs((prev) => ({
+                  ...prev,
+                  'group_ratio_setting.group_protected': value,
+                }))
+              }
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={24} sm={16}>
+            <Form.TextArea
+              label={t('用户分组折扣')}
+              placeholder={t('为一个 JSON 文本')}
+              extraText={t(
+                '键为用户分组名称，值为折扣系数，对该分组用户的全部模型生效，与令牌分组倍率相乘。例如：{"vip": 0.8, "svip": 0.5} 表示 vip 分组用户所有模型打八折，svip 分组用户所有模型打五折',
+              )}
+              field={'group_ratio_setting.group_user_ratio'}
+              autosize={{ minRows: 4, maxRows: 10 }}
+              trigger='blur'
+              stopValidateWithError
+              rules={[
+                {
+                  validator: (rule, value) => verifyJSON(value),
+                  message: t('不是合法的 JSON 字符串'),
+                },
+              ]}
+              onChange={(value) =>
+                setInputs((prev) => ({
+                  ...prev,
+                  'group_ratio_setting.group_user_ratio': value,
                 }))
               }
             />
@@ -581,6 +669,19 @@ export default function GroupRatioSettings(props) {
               </Paragraph>
             </GuideSection>
 
+            <GuideSection title={t('受保护分组与用户分组折扣')}>
+              <Paragraph size='small' style={{ lineHeight: 1.8 }}>
+                <Text strong>{t('受保护分组')}</Text>{' — '}
+                {t('仅本组用户可用的分组。其他分组的用户既看不到、也创建不了该分组的令牌，自动分组也不会路由到该分组。超级管理员不受限制，并可把指定用户指派进受保护分组。适合放只给自己或少数人使用的渠道。')}
+              </Paragraph>
+              <CodeBlock>{`{"Admin": true}`}</CodeBlock>
+              <Paragraph size='small' style={{ lineHeight: 1.8, marginTop: 10 }}>
+                <Text strong>{t('用户分组折扣')}</Text>{' — '}
+                {t('按用户身份设置折扣系数，对该分组用户的全部模型生效，与令牌分组倍率相乘。配置一次即可，无需再按令牌分组逐条设置。')}
+              </Paragraph>
+              <CodeBlock>{`{"vip": 0.8, "svip": 0.5}`}</CodeBlock>
+            </GuideSection>
+
             <GuideSection title={t('JSON 格式参考')}>
               <Paragraph size='small' style={{ marginBottom: 4 }}>
                 <Text strong code>GroupRatio</Text>{' — '}{t('分组名称到倍率的映射')}
@@ -590,6 +691,14 @@ export default function GroupRatioSettings(props) {
                 <Text strong code>UserUsableGroups</Text>{' — '}{t('用户可选分组的名称和描述（只包含勾选了用户可选的分组）')}
               </Paragraph>
               <CodeBlock>{`{"standard": "${t('标准价格')}", "premium": "${t('高级套餐，半价优惠')}"}`}</CodeBlock>
+              <Paragraph size='small' style={{ marginBottom: 4, marginTop: 8 }}>
+                <Text strong code>group_protected</Text>{' — '}{t('受保护分组，值为 true')}
+              </Paragraph>
+              <CodeBlock>{`{"Admin": true}`}</CodeBlock>
+              <Paragraph size='small' style={{ marginBottom: 4, marginTop: 8 }}>
+                <Text strong code>group_user_ratio</Text>{' — '}{t('用户分组折扣系数')}
+              </Paragraph>
+              <CodeBlock>{`{"vip": 0.8, "svip": 0.5}`}</CodeBlock>
             </GuideSection>
           </div>
         </Tabs.TabPane>

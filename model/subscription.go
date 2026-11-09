@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/pkg/cachex"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/samber/hot"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
@@ -23,6 +24,12 @@ const (
 	SubscriptionDurationHour   = "hour"
 	SubscriptionDurationCustom = "custom"
 )
+
+// isAutoAssignableGroup 判断订阅流程能否把用户自动指派到该分组。
+// 受保护分组只能由管理员显式指派，订阅升降级不得自动授予。
+func isAutoAssignableGroup(group string) bool {
+	return group != "" && !ratio_setting.IsGroupProtected(group)
+}
 
 // Subscription quota reset period
 const (
@@ -474,6 +481,9 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	if target == "" || target == currentGroup {
 		return "", nil
 	}
+	if !isAutoAssignableGroup(target) {
+		return "", nil
+	}
 	if err := tx.Model(&User{}).Where("id = ?", sub.UserId).
 		Update("group", target).Error; err != nil {
 		return "", err
@@ -516,7 +526,7 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	}
 	upgradeGroup := strings.TrimSpace(plan.UpgradeGroup)
 	prevGroup := ""
-	if upgradeGroup != "" {
+	if isAutoAssignableGroup(upgradeGroup) {
 		currentGroup, err := getUserGroupByIdTx(tx, userId)
 		if err != nil {
 			return nil, err
@@ -1215,6 +1225,9 @@ func ExpireDueSubscriptions(limit int) (int, error) {
 				target = prevGroup
 			}
 			if target == "" || target == currentGroup {
+				return nil
+			}
+			if !isAutoAssignableGroup(target) {
 				return nil
 			}
 			if err := tx.Model(&User{}).Where("id = ?", userId).

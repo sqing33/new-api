@@ -695,3 +695,74 @@ func TestModelPriceHelperNativeGeminiNoThinkingDoesNotAliasBillingModel(t *testi
 	assert.Equal(t, 1.25, priceData.ModelRatio)
 	assert.NotEqual(t, 37.5, priceData.ModelRatio)
 }
+
+func configureGroupRatioTest(t *testing.T) {
+	t.Helper()
+	originalRatios := ratio_setting.GroupRatio2JSONString()
+	originalSpecialRatios := ratio_setting.GroupGroupRatio2JSONString()
+	originalUserRatio := ratio_setting.GroupUserRatio2JSONString()
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"GPT":0.3}`))
+	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{}`))
+	require.NoError(t, ratio_setting.UpdateGroupUserRatioByJSONString(`{"vip":0.8}`))
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalRatios))
+		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(originalSpecialRatios))
+		require.NoError(t, ratio_setting.UpdateGroupUserRatioByJSONString(originalUserRatio))
+	})
+}
+
+func TestHandleGroupRatioAppliesUserGroupRatio(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	configureGroupRatioTest(t)
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	info := &relaycommon.RelayInfo{UserGroup: "vip", UsingGroup: "default"}
+
+	resolved := HandleGroupRatio(ctx, info)
+
+	assert.InDelta(t, 0.8, resolved.GroupRatio, 1e-9)
+	assert.True(t, resolved.HasUserGroupRatio)
+	assert.Equal(t, 0.8, resolved.UserGroupRatio)
+	assert.False(t, resolved.HasSpecialRatio)
+}
+
+func TestHandleGroupRatioMultipliesUserGroupRatioWithTokenGroupRatio(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	configureGroupRatioTest(t)
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	info := &relaycommon.RelayInfo{UserGroup: "vip", UsingGroup: "GPT"}
+
+	resolved := HandleGroupRatio(ctx, info)
+
+	assert.InDelta(t, 0.24, resolved.GroupRatio, 1e-9)
+}
+
+func TestHandleGroupRatioSpecialRatioOverridesUserGroupRatio(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	configureGroupRatioTest(t)
+	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"vip":{"default":0.5}}`))
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	info := &relaycommon.RelayInfo{UserGroup: "vip", UsingGroup: "default"}
+
+	resolved := HandleGroupRatio(ctx, info)
+
+	assert.Equal(t, 0.5, resolved.GroupRatio)
+	assert.True(t, resolved.HasSpecialRatio)
+	assert.False(t, resolved.HasUserGroupRatio)
+}
+
+func TestHandleGroupRatioFollowsAutoGroupFromContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	configureGroupRatioTest(t)
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Set("auto_group", "GPT")
+	info := &relaycommon.RelayInfo{UserGroup: "vip", UsingGroup: "default"}
+
+	resolved := HandleGroupRatio(ctx, info)
+
+	assert.Equal(t, "GPT", info.UsingGroup)
+	assert.InDelta(t, 0.24, resolved.GroupRatio, 1e-9)
+}

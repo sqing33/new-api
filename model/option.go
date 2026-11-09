@@ -242,6 +242,9 @@ func validateOptionValue(key string, value string) error {
 	if key == auto_refresh_setting.IntervalSecondsOptionKey {
 		return auto_refresh_setting.ValidateIntervalSeconds(value)
 	}
+	if key == "group_ratio_setting.group_user_ratio" {
+		return ratio_setting.CheckGroupUserRatio(value)
+	}
 	return nil
 }
 

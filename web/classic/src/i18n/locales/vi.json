@@ -5046,5 +5046,19 @@
   "慢失败阈值（秒）": "Ngưỡng thất bại chậm (giây)",
   "单次尝试耗时超过该值且失败时记为慢失败，0 表示不启用": "Một lần thử kéo dài ít nhất bằng này và vẫn thất bại được tính là thất bại chậm; 0 để tắt",
   "慢失败连续次数": "Số lần thất bại chậm liên tiếp",
-  "连续出现该次数的慢失败后，立即放弃同渠道重试并换渠道，0 表示不启用": "Sau số lần thất bại chậm liên tiếp này, bỏ qua các lần thử còn lại trên cùng kênh và đổi kênh; 0 để tắt"
+  "连续出现该次数的慢失败后，立即放弃同渠道重试并换渠道，0 表示不启用": "Sau số lần thất bại chậm liên tiếp này, bỏ qua các lần thử còn lại trên cùng kênh và đổi kênh; 0 để tắt",
+  "受保护": "Được bảo vệ",
+  "受保护分组": "Nhóm được bảo vệ",
+  "受保护分组与用户分组折扣": "Nhóm được bảo vệ và giảm giá theo nhóm người dùng",
+  "受保护分组，值为 true": "Nhóm được bảo vệ, giá trị là true",
+  "用户分组折扣": "Giảm giá theo nhóm người dùng",
+  "用户分组折扣系数": "Hệ số giảm giá theo nhóm người dùng",
+  "添加用户分组折扣": "Thêm giảm giá theo nhóm người dùng",
+  "暂无用户分组折扣，点击下方按钮添加": "Chưa có giảm giá theo nhóm người dùng, nhấn nút bên dưới để thêm",
+  "选择用户分组": "Chọn nhóm người dùng",
+  "按用户身份设置折扣系数，对该分组用户的全部模型生效，与令牌分组倍率相乘。例如 vip 填 0.8 表示该分组用户所有模型打八折": "Đặt hệ số giảm giá theo danh tính người dùng. Hệ số này áp dụng cho tất cả mô hình của người dùng thuộc nhóm đó và được nhân với hệ số nhóm của token. Ví dụ, đặt 0.8 cho vip nghĩa là mọi mô hình của người dùng vip đều được tính phí 80%.",
+  "按用户身份设置折扣系数，对该分组用户的全部模型生效，与令牌分组倍率相乘。配置一次即可，无需再按令牌分组逐条设置。": "Đặt hệ số giảm giá theo danh tính người dùng. Hệ số này áp dụng cho tất cả mô hình của người dùng thuộc nhóm đó và được nhân với hệ số nhóm của token. Chỉ cần cấu hình một lần, không phải đặt giảm giá cho từng nhóm token.",
+  "仅本组用户可用的分组。其他分组的用户既看不到、也创建不了该分组的令牌，自动分组也不会路由到该分组。超级管理员不受限制，并可把指定用户指派进受保护分组。适合放只给自己或少数人使用的渠道。": "Nhóm chỉ dành cho thành viên của nhóm đó. Người dùng thuộc nhóm khác không nhìn thấy, cũng không tạo được token cho nhóm này, và nhóm tự động không bao giờ định tuyến tới nó. Quản trị viên cấp cao không bị hạn chế và có thể chỉ định người dùng vào nhóm được bảo vệ. Phù hợp với các kênh chỉ nên dùng bởi bạn hoặc ít người.",
+  "键为分组名称，值为 true 表示该分组受保护。受保护分组仅本组用户可用，其他分组的用户无法创建该分组的令牌，也无法通过自动分组路由到该分组。超级管理员不受限制，且可把指定用户指派进受保护分组": "Khóa là tên nhóm; giá trị true nghĩa là nhóm đó được bảo vệ. Nhóm được bảo vệ chỉ dùng được bởi thành viên của chính nhóm đó: người dùng thuộc nhóm khác không thể tạo token cho nhóm này, và nhóm tự động không bao giờ định tuyến tới nó. Quản trị viên cấp cao không bị hạn chế và có thể chỉ định người dùng vào nhóm được bảo vệ.",
+  "键为用户分组名称，值为折扣系数，对该分组用户的全部模型生效，与令牌分组倍率相乘。例如：{\"vip\": 0.8, \"svip\": 0.5} 表示 vip 分组用户所有模型打八折，svip 分组用户所有模型打五折": "Khóa là tên nhóm người dùng và giá trị là hệ số giảm giá. Hệ số này áp dụng cho tất cả mô hình của người dùng thuộc nhóm đó và được nhân với hệ số nhóm của token. Ví dụ {\"vip\": 0.8, \"svip\": 0.5} nghĩa là mọi mô hình của người dùng vip được tính phí 80% và của người dùng svip là 50%."
 }

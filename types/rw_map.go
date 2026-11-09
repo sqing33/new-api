@@ -1,6 +1,7 @@
 package types
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
@@ -73,17 +74,30 @@ func (m *RWMap[K, V]) Len() int {
 	return len(m.data)
 }
 
+// LoadFromJsonString 用 JSON 文本覆盖 map 内容。
+// 空白文本视为空集合（不报错）；非空但非法的 JSON 视为错误，此时 map 保持为空。
 func LoadFromJsonString[K comparable, V any](m *RWMap[K, V], jsonStr string) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.data = make(map[K]V)
+	if strings.TrimSpace(jsonStr) == "" {
+		return nil
+	}
 	return common.Unmarshal([]byte(jsonStr), &m.data)
 }
 
+// LoadFromJsonStringWithCallback 用 JSON 文本覆盖 map 内容，并在载入成功后触发回调。
+// 空白文本视为空集合（不报错），同样会触发回调——清空 map 同样需要让调用方失效缓存。
 func LoadFromJsonStringWithCallback[K comparable, V any](m *RWMap[K, V], jsonStr string, onSuccess func()) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.data = make(map[K]V)
+	if strings.TrimSpace(jsonStr) == "" {
+		if onSuccess != nil {
+			onSuccess()
+		}
+		return nil
+	}
 	err := common.Unmarshal([]byte(jsonStr), &m.data)
 	if err == nil && onSuccess != nil {
 		onSuccess()

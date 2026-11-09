@@ -11,6 +11,10 @@ type GroupRatioInfo struct {
 	GroupRatio        float64
 	GroupSpecialRatio float64
 	HasSpecialRatio   bool
+	// UserGroupRatio 是用户分组倍率（乘数），与令牌分组倍率相乘得到最终倍率。
+	UserGroupRatio float64
+	// HasUserGroupRatio 表示 UserGroupRatio 是否命中了用户分组倍率配置。
+	HasUserGroupRatio bool
 }
 
 type PriceData struct {

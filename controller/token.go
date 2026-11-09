@@ -110,6 +110,25 @@ func getTokenRequestUserGroup(c *gin.Context) (string, error) {
 	return model.GetUserGroup(c.GetInt("id"), false)
 }
 
+// validateTokenGroup 校验令牌分组在当前用户的可用分组内。
+// 受保护分组仅限本组用户使用，这里做服务端强制校验，不依赖前端下拉。
+func validateTokenGroup(c *gin.Context, group string) bool {
+	if group == "" || group == "auto" {
+		return true
+	}
+	userGroup, err := getTokenRequestUserGroup(c)
+	if err != nil {
+		common.ApiError(c, err)
+		return false
+	}
+	role := common.GetContextKeyInt(c, constant.ContextKeyUserRole)
+	if !service.IsUserSelectableGroup(userGroup, role, group) {
+		common.ApiErrorI18n(c, i18n.MsgTokenGroupNotSelectable, map[string]any{"Group": group})
+		return false
+	}
+	return true
+}
+
 func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) bool {
 	if len(groups) == 0 {
 		if err := token.SetAutoGroups(nil); err != nil {
@@ -130,6 +149,7 @@ func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) boo
 		common.ApiError(c, err)
 		return false
 	}
+	role := common.GetContextKeyInt(c, constant.ContextKeyUserRole)
 	seen := make(map[string]struct{}, len(groups))
 	for _, group := range groups {
 		if _, ok := seen[group]; ok {
@@ -137,7 +157,7 @@ func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) boo
 			return false
 		}
 		seen[group] = struct{}{}
-		if !service.IsUserSelectableGroup(userGroup, group) {
+		if !service.IsUserSelectableGroup(userGroup, role, group) {
 			common.ApiErrorI18n(c, i18n.MsgTokenAutoGroupsInvalid, map[string]any{"Group": group})
 			return false
 		}
@@ -205,7 +225,7 @@ func GetTokenAutoGroups(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, gin.H{
-		"groups":    service.GetUserAutoGroup(userGroup),
+		"groups":    service.GetUserAutoGroup(userGroup, common.GetContextKeyInt(c, constant.ContextKeyUserRole)),
 		"max_count": setting.GetMaxTokenAutoGroups(),
 	})
 }
@@ -347,6 +367,9 @@ func AddToken(c *gin.Context) {
 	} else {
 		token.CrossGroupRetry = false
 		_ = token.SetAutoGroups(nil)
+		if !validateTokenGroup(c, token.Group) {
+			return
+		}
 	}
 	key, err := common.GenerateKey()
 	if err != nil {
@@ -467,6 +490,9 @@ func UpdateToken(c *gin.Context) {
 		if token.Group != "auto" {
 			cleanToken.CrossGroupRetry = false
 			_ = cleanToken.SetAutoGroups(nil)
+			if !validateTokenGroup(c, token.Group) {
+				return
+			}
 		} else if request.AutoGroups.Set {
 			if !setTokenAutoGroups(c, cleanToken, request.AutoGroups.Groups) {
 				return

@@ -20,6 +20,7 @@ import (
 	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/QuantumNous/new-api/constant"
 
@@ -685,7 +686,7 @@ func GetUserModels(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	groups := service.GetUserUsableGroups(user.Group)
+	groups := service.GetUserUsableGroups(user.Group, user.Role)
 	group := c.Query("group")
 	var groupsToQuery []string
 	switch {
@@ -695,7 +696,7 @@ func GetUserModels(c *gin.Context) {
 		}
 	case group == "auto":
 		if _, ok := groups[group]; ok {
-			groupsToQuery = service.GetUserAutoGroup(user.Group)
+			groupsToQuery = service.GetUserAutoGroup(user.Group, user.Role)
 		}
 	default:
 		if _, ok := groups[group]; ok {
@@ -739,6 +740,22 @@ func UpdateUser(c *gin.Context) {
 	if !canManageTargetRole(myRole, originUser.Role) {
 		common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
 		return
+	}
+	// 未指定分组时保持原分组，避免误清空用户身份
+	if updatedUser.Group == "" {
+		updatedUser.Group = originUser.Group
+	}
+	if updatedUser.Group != "" {
+		// 分组必须存在于分组倍率表
+		if !ratio_setting.ContainsGroupRatio(updatedUser.Group) {
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
+		// 受保护分组仅超级管理员可指派
+		if ratio_setting.IsGroupProtected(updatedUser.Group) && myRole != common.RoleRootUser {
+			common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
+			return
+		}
 	}
 	updatePassword := updatedUser.Password != ""
 	authzTouched := false

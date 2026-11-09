@@ -56,6 +56,9 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, task *model
 	if info.PriceData.GroupRatioInfo.HasSpecialRatio {
 		other.SetPublic("user_group_ratio", info.PriceData.GroupRatioInfo.GroupSpecialRatio)
 	}
+	if info.PriceData.GroupRatioInfo.HasUserGroupRatio {
+		other.SetPublic("user_group_discount", info.PriceData.GroupRatioInfo.UserGroupRatio)
+	}
 	if info.IsModelMapped {
 		other.SetPublic("is_model_mapped", true)
 		other.SetPublic("upstream_model_name", info.UpstreamModelName)
@@ -347,27 +350,22 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 		return false
 	}
 
-	// 获取用户和组的倍率信息
-	group := task.Group
-	if group == "" {
-		user, err := model.GetUserById(task.UserId, false)
-		if err == nil {
-			group = user.Group
-		}
+	// 区分令牌分组（计费用组）与用户分组（用户身份）：用户分组倍率按用户身份生效
+	usingGroup := strings.TrimSpace(task.Group)
+	userGroup := ""
+	user, err := model.GetUserById(task.UserId, false)
+	if err == nil {
+		userGroup = user.Group
 	}
-	if group == "" {
+	if usingGroup == "" {
+		usingGroup = userGroup
+	}
+	if usingGroup == "" {
 		return false
 	}
 
-	groupRatio := ratio_setting.GetGroupRatio(group)
-	userGroupRatio, hasUserGroupRatio := ratio_setting.GetGroupGroupRatio(group, group)
-
-	var finalGroupRatio float64
-	if hasUserGroupRatio {
-		finalGroupRatio = userGroupRatio
-	} else {
-		finalGroupRatio = groupRatio
-	}
+	// 与预扣费路径共用同一套分组倍率解析，保证预估与实扣口径一致
+	finalGroupRatio := ratio_setting.ResolveGroupRatio(userGroup, usingGroup).GroupRatio
 
 	// 计算 OtherRatios 乘积（视频折扣、时长等）
 	otherMultiplier := 1.0

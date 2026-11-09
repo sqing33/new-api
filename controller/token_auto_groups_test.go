@@ -232,3 +232,107 @@ func TestGetTokenAutoGroupsReturnsFullFilteredGlobalOrderAndLimit(t *testing.T) 
 	assert.Equal(t, []string{"vip", "default"}, data.Groups)
 	assert.Equal(t, 1, data.MaxCount)
 }
+
+func configureTokenProtectedGroupTest(t *testing.T) {
+	t.Helper()
+	originalUsableGroups := setting.UserUsableGroups2JSONString()
+	originalRatios := ratio_setting.GroupRatio2JSONString()
+	originalProtected := ratio_setting.GroupProtected2JSONString()
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default","Admin":"Admin"}`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"Admin":1}`))
+	require.NoError(t, ratio_setting.UpdateGroupProtectedByJSONString(`{"Admin":true}`))
+	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalUsableGroups))
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalRatios))
+		require.NoError(t, ratio_setting.UpdateGroupProtectedByJSONString(originalProtected))
+	})
+}
+
+func setupProtectedGroupUser(t *testing.T, id int, username string, group string, role int) *model.User {
+	t.Helper()
+	db := setupTokenControllerTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.User{}))
+	user := &model.User{
+		Id:       id,
+		Username: username,
+		Password: "password",
+		Group:    group,
+		Role:     role,
+		Status:   common.UserStatusEnabled,
+	}
+	require.NoError(t, db.Create(user).Error)
+	return user
+}
+
+func newProtectedGroupTokenContext(t *testing.T, method string, target string, body any, userID int, userGroup string, role int) (*gin.Context, *httptest.ResponseRecorder) {
+	t.Helper()
+	ctx, recorder := newAuthenticatedContext(t, method, target, body, userID)
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, userGroup)
+	common.SetContextKey(ctx, constant.ContextKeyUserRole, role)
+	return ctx, recorder
+}
+
+func TestAddTokenRejectsProtectedGroupForNonMember(t *testing.T) {
+	configureTokenProtectedGroupTest(t)
+	user := setupProtectedGroupUser(t, 201, "protected-non-member", "default", common.RoleCommonUser)
+	request := baseAutoTokenRequest("protected-non-member")
+	request["group"] = "Admin"
+
+	ctx, recorder := newProtectedGroupTokenContext(t, http.MethodPost, "/api/token/", request, user.Id, "default", common.RoleCommonUser)
+	AddToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	assert.False(t, response.Success)
+	var count int64
+	require.NoError(t, model.DB.Model(&model.Token{}).Count(&count).Error)
+	assert.Zero(t, count)
+}
+
+func TestAddTokenAllowsProtectedGroupForMemberAndRoot(t *testing.T) {
+	tests := []struct {
+		name      string
+		userGroup string
+		role      int
+	}{
+		{name: "member", userGroup: "Admin", role: common.RoleCommonUser},
+		{name: "root", userGroup: "default", role: common.RoleRootUser},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			configureTokenProtectedGroupTest(t)
+			user := setupProtectedGroupUser(t, 202, "protected-"+test.name, test.userGroup, test.role)
+			request := baseAutoTokenRequest("protected-" + test.name)
+			request["group"] = "Admin"
+
+			ctx, recorder := newProtectedGroupTokenContext(t, http.MethodPost, "/api/token/", request, user.Id, test.userGroup, test.role)
+			AddToken(ctx)
+
+			response := decodeAPIResponse(t, recorder)
+			require.True(t, response.Success, response.Message)
+			var token model.Token
+			require.NoError(t, model.DB.Where("name = ?", request["name"]).First(&token).Error)
+			assert.Equal(t, "Admin", token.Group)
+		})
+	}
+}
+
+func TestUpdateTokenRejectsProtectedGroupForNonMember(t *testing.T) {
+	configureTokenProtectedGroupTest(t)
+	user := setupProtectedGroupUser(t, 203, "protected-update", "default", common.RoleCommonUser)
+	token := seedToken(t, model.DB, user.Id, "protected-update", "protected-update-key")
+
+	request := baseAutoTokenRequest("protected-update")
+	request["id"] = token.Id
+	request["status"] = common.TokenStatusEnabled
+	request["group"] = "Admin"
+
+	ctx, recorder := newProtectedGroupTokenContext(t, http.MethodPut, "/api/token/", request, user.Id, "default", common.RoleCommonUser)
+	UpdateToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	assert.False(t, response.Success)
+	var stored model.Token
+	require.NoError(t, model.DB.First(&stored, token.Id).Error)
+	assert.Equal(t, "default", stored.Group)
+}

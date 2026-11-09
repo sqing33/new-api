@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"github.com/QuantumNous/new-api/common"
@@ -27,8 +28,13 @@ func ContainsAutoGroup(group string) bool {
 	return slices.Contains(autoGroups, group)
 }
 
+// UpdateAutoGroupsByJsonString 用 JSON 数组覆盖自动分组列表。
+// 空白文本视为空数组（不报错），避免把上一份有效配置清成空值。
 func UpdateAutoGroupsByJsonString(jsonString string) error {
 	autoGroups = make([]string, 0)
+	if strings.TrimSpace(jsonString) == "" {
+		return nil
+	}
 	return common.Unmarshal([]byte(jsonString), &autoGroups)
 }
 
