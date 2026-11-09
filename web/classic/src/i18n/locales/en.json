@@ -4657,5 +4657,11 @@
   "30 秒": "30 seconds",
   "1 分钟": "1 minute",
   "5 分钟": "5 minutes",
-  "提示：自动刷新会保持当前页码与筛选条件，页面切到后台时会自动暂停；修改后需要刷新页面才会生效。": "Note: auto refresh keeps the current page and filters, and pauses while the tab is in the background. Changes take effect after reloading the page."
+  "提示：自动刷新会保持当前页码与筛选条件，页面切到后台时会自动暂停；修改后需要刷新页面才会生效。": "Note: auto refresh keeps the current page and filters, and pauses while the tab is in the background. Changes take effect after reloading the page.",
+  "同渠道重试次数": "Same-channel retry times",
+  "在降低优先级换渠道之前，同一渠道原地重试的次数。多 key 渠道每次重试会换一个 key": "In-place retries on the same channel before dropping to a lower priority. Multi-key channels pick a different key each retry",
+  "慢失败阈值（秒）": "Slow failure threshold (s)",
+  "单次尝试耗时超过该值且失败时记为慢失败，0 表示不启用": "An attempt taking at least this long and still failing counts as a slow failure; 0 disables it",
+  "慢失败连续次数": "Consecutive slow failures",
+  "连续出现该次数的慢失败后，立即放弃同渠道重试并换渠道，0 表示不启用": "After this many slow failures in a row, skip the remaining same-channel retries and switch channels; 0 disables it"
 }

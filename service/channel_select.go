@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -44,6 +45,60 @@ type RetryParam struct {
 	RequestPath  string
 	Retry        *int
 	resetNextTry bool
+
+	// LockedChannelId pins the next attempt to one channel instead of running
+	// the normal priority/weight selection. It is set while the channel still
+	// has same-channel retry budget left, and cleared when the loop drops a
+	// priority tier. Pinning keeps the upstream prompt cache warm across retries.
+	LockedChannelId int
+	// SameChannelRetry counts the in-place retries already spent on
+	// LockedChannelId.
+	SameChannelRetry int
+	// ConsecutiveSlowFailures counts back-to-back slow failures across the whole
+	// request; any attempt that finishes quickly resets it.
+	ConsecutiveSlowFailures int
+}
+
+// RetryPolicy is the retry budget for one relay request. It is snapshotted once
+// per request so a settings change cannot resize the budget mid-flight.
+type RetryPolicy struct {
+	// PriorityRetries is how many priority tiers the loop may drop through.
+	// It keeps the historical RetryTimes meaning.
+	PriorityRetries int
+	// SameChannelRetries is how many extra attempts one channel gets, in place,
+	// before the loop drops to the next priority tier.
+	SameChannelRetries int
+	// SlowFailThreshold classifies an attempt as slow. Zero disables it.
+	SlowFailThreshold time.Duration
+	// SlowFailCount drops the remaining same-channel budget after this many
+	// consecutive slow failures. Zero disables the rule.
+	SlowFailCount int
+}
+
+// NewRetryPolicyFromSettings snapshots the retry settings for one request.
+func NewRetryPolicyFromSettings() RetryPolicy {
+	return RetryPolicy{
+		PriorityRetries:    max(common.RetryTimes, 0),
+		SameChannelRetries: max(common.ChannelRetryTimes, 0),
+		SlowFailThreshold:  time.Duration(max(common.ChannelRetrySlowFailSeconds, 0)) * time.Second,
+		SlowFailCount:      max(common.ChannelRetrySlowFailCount, 0),
+	}
+}
+
+// MaxAttempts is how many upstream attempts this policy permits, before the
+// hard ceiling in common.MaxRelayAttempts is applied.
+func (p RetryPolicy) MaxAttempts() int {
+	return (p.PriorityRetries + 1) * (p.SameChannelRetries + 1)
+}
+
+// RetryAttemptOutcome is one failed attempt reduced to the facts the retry
+// policy needs. An attempt that already streamed content to the client never
+// reaches this function: the caller refuses to replay over visible output.
+type RetryAttemptOutcome struct {
+	// Elapsed is how long the attempt took, measured from its start.
+	Elapsed time.Duration
+	// ChannelId is the channel that served the attempt.
+	ChannelId int
 }
 
 func (p *RetryParam) GetRetry() int {
@@ -70,6 +125,41 @@ func (p *RetryParam) IncreaseRetry() {
 
 func (p *RetryParam) ResetRetryNextTry() {
 	p.resetNextTry = true
+}
+
+// AdvanceAfterFailure records one failed attempt and prepares the next one.
+// It reports whether the loop still has budget for another attempt.
+//
+// The priority index only advances once the failing channel has exhausted its
+// in-place budget, so a flaky channel is retried a few times before the loop
+// drops a priority tier. A run of slow failures shortens that budget: a channel
+// that keeps timing out is unlikely to recover, and retrying it only delays the
+// drop while the client waits.
+func (p *RetryParam) AdvanceAfterFailure(outcome RetryAttemptOutcome, policy RetryPolicy) bool {
+	if policy.SlowFailThreshold > 0 && policy.SlowFailCount > 0 &&
+		outcome.Elapsed >= policy.SlowFailThreshold {
+		p.ConsecutiveSlowFailures++
+	} else {
+		p.ConsecutiveSlowFailures = 0
+	}
+	if policy.SlowFailCount > 0 && p.ConsecutiveSlowFailures >= policy.SlowFailCount {
+		p.ConsecutiveSlowFailures = 0
+		p.SameChannelRetry = policy.SameChannelRetries
+	}
+
+	if p.SameChannelRetry < policy.SameChannelRetries && outcome.ChannelId > 0 {
+		p.SameChannelRetry++
+		p.LockedChannelId = outcome.ChannelId
+		return true
+	}
+
+	p.SameChannelRetry = 0
+	p.LockedChannelId = 0
+	// A tier drop targets a different channel, so a slow-failure streak built on
+	// the previous one must not carry over and shorten the next channel's budget.
+	p.ConsecutiveSlowFailures = 0
+	p.IncreaseRetry()
+	return p.GetRetry() <= policy.PriorityRetries
 }
 
 // CacheGetRandomSatisfiedChannel tries to get a random channel that satisfies the requirements.

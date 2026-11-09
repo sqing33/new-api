@@ -4528,5 +4528,11 @@
   "30 秒": "30 secondes",
   "1 分钟": "1 minute",
   "5 分钟": "5 minutes",
-  "提示：自动刷新会保持当前页码与筛选条件，页面切到后台时会自动暂停；修改后需要刷新页面才会生效。": "Remarque : le rafraîchissement automatique conserve la page et les filtres courants, et se met en pause lorsque l’onglet passe en arrière-plan. Les modifications prennent effet après rechargement de la page."
+  "提示：自动刷新会保持当前页码与筛选条件，页面切到后台时会自动暂停；修改后需要刷新页面才会生效。": "Remarque : le rafraîchissement automatique conserve la page et les filtres courants, et se met en pause lorsque l’onglet passe en arrière-plan. Les modifications prennent effet après rechargement de la page.",
+  "同渠道重试次数": "Tentatives sur le même canal",
+  "在降低优先级换渠道之前，同一渠道原地重试的次数。多 key 渠道每次重试会换一个 key": "Nombre de tentatives sur place sur le même canal avant de passer à une priorité inférieure. Les canaux multi-clés changent de clé à chaque tentative",
+  "慢失败阈值（秒）": "Seuil d'échec lent (s)",
+  "单次尝试耗时超过该值且失败时记为慢失败，0 表示不启用": "Une tentative qui dure au moins ce temps et échoue compte comme un échec lent ; 0 le désactive",
+  "慢失败连续次数": "Échecs lents consécutifs",
+  "连续出现该次数的慢失败后，立即放弃同渠道重试并换渠道，0 表示不启用": "Après ce nombre d'échecs lents consécutifs, abandonne les tentatives sur le même canal et change de canal ; 0 le désactive"
 }

@@ -197,8 +197,15 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
 
-	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
-		relayInfo.RetryIndex = retryParam.GetRetry()
+	retryPolicy := service.NewRetryPolicyFromSettings()
+	maxAttempts := min(retryPolicy.MaxAttempts(), common.MaxRelayAttempts)
+
+	for attempt := 1; retryParam.GetRetry() <= retryPolicy.PriorityRetries; attempt++ {
+		// RetryIndex is the real attempt index (0 for the first attempt), not the
+		// priority tier. The two used to be the same number, but same-channel
+		// retries stay on one tier, so template overrides must see the attempt
+		// count to keep `is_retry` meaningful.
+		relayInfo.RetryIndex = attempt - 1
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
@@ -223,6 +230,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
+		attemptStart := time.Now()
 		switch relayFormat {
 		case types.RelayFormatOpenAIRealtime:
 			newAPIError = relay.WssHelper(c, relayInfo)
@@ -244,7 +252,21 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, relayInfo)
 
-		if !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
+		if !shouldRetry(c, newAPIError, maxAttempts-attempt) {
+			break
+		}
+		// Content already reached the client, so a retry could only append a
+		// second response after it. Stop instead of corrupting the stream.
+		if relayInfo.SendResponseCount > 0 {
+			break
+		}
+		if attempt >= maxAttempts {
+			break
+		}
+		if !retryParam.AdvanceAfterFailure(service.RetryAttemptOutcome{
+			Elapsed:   time.Since(attemptStart),
+			ChannelId: channel.Id,
+		}, retryPolicy) {
 			break
 		}
 	}
@@ -348,6 +370,24 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 			Name:    c.GetString("channel_name"),
 			AutoBan: &autoBanInt,
 		}, nil
+	}
+	if retryParam.LockedChannelId > 0 {
+		// Same-channel retry: reuse the channel that just failed so the upstream
+		// prompt cache stays warm. The key is still re-picked below, so a
+		// multi-key channel rotates to another key.
+		locked, lockErr := model.CacheGetChannel(retryParam.LockedChannelId)
+		if lockErr != nil || locked == nil || locked.Status != common.ChannelStatusEnabled {
+			// The channel went away between attempts (disabled, deleted, banned).
+			// Fall back to normal selection instead of failing the request.
+			retryParam.LockedChannelId = 0
+			retryParam.SameChannelRetry = 0
+		} else {
+			info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
+			if newAPIError := middleware.SetupContextForSelectedChannel(c, locked, info.OriginModelName); newAPIError != nil {
+				return nil, newAPIError
+			}
+			return locked, nil
+		}
 	}
 	channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(retryParam)
 	if err != nil {

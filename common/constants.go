@@ -133,6 +133,30 @@ var PreConsumedQuota = 500
 
 var RetryTimes = 0
 
+// ChannelRetryTimes caps how many extra attempts a single channel gets, in
+// place, before the retry loop drops to the next priority tier. Same-channel
+// retries reuse the channel (prompt cache stays warm) and only re-pick a key
+// for multi-key channels. It is an independent budget: it applies even when
+// RetryTimes is 0, so a single-tier deployment still retries a flaky channel.
+var ChannelRetryTimes = 3
+
+// ChannelRetrySlowFailSeconds classifies an attempt as a "slow failure": the
+// attempt burned at least this long and still failed without streaming any
+// content to the client. 0 disables the classification.
+var ChannelRetrySlowFailSeconds = 120
+
+// ChannelRetrySlowFailCount drops the remaining same-channel budget once this
+// many consecutive attempts fail slowly. A slow channel is unlikely to recover
+// quickly, so spending the whole budget on it only delays the priority drop.
+// 0 disables the rule.
+var ChannelRetrySlowFailCount = 2
+
+// MaxRelayAttempts is a hard ceiling on total upstream attempts for one
+// request, independent of how the retry budgets above are configured. It keeps
+// a misconfiguration (for example RetryTimes and ChannelRetryTimes both large)
+// from turning one request into an unbounded fan-out.
+const MaxRelayAttempts = 20
+
 //var RootUserEmail = ""
 
 var IsMasterNode bool

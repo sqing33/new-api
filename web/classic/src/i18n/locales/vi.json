@@ -5040,5 +5040,11 @@
   "30 秒": "30 giây",
   "1 分钟": "1 phút",
   "5 分钟": "5 phút",
-  "提示：自动刷新会保持当前页码与筛选条件，页面切到后台时会自动暂停；修改后需要刷新页面才会生效。": "Lưu ý: tự động làm mới giữ nguyên trang và bộ lọc hiện tại, và tạm dừng khi tab chuyển sang nền. Thay đổi có hiệu lực sau khi tải lại trang."
+  "提示：自动刷新会保持当前页码与筛选条件，页面切到后台时会自动暂停；修改后需要刷新页面才会生效。": "Lưu ý: tự động làm mới giữ nguyên trang và bộ lọc hiện tại, và tạm dừng khi tab chuyển sang nền. Thay đổi có hiệu lực sau khi tải lại trang.",
+  "同渠道重试次数": "Số lần thử lại cùng kênh",
+  "在降低优先级换渠道之前，同一渠道原地重试的次数。多 key 渠道每次重试会换一个 key": "Số lần thử lại ngay trên cùng kênh trước khi hạ ưu tiên và đổi kênh. Kênh nhiều key sẽ đổi key mỗi lần thử",
+  "慢失败阈值（秒）": "Ngưỡng thất bại chậm (giây)",
+  "单次尝试耗时超过该值且失败时记为慢失败，0 表示不启用": "Một lần thử kéo dài ít nhất bằng này và vẫn thất bại được tính là thất bại chậm; 0 để tắt",
+  "慢失败连续次数": "Số lần thất bại chậm liên tiếp",
+  "连续出现该次数的慢失败后，立即放弃同渠道重试并换渠道，0 表示不启用": "Sau số lần thất bại chậm liên tiếp này, bỏ qua các lần thử còn lại trên cùng kênh và đổi kênh; 0 để tắt"
 }

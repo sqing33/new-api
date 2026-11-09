@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
@@ -182,4 +183,113 @@ func TestSharedType61IdentityFilterContainsAllCandidateKeys(t *testing.T) {
 	assert.Equal(t, "alpha", filters[0].TaskPluginKey)
 	assert.Equal(t, []string{"alpha", "beta"}, filters[0].TaskPluginKeys)
 	assert.Empty(t, filters[0].TaskPluginChannelTypes)
+}
+
+func TestAdvanceAfterFailureSpendsSameChannelBudgetFirst(t *testing.T) {
+	policy := RetryPolicy{PriorityRetries: 1, SameChannelRetries: 3}
+	param := &RetryParam{}
+
+	// Three in-place retries, all pinned to the channel that just failed.
+	for spent := 1; spent <= 3; spent++ {
+		require.True(t, param.AdvanceAfterFailure(RetryAttemptOutcome{Elapsed: time.Millisecond, ChannelId: 30}, policy))
+		assert.Equal(t, spent, param.SameChannelRetry)
+		assert.Equal(t, 30, param.LockedChannelId)
+		assert.Equal(t, 0, param.GetRetry(), "same-channel retries must not drop a priority tier")
+	}
+
+	// Budget exhausted: drop one tier and clear the pin.
+	require.True(t, param.AdvanceAfterFailure(RetryAttemptOutcome{Elapsed: time.Millisecond, ChannelId: 30}, policy))
+	assert.Equal(t, 1, param.GetRetry())
+	assert.Zero(t, param.SameChannelRetry)
+	assert.Zero(t, param.LockedChannelId)
+}
+
+func TestAdvanceAfterFailureRetriesSameChannelWithNoPriorityBudget(t *testing.T) {
+	// RetryTimes=0 must not disable same-channel retries: the two budgets are
+	// independent, which is the reason ChannelRetryTimes exists.
+	policy := RetryPolicy{PriorityRetries: 0, SameChannelRetries: 3}
+	param := &RetryParam{}
+
+	require.True(t, param.AdvanceAfterFailure(RetryAttemptOutcome{ChannelId: 7}, policy))
+	assert.Equal(t, 7, param.LockedChannelId)
+	assert.Equal(t, 0, param.GetRetry())
+
+	param.AdvanceAfterFailure(RetryAttemptOutcome{ChannelId: 7}, policy)
+	param.AdvanceAfterFailure(RetryAttemptOutcome{ChannelId: 7}, policy)
+	assert.False(t, param.AdvanceAfterFailure(RetryAttemptOutcome{ChannelId: 7}, policy), "no priority budget left after the same-channel budget is spent")
+}
+
+func TestAdvanceAfterFailureStopsAfterConsecutiveSlowFailures(t *testing.T) {
+	policy := RetryPolicy{
+		PriorityRetries:    1,
+		SameChannelRetries: 3,
+		SlowFailThreshold:  120 * time.Second,
+		SlowFailCount:      2,
+	}
+	param := &RetryParam{}
+
+	require.True(t, param.AdvanceAfterFailure(RetryAttemptOutcome{Elapsed: 121 * time.Second, ChannelId: 30}, policy))
+	assert.Equal(t, 1, param.ConsecutiveSlowFailures)
+	assert.Equal(t, 1, param.SameChannelRetry)
+
+	// Second slow failure exhausts the same-channel budget early, so the next
+	// attempt jumps to the next priority tier instead of waiting out 3 retries.
+	require.True(t, param.AdvanceAfterFailure(RetryAttemptOutcome{Elapsed: 121 * time.Second, ChannelId: 30}, policy))
+	assert.Equal(t, 1, param.GetRetry(), "slow failures drop the tier without spending the full budget")
+	assert.Zero(t, param.LockedChannelId)
+}
+
+func TestAdvanceAfterFailureResetsSlowFailureStreakOnFastAttempt(t *testing.T) {
+	policy := RetryPolicy{
+		PriorityRetries:    2,
+		SameChannelRetries: 3,
+		SlowFailThreshold:  120 * time.Second,
+		SlowFailCount:      2,
+	}
+	param := &RetryParam{}
+
+	require.True(t, param.AdvanceAfterFailure(RetryAttemptOutcome{Elapsed: 121 * time.Second, ChannelId: 30}, policy))
+	require.True(t, param.AdvanceAfterFailure(RetryAttemptOutcome{Elapsed: 2 * time.Second, ChannelId: 30}, policy))
+	assert.Zero(t, param.ConsecutiveSlowFailures, "a fast failure breaks the streak")
+	assert.Equal(t, 2, param.SameChannelRetry)
+	assert.Equal(t, 0, param.GetRetry(), "streak reset keeps the normal same-channel budget")
+}
+
+func TestAdvanceAfterFailureIgnoresSlowFailuresWhenDisabled(t *testing.T) {
+	for _, policy := range []RetryPolicy{
+		{PriorityRetries: 1, SameChannelRetries: 3},                                 // threshold unset
+		{PriorityRetries: 1, SameChannelRetries: 3, SlowFailThreshold: time.Minute}, // count unset
+	} {
+		param := &RetryParam{}
+		require.True(t, param.AdvanceAfterFailure(RetryAttemptOutcome{Elapsed: time.Hour, ChannelId: 30}, policy))
+		assert.Zero(t, param.ConsecutiveSlowFailures)
+		assert.Equal(t, 1, param.SameChannelRetry)
+	}
+}
+
+func TestRetryPolicyMaxAttemptsMultipliesBothBudgets(t *testing.T) {
+	assert.Equal(t, 4, RetryPolicy{PriorityRetries: 0, SameChannelRetries: 3}.MaxAttempts())
+	assert.Equal(t, 8, RetryPolicy{PriorityRetries: 1, SameChannelRetries: 3}.MaxAttempts())
+	assert.Equal(t, 1, RetryPolicy{}.MaxAttempts(), "no budget still leaves the first attempt")
+}
+
+func TestAdvanceAfterFailureClearsSlowStreakAcrossTierDrop(t *testing.T) {
+	// A slowdown seen on one channel must not shorten the next channel's budget.
+	policy := RetryPolicy{
+		PriorityRetries:    1,
+		SameChannelRetries: 3,
+		SlowFailThreshold:  120 * time.Second,
+		SlowFailCount:      2,
+	}
+	param := &RetryParam{}
+	require.True(t, param.AdvanceAfterFailure(RetryAttemptOutcome{Elapsed: 121 * time.Second, ChannelId: 30}, policy))
+	// Budget exhausted by the slow rule: this failure drops the tier.
+	require.True(t, param.AdvanceAfterFailure(RetryAttemptOutcome{Elapsed: 121 * time.Second, ChannelId: 30}, policy))
+	require.Equal(t, 1, param.GetRetry())
+	assert.Zero(t, param.ConsecutiveSlowFailures, "a tier drop starts a clean streak for the new channel")
+
+	// The next channel gets its full in-place budget even after a slow failure.
+	require.True(t, param.AdvanceAfterFailure(RetryAttemptOutcome{Elapsed: 121 * time.Second, ChannelId: 41}, policy))
+	assert.Equal(t, 41, param.LockedChannelId)
+	assert.Equal(t, 1, param.SameChannelRetry)
 }

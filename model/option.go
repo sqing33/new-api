@@ -171,6 +171,9 @@ func InitOptionMap() {
 	//common.OptionMap["ChatLink2"] = common.ChatLink2
 	common.OptionMap["QuotaPerUnit"] = strconv.FormatFloat(common.QuotaPerUnit, 'f', -1, 64)
 	common.OptionMap["RetryTimes"] = strconv.Itoa(common.RetryTimes)
+	common.OptionMap["ChannelRetryTimes"] = strconv.Itoa(common.ChannelRetryTimes)
+	common.OptionMap["ChannelRetrySlowFailSeconds"] = strconv.Itoa(common.ChannelRetrySlowFailSeconds)
+	common.OptionMap["ChannelRetrySlowFailCount"] = strconv.Itoa(common.ChannelRetrySlowFailCount)
 	common.OptionMap["DataExportInterval"] = strconv.Itoa(common.DataExportInterval)
 	common.OptionMap["DataExportDefaultTime"] = common.DataExportDefaultTime
 	common.OptionMap["DefaultCollapseSidebar"] = strconv.FormatBool(common.DefaultCollapseSidebar)
@@ -310,6 +313,18 @@ func UpdateOptionsBulk(values map[string]string) error {
 		}
 	}
 	return nil
+}
+
+// clampRetryBudget parses a retry-related option and bounds it to
+// [0, maxValue]. Retry budgets multiply together, so an unbounded value coming
+// from the settings API would fan a single request out to an arbitrary number
+// of upstream attempts. An unparsable value falls back to 0.
+func clampRetryBudget(value string, maxValue int) int {
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		return 0
+	}
+	return min(parsed, maxValue)
 }
 
 func updateOptionMap(key string, value string) (err error) {
@@ -597,6 +612,12 @@ func updateOptionMap(key string, value string) (err error) {
 		err = setting.UpdateModelRequestRateLimitGroupByJSONString(value)
 	case "RetryTimes":
 		common.RetryTimes, _ = strconv.Atoi(value)
+	case "ChannelRetryTimes":
+		common.ChannelRetryTimes = clampRetryBudget(value, 10)
+	case "ChannelRetrySlowFailSeconds":
+		common.ChannelRetrySlowFailSeconds = clampRetryBudget(value, 3600)
+	case "ChannelRetrySlowFailCount":
+		common.ChannelRetrySlowFailCount = clampRetryBudget(value, 10)
 	case "DataExportInterval":
 		common.DataExportInterval, _ = strconv.Atoi(value)
 	case "DataExportDefaultTime":

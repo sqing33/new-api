@@ -53,6 +53,9 @@ export default function GeneralSettings(props) {
     'general_setting.custom_currency_exchange_rate': '',
     QuotaPerUnit: '',
     RetryTimes: '',
+    ChannelRetryTimes: '',
+    ChannelRetrySlowFailSeconds: '',
+    ChannelRetrySlowFailCount: '',
     USDExchangeRate: '',
     DisplayTokenStatEnabled: false,
     DefaultCollapseSidebar: false,
@@ -284,6 +287,45 @@ export default function GeneralSettings(props) {
                   initValue={''}
                   placeholder={t('失败重试次数')}
                   onChange={handleFieldChange('RetryTimes')}
+                  showClear
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Input
+                  field={'ChannelRetryTimes'}
+                  label={t('同渠道重试次数')}
+                  initValue={''}
+                  placeholder={t('同渠道重试次数')}
+                  onChange={handleFieldChange('ChannelRetryTimes')}
+                  extraText={t(
+                    '在降低优先级换渠道之前，同一渠道原地重试的次数。多 key 渠道每次重试会换一个 key',
+                  )}
+                  showClear
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Input
+                  field={'ChannelRetrySlowFailSeconds'}
+                  label={t('慢失败阈值（秒）')}
+                  initValue={''}
+                  placeholder={t('慢失败阈值（秒）')}
+                  onChange={handleFieldChange('ChannelRetrySlowFailSeconds')}
+                  extraText={t(
+                    '单次尝试耗时超过该值且失败时记为慢失败，0 表示不启用',
+                  )}
+                  showClear
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Input
+                  field={'ChannelRetrySlowFailCount'}
+                  label={t('慢失败连续次数')}
+                  initValue={''}
+                  placeholder={t('慢失败连续次数')}
+                  onChange={handleFieldChange('ChannelRetrySlowFailCount')}
+                  extraText={t(
+                    '连续出现该次数的慢失败后，立即放弃同渠道重试并换渠道，0 表示不启用',
+                  )}
                   showClear
                 />
               </Col>
