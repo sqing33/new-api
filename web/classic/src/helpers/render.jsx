@@ -1205,7 +1205,20 @@ export function convertUSDToCurrency(usdAmount, digits = 2) {
   return symbol + convertedAmount.toFixed(digits);
 }
 
+// UNLIMITED_QUOTA 是无限额度钱包的余额阈值，对应后端的 common.UnlimitedQuota（1 << 52）。
+// 余额达到该值的钱包被展示为 ∞，因为它的余额既不会被扣减也不会耗尽。
+export const UNLIMITED_QUOTA = 4503599627370496;
+
+// isUnlimitedQuota 判断余额是否处于无限额度状态。
+export function isUnlimitedQuota(quota) {
+  const value = Number(quota);
+  return Number.isFinite(value) && value >= UNLIMITED_QUOTA;
+}
+
 export function renderQuota(quota, digits = 2) {
+  if (isUnlimitedQuota(quota)) {
+    return '∞';
+  }
   let quotaPerUnit = localStorage.getItem('quota_per_unit');
   const quotaDisplayType = localStorage.getItem('quota_display_type') || 'USD';
   quotaPerUnit = parseFloat(quotaPerUnit);

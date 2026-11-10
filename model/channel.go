@@ -824,6 +824,11 @@ func (channel *Channel) GetStatusCodeMapping() string {
 
 func (channel *Channel) Insert() error {
 	var err error
+	// 分组列的数据库默认值仍是历史遗留的 'default'，这里显式写入当前默认分组，
+	// 避免新渠道落到一个已经改名的分组上。
+	if channel.Group == "" {
+		channel.Group = common.DefaultUserGroup
+	}
 	err = DB.Create(channel).Error
 	if err != nil {
 		return err

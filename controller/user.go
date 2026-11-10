@@ -710,6 +710,32 @@ func GetUserModels(c *gin.Context) {
 	})
 }
 
+// applyUnlimitedGroupQuota 处理用户分组切换时的余额调整：
+// 进入无限额度分组时把余额直接置为无限额度值，离开时把余额恢复为 0。
+// 返回余额差量，事务提交后用于同步用户缓存。
+func applyUnlimitedGroupQuota(tx *gorm.DB, originUser *model.User, newGroup string) (int, error) {
+	target := 0
+	switch {
+	case ratio_setting.IsGroupUnlimited(newGroup):
+		target = common.UnlimitedQuota
+	case ratio_setting.IsGroupUnlimited(originUser.Group):
+		target = 0
+	default:
+		return 0, nil
+	}
+	currentQuota, err := model.GetUserQuota(originUser.Id, false)
+	if err != nil {
+		currentQuota = originUser.Quota
+	}
+	if currentQuota == target {
+		return 0, nil
+	}
+	if err := model.SetUserQuota(tx, originUser.Id, target); err != nil {
+		return 0, err
+	}
+	return target - currentQuota, nil
+}
+
 func UpdateUser(c *gin.Context) {
 	var updatedUser model.User
 	err := common.DecodeJson(c.Request.Body, &updatedUser)
@@ -759,10 +785,16 @@ func UpdateUser(c *gin.Context) {
 	}
 	updatePassword := updatedUser.Password != ""
 	authzTouched := false
+	quotaDelta := 0
 	if err := model.DB.Transaction(func(tx *gorm.DB) error {
 		if err := updatedUser.EditWithTx(tx, updatePassword); err != nil {
 			return err
 		}
+		delta, err := applyUnlimitedGroupQuota(tx, originUser, updatedUser.Group)
+		if err != nil {
+			return err
+		}
+		quotaDelta = delta
 		touched, err := updateAdminPermissionsForUserInTx(c, tx, updatedUser.Id, originUser.Role, updatedUser.AdminPermissions)
 		authzTouched = touched
 		return err
@@ -770,6 +802,7 @@ func UpdateUser(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	model.SyncUserQuotaCache(updatedUser.Id, quotaDelta)
 	if authzTouched {
 		if err := authz.ReloadPolicy(); err != nil {
 			common.ApiError(c, err)

@@ -16,10 +16,14 @@ import (
 func GetGroups(c *gin.Context) {
 	groupNames := make([]string, 0)
 	protectedGroupNames := make([]string, 0)
+	unlimitedGroupNames := make([]string, 0)
 	for groupName := range ratio_setting.GetGroupRatioCopy() {
 		groupNames = append(groupNames, groupName)
 		if ratio_setting.IsGroupProtected(groupName) {
 			protectedGroupNames = append(protectedGroupNames, groupName)
+		}
+		if ratio_setting.IsGroupUnlimited(groupName) {
+			unlimitedGroupNames = append(unlimitedGroupNames, groupName)
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -29,6 +33,8 @@ func GetGroups(c *gin.Context) {
 		// 受保护分组仍出现在分组列表中（渠道、订阅等场景需要），
 		// 由调用方按自身权限决定是否允许指派。
 		"protected_groups": protectedGroupNames,
+		// 无限额度分组的成员余额为无限额度值，界面据此展示 ∞。
+		"unlimited_groups": unlimitedGroupNames,
 	})
 }
 

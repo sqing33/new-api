@@ -395,7 +395,7 @@ export const useDeploymentsData = () => {
           type: 4,
           key: randomKey,
           base_url: baseUrl,
-          group: 'default',
+          group: 'User',
           tag: 'ionet',
           remark: `[IO.NET] Auto-synced from deployment ${deployment.id}`,
           other_info: JSON.stringify(otherInfo),

@@ -94,7 +94,7 @@ const EditUserModal = (props) => {
     email: '',
     quota: 0,
     quota_amount: 0,
-    group: 'default',
+    group: 'User',
     remark: '',
   });
 

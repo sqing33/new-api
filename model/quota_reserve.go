@@ -162,11 +162,15 @@ func reserveTokenQuotaDB(id int, quota int) (bool, error) {
 // TryReserveUserQuota atomically checks and deducts a user's wallet quota.
 // 缓存命中时以缓存余额为准（避免批量模式下过期的数据库余额放大并发超扣）；
 // Redis 异常或水合失败时降级为数据库条件更新，保证服务可用。
+// 无限额度钱包不预扣：余额不会被扣减，结算时同样不扣，消耗只统计。
 func TryReserveUserQuota(id int, quota int) (bool, error) {
 	if quota < 0 {
 		return false, errors.New("quota 不能为负数！")
 	}
 	if quota == 0 {
+		return true, nil
+	}
+	if isUnlimitedQuotaWallet(id) {
 		return true, nil
 	}
 	if !common.RedisEnabled {

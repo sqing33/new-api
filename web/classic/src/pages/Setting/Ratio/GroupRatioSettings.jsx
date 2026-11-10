@@ -58,6 +58,7 @@ const OPTION_KEYS = [
   'group_ratio_setting.group_special_usable_group',
   'group_ratio_setting.group_protected',
   'group_ratio_setting.group_user_ratio',
+  'group_ratio_setting.group_unlimited',
   'AutoGroups',
   'DefaultUseAutoGroup',
 ];
@@ -84,6 +85,7 @@ export default function GroupRatioSettings(props) {
     'group_ratio_setting.group_special_usable_group': '',
     'group_ratio_setting.group_protected': '',
     'group_ratio_setting.group_user_ratio': '',
+    'group_ratio_setting.group_unlimited': '',
     AutoGroups: '',
     DefaultUseAutoGroup: false,
   });
@@ -164,12 +166,14 @@ export default function GroupRatioSettings(props) {
       GroupRatio,
       UserUsableGroups,
       'group_ratio_setting.group_protected': groupProtected,
+      'group_ratio_setting.group_unlimited': groupUnlimited,
     }) => {
       setInputs((prev) => ({
         ...prev,
         GroupRatio,
         UserUsableGroups,
         'group_ratio_setting.group_protected': groupProtected,
+        'group_ratio_setting.group_unlimited': groupUnlimited,
       }));
     },
     [],
@@ -210,6 +214,7 @@ export default function GroupRatioSettings(props) {
           groupRatio={inputs.GroupRatio}
           userUsableGroups={inputs.UserUsableGroups}
           groupProtected={inputs['group_ratio_setting.group_protected']}
+          groupUnlimited={inputs['group_ratio_setting.group_unlimited']}
           onChange={handleGroupTableChange}
         />
       </Form.Section>
@@ -459,6 +464,33 @@ export default function GroupRatioSettings(props) {
         <Row gutter={16}>
           <Col xs={24} sm={16}>
             <Form.TextArea
+              label={t('无限额度分组')}
+              placeholder={t('为一个 JSON 文本')}
+              extraText={t(
+                '键为分组名称，值为 true 表示该分组为无限额度分组。该分组用户的余额会被直接置为无限额度值，消耗照常统计但不受限制；离开该分组时余额恢复为 0',
+              )}
+              field={'group_ratio_setting.group_unlimited'}
+              autosize={{ minRows: 4, maxRows: 10 }}
+              trigger='blur'
+              stopValidateWithError
+              rules={[
+                {
+                  validator: (rule, value) => verifyJSON(value),
+                  message: t('不是合法的 JSON 字符串'),
+                },
+              ]}
+              onChange={(value) =>
+                setInputs((prev) => ({
+                  ...prev,
+                  'group_ratio_setting.group_unlimited': value,
+                }))
+              }
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={24} sm={16}>
+            <Form.TextArea
               label={t('自动分组auto，从第一个开始选择')}
               placeholder={t('为一个 JSON 文本')}
               field={'AutoGroups'}
@@ -682,11 +714,19 @@ export default function GroupRatioSettings(props) {
               <CodeBlock>{`{"vip": 0.8, "svip": 0.5}`}</CodeBlock>
             </GuideSection>
 
+            <GuideSection title={t('无限额度分组')}>
+              <Paragraph size='small' style={{ lineHeight: 1.8 }}>
+                <Text strong>{t('无限额度分组')}</Text>{' — '}
+                {t('该分组用户的余额会被直接置为无限额度值，消耗照常统计但不受限制；离开该分组时余额恢复为 0。适合放内部或赠送性质的账号。')}
+              </Paragraph>
+              <CodeBlock>{`{"Free": true}`}</CodeBlock>
+            </GuideSection>
+
             <GuideSection title={t('JSON 格式参考')}>
               <Paragraph size='small' style={{ marginBottom: 4 }}>
                 <Text strong code>GroupRatio</Text>{' — '}{t('分组名称到倍率的映射')}
               </Paragraph>
-              <CodeBlock>{`{"default": 1, "vip": 0.5, "standard": 1, "premium": 0.5}`}</CodeBlock>
+              <CodeBlock>{`{"User": 1, "vip": 0.5, "standard": 1, "premium": 0.5}`}</CodeBlock>
               <Paragraph size='small' style={{ marginBottom: 4, marginTop: 8 }}>
                 <Text strong code>UserUsableGroups</Text>{' — '}{t('用户可选分组的名称和描述（只包含勾选了用户可选的分组）')}
               </Paragraph>
@@ -699,6 +739,10 @@ export default function GroupRatioSettings(props) {
                 <Text strong code>group_user_ratio</Text>{' — '}{t('用户分组折扣系数')}
               </Paragraph>
               <CodeBlock>{`{"vip": 0.8, "svip": 0.5}`}</CodeBlock>
+              <Paragraph size='small' style={{ marginBottom: 4, marginTop: 8 }}>
+                <Text strong code>group_unlimited</Text>{' — '}{t('无限额度分组，值为 true')}
+              </Paragraph>
+              <CodeBlock>{`{"Free": true}`}</CodeBlock>
             </GuideSection>
           </div>
         </Tabs.TabPane>

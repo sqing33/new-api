@@ -180,7 +180,7 @@ func seedToken(t *testing.T, db *gorm.DB, userID int, name string, rawKey string
 		ExpiredTime:    -1,
 		RemainQuota:    100,
 		UnlimitedQuota: true,
-		Group:          "default",
+		Group:          "User",
 	}
 	if err := db.Create(token).Error; err != nil {
 		t.Fatalf("failed to create token: %v", err)
@@ -211,7 +211,7 @@ func newAuthenticatedContext(t *testing.T, method string, target string, body an
 	ctx.Set("id", userID)
 	// 与生产一致：后台鉴权成功后用户分组与角色都会写入上下文，
 	// 分组可见性判定依赖这两个值。
-	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "User")
 	common.SetContextKey(ctx, constant.ContextKeyUserRole, common.RoleCommonUser)
 	return ctx, recorder
 }
@@ -338,7 +338,7 @@ func runTokenMigrationCompatibilityTest(t *testing.T, db *gorm.DB, dialect strin
 		ModelLimits:        "",
 		AllowIps:           common.GetPointer(""),
 		UsedQuota:          0,
-		Group:              "default",
+		Group:              "User",
 		CrossGroupRetry:    false,
 	}).Error; err != nil {
 		t.Fatalf("failed to seed legacy token row: %v", err)
@@ -388,7 +388,7 @@ func runTokenMigrationCompatibilityTest(t *testing.T, db *gorm.DB, dialect strin
 		ModelLimits:        "",
 		AllowIps:           common.GetPointer(""),
 		UsedQuota:          0,
-		Group:              "default",
+		Group:              "User",
 		CrossGroupRetry:    false,
 	}
 	if err := db.Create(&inserted).Error; err != nil {
@@ -532,7 +532,7 @@ func TestUpdateTokenMasksKeyInResponse(t *testing.T) {
 		"unlimited_quota":      true,
 		"model_limits_enabled": false,
 		"model_limits":         "",
-		"group":                "default",
+		"group":                "User",
 		"cross_group_retry":    false,
 	}
 
@@ -648,9 +648,9 @@ func TestAPITokenAuditDatabaseMatrix(t *testing.T) {
 func verifyAPITokenAudit(t *testing.T) {
 	t.Helper()
 	pat := "api-token-audit-pat-secret"
-	user := &model.User{Username: "token-owner", Password: "placeholder", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Group: "default", AuthVersion: 1, AccessToken: &pat, AffCode: "token-owner"}
+	user := &model.User{Username: "token-owner", Password: "placeholder", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Group: "User", AuthVersion: 1, AccessToken: &pat, AffCode: "token-owner"}
 	require.NoError(t, model.DB.Create(user).Error)
-	other := &model.User{Username: "other-owner", Password: "placeholder", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Group: "default", AuthVersion: 1, AffCode: "other-owner"}
+	other := &model.User{Username: "other-owner", Password: "placeholder", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Group: "User", AuthVersion: 1, AffCode: "other-owner"}
 	require.NoError(t, model.DB.Create(other).Error)
 	session := &model.UserSession{SID: "token-audit-session", UserID: user.Id, Version: 1, UserAuthVersion: 1, Status: model.UserSessionStatusActive, RefreshHash: "placeholder", LoginMethod: "password", LastActiveAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
 	require.NoError(t, model.CreateUserSession(session))
@@ -688,7 +688,7 @@ func verifyAPITokenAudit(t *testing.T) {
 		{name: "malformed body", method: "POST", path: "/", body: `{"key":"raw-body-secret"`, action: "token.create", params: `{}`},
 		{name: "validation error exceeds audit buffer", method: "POST", path: "/", body: `{"remain_quota":` + strings.Repeat("9", 64*1024) + `}`, action: "token.create", params: `{}`},
 		{name: "create storage failure", method: "POST", path: "/", body: `{"name":"attempt","unlimited_quota":true}`, action: "token.create", params: `{"name":"attempt"}`, failWrite: true},
-		{name: "normalized update", method: "PUT", path: "/", body: `{"id":$id,"name":"renamed","expired_time":-1,"remain_quota":200,"unlimited_quota":true,"group":"default","cross_group_retry":true,"allow_ips":""}`, action: "token.update", success: true, params: `{"id":$id,"name":"renamed","changed_fields":["name","remain_quota","group","cross_group_retry","auto_groups"]}`},
+		{name: "normalized update", method: "PUT", path: "/", body: `{"id":$id,"name":"renamed","expired_time":-1,"remain_quota":200,"unlimited_quota":true,"group":"User","cross_group_retry":true,"allow_ips":""}`, action: "token.update", success: true, params: `{"id":$id,"name":"renamed","changed_fields":["name","remain_quota","group","cross_group_retry","auto_groups"]}`},
 		{name: "configuration values stay private", method: "PUT", path: "/", body: `{"id":$id,"name":"owned","expired_time":42,"remain_quota":100,"unlimited_quota":false,"model_limits_enabled":true,"model_limits":"private-model-configuration","allow_ips":"203.0.113.57","group":"auto","cross_group_retry":true}`, action: "token.update", success: true, params: `{"id":$id,"name":"owned","changed_fields":["expired_time","unlimited_quota","model_limits_enabled","model_limits","allow_ips"]}`},
 		{name: "unchanged update", method: "PUT", path: "/", body: `{"id":$id,"name":"owned","expired_time":-1,"remain_quota":100,"unlimited_quota":true,"group":"auto","cross_group_retry":true,"allow_ips":""}`, action: "token.update", success: true, params: `{"id":$id,"name":"owned","changed_fields":[]}`},
 		{name: "successful response exceeds audit buffer", method: "PUT", path: "/", body: `{"id":$id,"name":"owned","expired_time":-1,"remain_quota":100,"unlimited_quota":true,"group":"auto","cross_group_retry":true,"allow_ips":"","model_limits":"` + strings.Repeat("m", 64*1024-128) + `"}`, action: "token.update", success: true, params: `{"id":$id,"name":"owned","changed_fields":["model_limits"]}`},
@@ -712,7 +712,7 @@ func verifyAPITokenAudit(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			empty := ""
-			owned := &model.Token{UserId: user.Id, Name: "owned", Key: fmt.Sprintf("owned-key-secret-%d", index), Status: common.TokenStatusEnabled, ExpiredTime: -1, RemainQuota: 100, UnlimitedQuota: true, Group: "auto", CrossGroupRetry: true, AutoGroups: `["default"]`, AllowIps: &empty}
+			owned := &model.Token{UserId: user.Id, Name: "owned", Key: fmt.Sprintf("owned-key-secret-%d", index), Status: common.TokenStatusEnabled, ExpiredTime: -1, RemainQuota: 100, UnlimitedQuota: true, Group: "auto", CrossGroupRetry: true, AutoGroups: `["User"]`, AllowIps: &empty}
 			if tc.initialStatus != 0 {
 				owned.Status = tc.initialStatus
 			}

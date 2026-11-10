@@ -235,7 +235,7 @@ const EditChannelModal = (props) => {
     auto_ban: 1,
     auto_test: 1,
     test_model: '',
-    groups: ['default'],
+    groups: ['User'],
     priority: 0,
     weight: 0,
     tag: '',

@@ -221,6 +221,13 @@ const (
 // 仅本组用户可用，管理员可把指定用户显式指派进来。
 const DefaultRootGroup = "Admin"
 
+// DefaultUserGroup 是普通用户默认所属的分组。
+const DefaultUserGroup = "User"
+
+// DefaultUnlimitedGroup 是默认的无限额度分组。该组成员的钱包余额被置为
+// common.UnlimitedQuota，消耗照常统计但不受限制。
+const DefaultUnlimitedGroup = "Free"
+
 func IsValidateRole(role int) bool {
 	return role == RoleGuestUser || role == RoleCommonUser || role == RoleAdminUser || role == RoleRootUser
 }

@@ -471,8 +471,8 @@ export const getChannelsColumns = ({
             {text
               ?.split(',')
               .sort((a, b) => {
-                if (a === 'default') return -1;
-                if (b === 'default') return 1;
+                if (a === 'User') return -1;
+                if (b === 'User') return 1;
                 return a.localeCompare(b);
               })
               .map((item, index) => renderGroup(item))}

@@ -13,7 +13,7 @@ import (
 const DefaultMaxTokenAutoGroups = 5
 
 var autoGroups = []string{
-	"default",
+	common.DefaultUserGroup,
 }
 
 var DefaultUseAutoGroup = false

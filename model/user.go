@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
@@ -684,6 +685,11 @@ func (user *User) prepareForInsert(tx *gorm.DB) error {
 	user.Email = NormalizeEmail(user.Email)
 	if err := ensureEmailAvailableWithTx(tx, user.Email, 0); err != nil {
 		return err
+	}
+	// 分组列的数据库默认值仍是历史遗留的 'default'，这里显式写入当前默认分组，
+	// 避免新用户落到一个已经改名的分组上。
+	if user.Group == "" {
+		user.Group = common.DefaultUserGroup
 	}
 	if user.Password == "" {
 		return nil
@@ -1387,12 +1393,60 @@ func GetUserSetting(id int, fromDB bool) (settingMap dto.UserSetting, err error)
 	return userBase.GetSetting(), nil
 }
 
+// isUnlimitedQuotaWallet 判断用户钱包是否处于无限额度状态。
+// 判定依据：用户分组被标记为无限额度分组，或钱包余额已被置为无限额度值。
+// 无限额度钱包的余额固定不变：充值与退款都是空操作，扣费也是空操作，
+// 消耗只统计（used_quota / 请求数 / 日志）不受限制。
+func isUnlimitedQuotaWallet(userId int) bool {
+	cache, err := GetUserCache(userId)
+	if err != nil {
+		// 缓存不可用时退回数据库，避免判定失效导致无限额度用户被扣费。
+		var user User
+		if dbErr := DB.Select("group", "quota").First(&user, userId).Error; dbErr != nil {
+			return false
+		}
+		return ratio_setting.IsGroupUnlimited(user.Group) || common.IsUnlimitedQuota(user.Quota)
+	}
+	if ratio_setting.IsGroupUnlimited(cache.Group) {
+		return true
+	}
+	return common.IsUnlimitedQuota(cache.Quota)
+}
+
+// SetUserQuota 写入用户余额，供分组切换时把余额置为无限额度值或恢复为普通余额。
+func SetUserQuota(tx *gorm.DB, id int, quota int) error {
+	result := tx.Model(&User{}).Where("id = ?", id).Update("quota", quota)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// SyncUserQuotaCache 把已提交的余额变动同步到用户缓存，
+// 保证缓存余额与数据库余额保持一致（余额变动始终以差量方式应用，
+// 不会覆盖尚未落库的预扣）。
+func SyncUserQuotaCache(id int, delta int) {
+	if delta == 0 {
+		return
+	}
+	if err := cacheIncrUserQuota(id, int64(delta)); err != nil {
+		common.SysError(fmt.Sprintf("failed to sync user quota cache for user %d: %s", id, err.Error()))
+	}
+}
+
 func IncreaseUserQuota(id int, quota int, db bool) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
 	}
 	if err := common.ValidateWalletQuota(quota); err != nil {
 		return err
+	}
+	// 无限额度钱包的余额固定不变：充值与退款都是空操作。
+	if isUnlimitedQuotaWallet(id) {
+		return nil
 	}
 	if !db && common.BatchUpdateEnabled {
 		addNewRecord(BatchUpdateTypeUserQuota, id, quota)
@@ -1437,6 +1491,10 @@ func increaseUserQuota(id int, quota int) (err error) {
 func DecreaseUserQuota(id int, quota int, db bool) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
+	}
+	// 无限额度钱包不扣减余额：消耗照常统计，但不限制消耗。
+	if isUnlimitedQuotaWallet(id) {
+		return nil
 	}
 	gopool.Go(func() {
 		err := cacheDecrUserQuota(id, int64(quota))
@@ -1529,15 +1587,28 @@ func updateUserQuotaUsedQuotaAndRequestCount(id int, quota int, usedQuota int, r
 		return
 	}
 
-	err := DB.Model(&User{}).Where("id = ?", id).Updates(
-		map[string]any{
-			"quota":         gorm.Expr("quota + ?", quota),
-			"used_quota":    gorm.Expr("used_quota + ?", usedQuota),
-			"request_count": gorm.Expr("request_count + ?", requestCount),
-		},
-	).Error
+	// 余额与用量分开落库：无限额度钱包的余额固定不变，但用量与请求数必须照常累计。
+	if quota != 0 {
+		err := DB.Model(&User{}).
+			Where("id = ? AND quota < ?", id, common.UnlimitedQuota).
+			Update("quota", gorm.Expr("quota + ?", quota)).Error
+		if err != nil {
+			common.SysLog("failed to batch update user quota: " + err.Error())
+		}
+	}
+	if usedQuota == 0 && requestCount == 0 {
+		return
+	}
+	updates := map[string]any{}
+	if usedQuota != 0 {
+		updates["used_quota"] = gorm.Expr("used_quota + ?", usedQuota)
+	}
+	if requestCount != 0 {
+		updates["request_count"] = gorm.Expr("request_count + ?", requestCount)
+	}
+	err := DB.Model(&User{}).Where("id = ?", id).Updates(updates).Error
 	if err != nil {
-		common.SysLog("failed to batch update user quota, used quota and request count: " + err.Error())
+		common.SysLog("failed to batch update user used quota and request count: " + err.Error())
 	}
 }
 

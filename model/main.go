@@ -471,6 +471,14 @@ func migrateDB() error {
 	if err := migratePerfConcurrencyUniqueIndex(DB); err != nil {
 		return err
 	}
+	// 默认分组改名要在 AutoMigrate 之后执行：新库此时才有表可改，
+	// 选项也还没被读进内存，改写后的选项行会在 InitOptionMap 时生效。
+	if err := migrateUserGroupRename(DB); err != nil {
+		return err
+	}
+	if err := migrateLogGroupRename(DB); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -480,6 +488,9 @@ func migrateLOGDB() error {
 	}
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		return migrateClickHouseLogDB()
+	}
+	if err := migrateLogGroupRename(LOG_DB); err != nil {
+		return err
 	}
 	return LOG_DB.AutoMigrate(&Log{})
 }

@@ -189,17 +189,17 @@ func TestGetUserModelsFiltersByRequestedGroup(t *testing.T) {
 		Id:       1002,
 		Username: "playground-model-user",
 		Password: "password",
-		Group:    "default",
+		Group:    "User",
 		Status:   common.UserStatusEnabled,
 	}).Error)
 	require.NoError(t, db.Create(&[]model.Ability{
-		{Group: "default", Model: "zz-default-only-model", ChannelId: 1, Enabled: true},
-		{Group: "default", Model: "zz-disabled-model", ChannelId: 1, Enabled: false},
+		{Group: "User", Model: "zz-default-only-model", ChannelId: 1, Enabled: true},
+		{Group: "User", Model: "zz-disabled-model", ChannelId: 1, Enabled: false},
 	}).Error)
 
 	defaultRecorder := httptest.NewRecorder()
 	defaultContext, _ := gin.CreateTestContext(defaultRecorder)
-	defaultContext.Request = httptest.NewRequest(http.MethodGet, "/api/user/models?group=default", nil)
+	defaultContext.Request = httptest.NewRequest(http.MethodGet, "/api/user/models?group=User", nil)
 	defaultContext.Set("id", 1002)
 
 	GetUserModels(defaultContext)
@@ -229,11 +229,11 @@ func TestGetUserModelsExpandsAutoGroupsInConfiguredOrder(t *testing.T) {
 		specialGroups.AddAll(originalSpecialGroups)
 	})
 
-	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["vip","default","unavailable"]`))
-	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"auto":"自动分组","default":"默认分组","unavailable":"不可用分组"}`))
+	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["vip","User","unavailable"]`))
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"auto":"自动分组","User":"默认分组","unavailable":"不可用分组"}`))
 	specialGroups := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup
 	specialGroups.Clear()
-	specialGroups.Set("default", map[string]string{
+	specialGroups.Set("User", map[string]string{
 		"+:vip":         "VIP 分组",
 		"-:unavailable": "",
 	})
@@ -243,14 +243,14 @@ func TestGetUserModelsExpandsAutoGroupsInConfiguredOrder(t *testing.T) {
 		Id:       1003,
 		Username: "playground-auto-model-user",
 		Password: "password",
-		Group:    "default",
+		Group:    "User",
 		Status:   common.UserStatusEnabled,
 	}).Error)
 	require.NoError(t, db.Create(&[]model.Ability{
 		{Group: "vip", Model: "zz-vip-model", ChannelId: 1, Enabled: true},
 		{Group: "vip", Model: "zz-shared-model", ChannelId: 1, Enabled: true},
-		{Group: "default", Model: "zz-default-model", ChannelId: 1, Enabled: true},
-		{Group: "default", Model: "zz-shared-model", ChannelId: 2, Enabled: true},
+		{Group: "User", Model: "zz-default-model", ChannelId: 1, Enabled: true},
+		{Group: "User", Model: "zz-shared-model", ChannelId: 2, Enabled: true},
 		{Group: "unavailable", Model: "zz-unavailable-model", ChannelId: 1, Enabled: true},
 	}).Error)
 
@@ -283,14 +283,14 @@ func TestListModelsIncludesTieredBillingModel(t *testing.T) {
 		Id:       1001,
 		Username: "model-list-user",
 		Password: "password",
-		Group:    "default",
+		Group:    "User",
 		Status:   common.UserStatusEnabled,
 	}).Error)
 	require.NoError(t, db.Create(&[]model.Ability{
-		{Group: "default", Model: "zz-tiered-visible-model", ChannelId: 1, Enabled: true},
-		{Group: "default", Model: "zz-tiered-empty-expr-model", ChannelId: 1, Enabled: true},
-		{Group: "default", Model: "zz-tiered-missing-expr-model", ChannelId: 1, Enabled: true},
-		{Group: "default", Model: "zz-unpriced-model", ChannelId: 1, Enabled: true},
+		{Group: "User", Model: "zz-tiered-visible-model", ChannelId: 1, Enabled: true},
+		{Group: "User", Model: "zz-tiered-empty-expr-model", ChannelId: 1, Enabled: true},
+		{Group: "User", Model: "zz-tiered-missing-expr-model", ChannelId: 1, Enabled: true},
+		{Group: "User", Model: "zz-unpriced-model", ChannelId: 1, Enabled: true},
 	}).Error)
 	// 定价页只展示已在模型管理页登记的模型，这里补齐登记
 	require.NoError(t, db.Create(&[]model.Model{
@@ -345,7 +345,7 @@ func TestListModelsUsesAdvancedCustomEndpointTypesFromPricingCache(t *testing.T)
 		Id:       1003,
 		Username: "advanced-custom-model-list-user",
 		Password: "password",
-		Group:    "default",
+		Group:    "User",
 		Status:   common.UserStatusEnabled,
 	}).Error)
 
@@ -355,7 +355,7 @@ func TestListModelsUsesAdvancedCustomEndpointTypesFromPricingCache(t *testing.T)
 		Key:    "advanced-custom-key",
 		Status: common.ChannelStatusEnabled,
 		Name:   "advanced-custom-channel",
-		Group:  "default",
+		Group:  "User",
 		Models: "gemini-3.5-flash",
 	}
 	channel.SetOtherSettings(dto.ChannelOtherSettings{
@@ -376,7 +376,7 @@ func TestListModelsUsesAdvancedCustomEndpointTypesFromPricingCache(t *testing.T)
 	})
 	require.NoError(t, db.Create(channel).Error)
 	require.NoError(t, db.Create(&model.Ability{
-		Group:     "default",
+		Group:     "User",
 		Model:     "gemini-3.5-flash",
 		ChannelId: 701,
 		Enabled:   true,
@@ -413,16 +413,16 @@ func TestListModelsTokenLimitIncludesTieredBillingModel(t *testing.T) {
 	})
 	db := setupModelListControllerTestDB(t)
 	require.NoError(t, db.Create(&[]model.Ability{
-		{Group: "default", Model: "zz-token-tiered-visible-model", ChannelId: 1, Enabled: true},
-		{Group: "default", Model: "zz-token-tiered-empty-expr-model", ChannelId: 1, Enabled: true},
-		{Group: "default", Model: "zz-token-tiered-missing-expr-model", ChannelId: 1, Enabled: true},
-		{Group: "default", Model: "zz-token-unpriced-model", ChannelId: 1, Enabled: true},
+		{Group: "User", Model: "zz-token-tiered-visible-model", ChannelId: 1, Enabled: true},
+		{Group: "User", Model: "zz-token-tiered-empty-expr-model", ChannelId: 1, Enabled: true},
+		{Group: "User", Model: "zz-token-tiered-missing-expr-model", ChannelId: 1, Enabled: true},
+		{Group: "User", Model: "zz-token-unpriced-model", ChannelId: 1, Enabled: true},
 	}).Error)
 
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "User")
 	common.SetContextKey(ctx, constant.ContextKeyTokenModelLimitEnabled, true)
 	common.SetContextKey(ctx, constant.ContextKeyTokenModelLimit, map[string]bool{
 		"zz-token-tiered-visible-model":      true,
@@ -446,8 +446,8 @@ func TestListModelsTokenLimitUsesResolvedCustomAutoGroups(t *testing.T) {
 	originalUsableGroups := setting.UserUsableGroups2JSONString()
 	originalRatios := ratio_setting.GroupRatio2JSONString()
 	require.NoError(t, setting.UpdateMaxTokenAutoGroups("5"))
-	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default","vip":"VIP"}`))
-	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":1}`))
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"User":"Default","vip":"VIP"}`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"User":1,"vip":1}`))
 	t.Cleanup(func() {
 		require.NoError(t, setting.UpdateMaxTokenAutoGroups(fmt.Sprintf("%d", originalMax)))
 		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalUsableGroups))
@@ -458,13 +458,13 @@ func TestListModelsTokenLimitUsesResolvedCustomAutoGroups(t *testing.T) {
 	require.NoError(t, db.Create(&[]model.Ability{
 		{Group: "vip", Model: "zz-vip-allowed", ChannelId: 1, Enabled: true},
 		{Group: "vip", Model: "zz-vip-denied", ChannelId: 1, Enabled: true},
-		{Group: "default", Model: "zz-default-outside-snapshot", ChannelId: 1, Enabled: true},
+		{Group: "User", Model: "zz-default-outside-snapshot", ChannelId: 1, Enabled: true},
 	}).Error)
 
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "User")
 	common.SetContextKey(ctx, constant.ContextKeyTokenGroup, "auto")
 	common.SetContextKey(ctx, constant.ContextKeyTokenAutoGroups, []string{"vip"})
 	common.SetContextKey(ctx, constant.ContextKeyTokenModelLimitEnabled, true)
@@ -478,11 +478,11 @@ func TestListModelsTokenLimitUsesResolvedCustomAutoGroups(t *testing.T) {
 	ids := decodeListModelsResponse(t, recorder)
 	require.Equal(t, map[string]struct{}{"zz-vip-allowed": {}}, ids)
 
-	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default"}`))
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"User":"Default"}`))
 	emptyRecorder := httptest.NewRecorder()
 	emptyCtx, _ := gin.CreateTestContext(emptyRecorder)
 	emptyCtx.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-	common.SetContextKey(emptyCtx, constant.ContextKeyUserGroup, "default")
+	common.SetContextKey(emptyCtx, constant.ContextKeyUserGroup, "User")
 	common.SetContextKey(emptyCtx, constant.ContextKeyTokenGroup, "auto")
 	common.SetContextKey(emptyCtx, constant.ContextKeyTokenAutoGroups, []string{"vip"})
 	common.SetContextKey(emptyCtx, constant.ContextKeyTokenModelLimitEnabled, true)
@@ -513,7 +513,7 @@ func TestSetupLoginDoesNotTouchPasswordWhenPasswordFieldOmitted(t *testing.T) {
 		Password: hashedPassword,
 		Role:     common.RoleCommonUser,
 		Status:   common.UserStatusEnabled,
-		Group:    "default",
+		Group:    "User",
 	}
 	require.NoError(t, db.Create(user).Error)
 

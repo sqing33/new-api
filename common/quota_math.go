@@ -14,7 +14,17 @@ const (
 	MaxQuota       = math.MaxInt32
 	MinQuota       = math.MinInt32
 	MaxWalletQuota = 1<<53 - 1
+	// UnlimitedQuota 是无限额度钱包的余额值。余额达到该值即视为无限额度钱包：
+	// 余额不再增减，消耗照常统计但不受限制。
+	// 取值远低于 MaxWalletQuota，为充值等正向变动保留余量，
+	// 同时余额永远不会被耗尽。
+	UnlimitedQuota = 1 << 52
 )
+
+// IsUnlimitedQuota 判断余额是否已达到无限额度值。
+func IsUnlimitedQuota(quota int) bool {
+	return quota >= UnlimitedQuota
+}
 
 // ValidateWalletQuota enforces the upper bound shared by wallet mutations.
 // Negative balances remain valid because billing can temporarily overdraw a

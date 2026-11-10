@@ -245,6 +245,9 @@ func validateOptionValue(key string, value string) error {
 	if key == "group_ratio_setting.group_user_ratio" {
 		return ratio_setting.CheckGroupUserRatio(value)
 	}
+	if key == "group_ratio_setting.group_unlimited" {
+		return ratio_setting.CheckGroupUnlimited(value)
+	}
 	return nil
 }
 

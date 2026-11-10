@@ -18,7 +18,7 @@ func createReserveTestUser(t *testing.T, quota int) User {
 		Password:    "unused-password-hash",
 		Role:        common.RoleCommonUser,
 		Status:      common.UserStatusEnabled,
-		Group:       "default",
+		Group:       "User",
 		AuthVersion: 1,
 		Quota:       quota,
 		AffCode:     "reserve-aff-" + common.GetRandomString(8),

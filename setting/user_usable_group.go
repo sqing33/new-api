@@ -9,7 +9,7 @@ import (
 )
 
 var userUsableGroups = map[string]string{
-	"default":               "默认分组",
+	common.DefaultUserGroup: "默认分组",
 	"vip":                   "vip分组",
 	common.DefaultRootGroup: "管理员分组",
 }

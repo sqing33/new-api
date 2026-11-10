@@ -25,15 +25,22 @@ function parseJSON(str, fallback) {
   }
 }
 
-function buildRows(groupRatioStr, userUsableGroupsStr, groupProtectedStr) {
+function buildRows(
+  groupRatioStr,
+  userUsableGroupsStr,
+  groupProtectedStr,
+  groupUnlimitedStr,
+) {
   const ratioMap = parseJSON(groupRatioStr, {});
   const usableMap = parseJSON(userUsableGroupsStr, {});
   const protectedMap = parseJSON(groupProtectedStr, {});
+  const unlimitedMap = parseJSON(groupUnlimitedStr, {});
 
   const allNames = new Set([
     ...Object.keys(ratioMap),
     ...Object.keys(usableMap),
     ...Object.keys(protectedMap),
+    ...Object.keys(unlimitedMap),
   ]);
 
   return Array.from(allNames).map((name) => ({
@@ -43,6 +50,7 @@ function buildRows(groupRatioStr, userUsableGroupsStr, groupProtectedStr) {
     selectable: name in usableMap,
     description: usableMap[name] ?? '',
     protected: protectedMap[name] === true,
+    unlimited: unlimitedMap[name] === true,
   }));
 }
 
@@ -50,6 +58,7 @@ export function serializeGroupTable(rows) {
   const groupRatio = {};
   const userUsableGroups = {};
   const groupProtected = {};
+  const groupUnlimited = {};
 
   rows.forEach((row) => {
     if (!row.name) return;
@@ -59,6 +68,9 @@ export function serializeGroupTable(rows) {
     }
     if (row.protected) {
       groupProtected[row.name] = true;
+    }
+    if (row.unlimited) {
+      groupUnlimited[row.name] = true;
     }
   });
 
@@ -70,6 +82,11 @@ export function serializeGroupTable(rows) {
       null,
       2,
     ),
+    'group_ratio_setting.group_unlimited': JSON.stringify(
+      groupUnlimited,
+      null,
+      2,
+    ),
   };
 }
 
@@ -77,12 +94,13 @@ export default function GroupTable({
   groupRatio,
   userUsableGroups,
   groupProtected,
+  groupUnlimited,
   onChange,
 }) {
   const { t } = useTranslation();
 
   const [rows, setRows] = useState(() =>
-    buildRows(groupRatio, userUsableGroups, groupProtected),
+    buildRows(groupRatio, userUsableGroups, groupProtected, groupUnlimited),
   );
 
   // Use functional setRows to keep updateRow/addRow/removeRow referentially
@@ -126,6 +144,7 @@ export default function GroupTable({
           selectable: true,
           description: '',
           protected: false,
+          unlimited: false,
         },
       ];
     });
@@ -213,6 +232,21 @@ export default function GroupTable({
             checked={record.protected}
             onChange={(e) =>
               updateRow(record._id, 'protected', e.target.checked)
+            }
+          />
+        ),
+      },
+      {
+        title: t('无限额度'),
+        dataIndex: 'unlimited',
+        key: 'unlimited',
+        width: 90,
+        align: 'center',
+        render: (_, record) => (
+          <Checkbox
+            checked={record.unlimited}
+            onChange={(e) =>
+              updateRow(record._id, 'unlimited', e.target.checked)
             }
           />
         ),

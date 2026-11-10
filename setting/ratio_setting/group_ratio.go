@@ -10,10 +10,11 @@ import (
 )
 
 var defaultGroupRatio = map[string]float64{
-	"default":               1,
-	"vip":                   1,
-	"svip":                  1,
-	common.DefaultRootGroup: 1,
+	common.DefaultUserGroup:      1,
+	"vip":                        1,
+	"svip":                       1,
+	common.DefaultRootGroup:      1,
+	common.DefaultUnlimitedGroup: 1,
 }
 
 var groupRatioMap = types.NewRWMap[string, float64]()
@@ -38,12 +39,21 @@ var defaultGroupUserRatio = map[string]float64{}
 
 var groupUserRatioMap = types.NewRWMap[string, float64]()
 
+// defaultGroupUnlimited 列出默认的无限额度分组。无限额度分组成员的余额被
+// 置为 common.UnlimitedQuota，消耗照常统计但不受限制。
+var defaultGroupUnlimited = map[string]bool{
+	common.DefaultUnlimitedGroup: true,
+}
+
+var groupUnlimitedMap = types.NewRWMap[string, bool]()
+
 type GroupRatioSetting struct {
 	GroupRatio              *types.RWMap[string, float64]            `json:"group_ratio"`
 	GroupGroupRatio         *types.RWMap[string, map[string]float64] `json:"group_group_ratio"`
 	GroupSpecialUsableGroup *types.RWMap[string, map[string]string]  `json:"group_special_usable_group"`
 	GroupProtected          *types.RWMap[string, bool]               `json:"group_protected"`
 	GroupUserRatio          *types.RWMap[string, float64]            `json:"group_user_ratio"`
+	GroupUnlimited          *types.RWMap[string, bool]               `json:"group_unlimited"`
 }
 
 var groupRatioSetting GroupRatioSetting
@@ -56,6 +66,7 @@ func init() {
 	groupGroupRatioMap.AddAll(defaultGroupGroupRatio)
 	groupProtectedMap.AddAll(defaultGroupProtected)
 	groupUserRatioMap.AddAll(defaultGroupUserRatio)
+	groupUnlimitedMap.AddAll(defaultGroupUnlimited)
 
 	groupRatioSetting = GroupRatioSetting{
 		GroupSpecialUsableGroup: groupSpecialUsableGroup,
@@ -63,6 +74,7 @@ func init() {
 		GroupGroupRatio:         groupGroupRatioMap,
 		GroupProtected:          groupProtectedMap,
 		GroupUserRatio:          groupUserRatioMap,
+		GroupUnlimited:          groupUnlimitedMap,
 	}
 
 	config.GlobalConfig.Register("group_ratio_setting", &groupRatioSetting)
@@ -78,6 +90,9 @@ func GetGroupRatioSetting() *GroupRatioSetting {
 	}
 	if groupRatioSetting.GroupUserRatio == nil {
 		groupRatioSetting.GroupUserRatio = groupUserRatioMap
+	}
+	if groupRatioSetting.GroupUnlimited == nil {
+		groupRatioSetting.GroupUnlimited = groupUnlimitedMap
 	}
 	return &groupRatioSetting
 }
@@ -140,6 +155,13 @@ func GetUserGroupRatio(userGroup string) (float64, bool) {
 	return groupUserRatioMap.Get(userGroup)
 }
 
+// IsGroupUnlimited 判断分组是否为无限额度分组。无限额度分组成员的余额被
+// 置为 common.UnlimitedQuota，消耗照常统计但不受限制。
+func IsGroupUnlimited(group string) bool {
+	unlimited, ok := groupUnlimitedMap.Get(group)
+	return ok && unlimited
+}
+
 // ResolveGroupRatio 计算一次请求最终生效的分组倍率。
 // 优先级：分组特殊倍率（用户分组 × 令牌分组，覆盖语义）> 令牌分组倍率 × 用户分组倍率。
 // 用户分组倍率是乘数而非覆盖值，因此用户既享受身份折扣，也保留令牌分组自身的优惠。
@@ -183,6 +205,16 @@ func UpdateGroupUserRatioByJSONString(jsonStr string) error {
 	return types.LoadFromJsonString(groupUserRatioMap, jsonStr)
 }
 
+// GroupUnlimited2JSONString 导出无限额度分组配置。
+func GroupUnlimited2JSONString() string {
+	return groupUnlimitedMap.MarshalJSONString()
+}
+
+// UpdateGroupUnlimitedByJSONString 覆盖无限额度分组配置。
+func UpdateGroupUnlimitedByJSONString(jsonStr string) error {
+	return types.LoadFromJsonString(groupUnlimitedMap, jsonStr)
+}
+
 func CheckGroupRatio(jsonStr string) error {
 	if strings.TrimSpace(jsonStr) == "" {
 		return nil
@@ -213,6 +245,18 @@ func CheckGroupUserRatio(jsonStr string) error {
 		if ratio < 0 {
 			return errors.New("user group ratio must be not less than 0: " + name)
 		}
+	}
+	return nil
+}
+
+// CheckGroupUnlimited 校验无限额度分组配置：必须是「分组名 → true/false」的对象。
+func CheckGroupUnlimited(jsonStr string) error {
+	if strings.TrimSpace(jsonStr) == "" {
+		return nil
+	}
+	checkGroupUnlimited := make(map[string]bool)
+	if err := common.Unmarshal([]byte(jsonStr), &checkGroupUnlimited); err != nil {
+		return err
 	}
 	return nil
 }

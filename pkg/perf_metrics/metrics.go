@@ -99,7 +99,7 @@ func Record(sample Sample) {
 		return
 	}
 	if sample.Group == "" {
-		sample.Group = "default"
+		sample.Group = common.DefaultUserGroup
 	}
 	if sample.ChannelName == "" {
 		sample.ChannelName = UnknownChannelName
