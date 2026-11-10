@@ -110,13 +110,15 @@ const EditUserModal = (props) => {
 
   // 受保护分组仅超级管理员可以指派，其他管理员在下拉里看不到；
   // 正在编辑用户当前所在的分组始终保留，避免回显丢失。
+  // 注意：inputs 在用户信息加载完成前为 null，取值必须做空值保护。
+  const currentUserGroup = inputs?.group;
   const visibleGroupOptions = useMemo(() => {
     if (isRoot()) return groupOptions;
     return groupOptions.filter(
       (option) =>
-        !protectedGroups.has(option.value) || option.value === inputs.group,
+        !protectedGroups.has(option.value) || option.value === currentUserGroup,
     );
-  }, [groupOptions, protectedGroups, inputs.group]);
+  }, [groupOptions, protectedGroups, currentUserGroup]);
 
   const handleCancel = () => props.handleClose();
 
