@@ -199,6 +199,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	retryPolicy := service.NewRetryPolicyFromSettings()
 	maxAttempts := min(retryPolicy.MaxAttempts(), common.MaxRelayAttempts)
+	// The same-channel budget is a per-channel total: a channel gets the first
+	// attempt plus ChannelRetryTimes retries, no matter how many priority tiers
+	// the loop walks. Without this, a model served by one channel would burn
+	// (tiers+1)*(retries+1) attempts against that same channel.
+	retryParam.MaxAttemptsPerChannel = retryPolicy.SameChannelRetries + 1
 
 	for attempt := 1; retryParam.GetRetry() <= retryPolicy.PriorityRetries; attempt++ {
 		// RetryIndex is the real attempt index (0 for the first attempt), not the
@@ -212,6 +217,14 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError = channelErr
 			break
 		}
+		if channel == nil {
+			// No candidate channel with budget left. Stop retrying and report the
+			// upstream error from the previous attempt instead of a synthetic
+			// "no available channel".
+			logger.LogInfo(c, "重试终止：没有剩余可用渠道预算")
+			break
+		}
+		retryParam.RecordChannelAttempt(channel.Id)
 		addUsedChannel(c, channel.Id)
 		if billingErr := service.PrepareTieredBillingForSelectedGroup(c, relayInfo); billingErr != nil {
 			newAPIError = billingErr
@@ -381,6 +394,13 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 			// Fall back to normal selection instead of failing the request.
 			retryParam.LockedChannelId = 0
 			retryParam.SameChannelRetry = 0
+		} else if retryParam.MaxAttemptsPerChannel > 0 &&
+			retryParam.ChannelAttemptCount(locked.Id) >= retryParam.MaxAttemptsPerChannel {
+			// The pinned channel used up its whole per-request budget; another
+			// attempt would be pure spinning. Drop the pin and let selection pick
+			// a different channel.
+			retryParam.LockedChannelId = 0
+			retryParam.SameChannelRetry = 0
 		} else {
 			info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
 			if newAPIError := middleware.SetupContextForSelectedChannel(c, locked, info.OriginModelName); newAPIError != nil {
@@ -394,6 +414,12 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		return nil, types.NewError(fmt.Errorf("获取分组 %s 下模型 %s 的可用渠道失败（retry）: %s", selectGroup, info.OriginModelName, err.Error()), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 	if channel == nil {
+		// Every remaining candidate has already exhausted its per-channel budget.
+		// Callers treat a nil channel with no error as "no fresh channel left" and
+		// keep the upstream error from the previous attempt.
+		if retryParam.GetRetry() > 0 || retryParam.SameChannelRetry > 0 {
+			return nil, nil
+		}
 		return nil, types.NewError(fmt.Errorf("分组 %s 下模型 %s 的可用渠道不存在（retry）", selectGroup, info.OriginModelName), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 
@@ -694,6 +720,13 @@ func executeTaskSubmissionWith(
 			if channelErr != nil {
 				logger.LogError(c, channelErr.Error())
 				taskErr = service.TaskErrorWrapperLocal(channelErr.Err, "get_channel_failed", http.StatusInternalServerError)
+				break
+			}
+			if channel == nil {
+				// getChannel only yields a nil channel without an error when the
+				// per-channel budget excludes every candidate; this path does not
+				// set that budget, so treat it as a selection failure.
+				taskErr = service.TaskErrorWrapperLocal(errors.New("no channel left for retry"), "get_channel_failed", http.StatusServiceUnavailable)
 				break
 			}
 		}

@@ -57,6 +57,48 @@ type RetryParam struct {
 	// ConsecutiveSlowFailures counts back-to-back slow failures across the whole
 	// request; any attempt that finishes quickly resets it.
 	ConsecutiveSlowFailures int
+
+	// channelAttempts counts every attempt served by each channel, across all
+	// priority tiers. The same-channel budget is a per-channel total, not a
+	// per-tier one: dropping a tier must not hand the same channel another full
+	// budget, otherwise a model served by a single channel burns
+	// (tiers+1)*(retries+1) attempts against that one channel.
+	channelAttempts map[int]int
+	// MaxAttemptsPerChannel is the per-channel ceiling for this request. Zero
+	// disables both the ceiling and the exclusion that enforces it.
+	MaxAttemptsPerChannel int
+}
+
+// RecordChannelAttempt accounts for one attempt served by channelId.
+func (p *RetryParam) RecordChannelAttempt(channelId int) {
+	if channelId <= 0 {
+		return
+	}
+	if p.channelAttempts == nil {
+		p.channelAttempts = make(map[int]int)
+	}
+	p.channelAttempts[channelId]++
+}
+
+// ChannelAttemptCount is how many attempts channelId has served in this request.
+func (p *RetryParam) ChannelAttemptCount(channelId int) int {
+	return p.channelAttempts[channelId]
+}
+
+// ExhaustedChannelIds returns the channels that already reached
+// maxAttemptsPerChannel, so selection can skip them instead of spending the
+// remaining budget on a channel that has proven unhealthy.
+func (p *RetryParam) ExhaustedChannelIds(maxAttemptsPerChannel int) map[int]struct{} {
+	if len(p.channelAttempts) == 0 || maxAttemptsPerChannel <= 0 {
+		return nil
+	}
+	exhausted := make(map[int]struct{}, len(p.channelAttempts))
+	for channelId, attempts := range p.channelAttempts {
+		if attempts >= maxAttemptsPerChannel {
+			exhausted[channelId] = struct{}{}
+		}
+	}
+	return exhausted
 }
 
 // RetryPolicy is the retry budget for one relay request. It is snapshotted once
@@ -239,6 +281,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 				param.ModelName,
 				priorityRetry,
 				filters,
+				param.ExhaustedChannelIds(param.MaxAttemptsPerChannel),
 			)
 			if channel == nil {
 				// Current group has no available channel for this model, try next group
@@ -282,6 +325,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			param.ModelName,
 			param.GetRetry(),
 			filters,
+			param.ExhaustedChannelIds(param.MaxAttemptsPerChannel),
 		)
 		if err != nil {
 			return nil, param.TokenGroup, err

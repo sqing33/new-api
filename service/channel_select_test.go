@@ -293,3 +293,46 @@ func TestAdvanceAfterFailureClearsSlowStreakAcrossTierDrop(t *testing.T) {
 	assert.Equal(t, 41, param.LockedChannelId)
 	assert.Equal(t, 1, param.SameChannelRetry)
 }
+
+func TestExhaustedChannelIdsUsesPerChannelTotals(t *testing.T) {
+	param := &RetryParam{}
+	for range 4 {
+		param.RecordChannelAttempt(36)
+	}
+	param.RecordChannelAttempt(37)
+
+	exhausted := param.ExhaustedChannelIds(4)
+	assert.Contains(t, exhausted, 36)
+	assert.NotContains(t, exhausted, 37)
+	assert.Equal(t, 4, param.ChannelAttemptCount(36))
+}
+
+func TestExhaustedChannelIdsDisabledWithoutPerChannelCap(t *testing.T) {
+	param := &RetryParam{}
+	for range 10 {
+		param.RecordChannelAttempt(36)
+	}
+	assert.Nil(t, param.ExhaustedChannelIds(0))
+}
+
+func TestRetryBudgetStopsSingleChannelFromSpinning(t *testing.T) {
+	// A model served by exactly one channel must not spend the whole
+	// (tiers+1)*(retries+1) allowance on it: the per-channel total caps it, so
+	// the loop stops instead of issuing 16 identical attempts.
+	policy := RetryPolicy{PriorityRetries: 3, SameChannelRetries: 3}
+	param := &RetryParam{MaxAttemptsPerChannel: policy.SameChannelRetries + 1}
+
+	attempts := 0
+	for attempt := 1; attempt <= policy.MaxAttempts(); attempt++ {
+		exhausted := param.ExhaustedChannelIds(param.MaxAttemptsPerChannel)
+		if _, skip := exhausted[36]; skip {
+			break
+		}
+		param.RecordChannelAttempt(36)
+		attempts++
+		if !param.AdvanceAfterFailure(RetryAttemptOutcome{ChannelId: 36}, policy) {
+			break
+		}
+	}
+	assert.Equal(t, 4, attempts, "one channel gets the first attempt plus ChannelRetryTimes retries")
+}

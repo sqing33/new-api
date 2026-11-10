@@ -119,10 +119,11 @@ func GetRandomSatisfiedChannel(
 	model string,
 	retry int,
 	filters []dto.ChannelFilter,
+	excludeChannelIds map[int]struct{},
 ) (*Channel, error) {
 	// if memory cache is disabled, get channel directly from database
 	if !common.MemoryCacheEnabled {
-		return GetChannel(group, model, retry, filters)
+		return GetChannel(group, model, retry, filters, excludeChannelIds)
 	}
 
 	channelSyncLock.RLock()
@@ -136,6 +137,8 @@ func GetRandomSatisfiedChannel(
 		normalizedModel := ratio_setting.RoutingMatchModelName(model)
 		channels, _ = filterCandidateIDs(group2model2channels[group][normalizedModel], model, filters)
 	}
+
+	channels = excludeChannels(channels, excludeChannelIds)
 
 	if len(channels) == 0 {
 		return nil, nil
@@ -214,6 +217,24 @@ func GetRandomSatisfiedChannel(
 	}
 	// return null if no channel is not found
 	return nil, errors.New("channel not found")
+}
+
+// excludeChannels drops the given channel ids from a candidate list. It always
+// builds a new slice: ids may be the shared cache slice owned by
+// group2model2channels, and filtering it in place would corrupt selection for
+// every later request.
+func excludeChannels(ids []int, exclude map[int]struct{}) []int {
+	if len(exclude) == 0 || len(ids) == 0 {
+		return ids
+	}
+	kept := make([]int, 0, len(ids))
+	for _, id := range ids {
+		if _, skip := exclude[id]; skip {
+			continue
+		}
+		kept = append(kept, id)
+	}
+	return kept
 }
 
 func CacheGetChannel(id int) (*Channel, error) {
