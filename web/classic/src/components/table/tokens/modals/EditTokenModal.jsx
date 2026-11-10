@@ -67,6 +67,7 @@ const EditTokenModal = (props) => {
   const formApiRef = useRef(null);
   const [models, setModels] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [tokenGroups, setTokenGroups] = useState([]);
   const [showQuotaInput, setShowQuotaInput] = useState(false);
   const isEdit = props.editingToken.id !== undefined;
 
@@ -81,6 +82,8 @@ const EditTokenModal = (props) => {
     allow_ips: '',
     // 留空表示跟随用户分组；用 undefined 而非空串，避免 Semi 生成 label 为空的幽灵选中项
     group: undefined,
+    // 组织分组：留空表示未分组
+    token_group: undefined,
     cross_group_retry: false,
     tokenCount: 1,
   });
@@ -159,6 +162,24 @@ const EditTokenModal = (props) => {
     }
   };
 
+  // 组织分组目录：用户给令牌打的标签，与上面的「令牌分组」无关
+  const loadTokenGroups = async () => {
+    try {
+      const res = await API.get('/api/token_group/');
+      const { success, data } = res.data;
+      if (success) {
+        setTokenGroups(
+          (data || []).map((group) => ({
+            label: group.name,
+            value: group.name,
+          })),
+        );
+      }
+    } catch (_) {
+      // 分组目录加载失败不阻塞编辑，令牌仍可正常保存（只是没有下拉候选）
+    }
+  };
+
   const loadToken = async () => {
     setLoading(true);
     let res = await API.get(`/api/token/${props.editingToken.id}`);
@@ -192,6 +213,7 @@ const EditTokenModal = (props) => {
     }
     loadModels();
     loadGroups();
+    loadTokenGroups();
   }, [props.editingToken.id]);
 
   useEffect(() => {
@@ -412,6 +434,18 @@ const EditTokenModal = (props) => {
                         style={{ width: '100%' }}
                       />
                     )}
+                  </Col>
+                  <Col span={24}>
+                    <Form.Select
+                      field='token_group'
+                      label={t('分组')}
+                      placeholder={t('分组，用于按设备或工具归类')}
+                      optionList={tokenGroups}
+                      allowCreate
+                      filter
+                      showClear
+                      style={{ width: '100%' }}
+                    />
                   </Col>
                   <Col
                     span={24}

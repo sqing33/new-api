@@ -18,10 +18,25 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useState } from 'react';
-import { Button, Space } from '@douyinfe/semi-ui';
+import { Button } from '@douyinfe/semi-ui';
 import { showError } from '../../../helpers';
 import CopyTokensModal from './modals/CopyTokensModal';
 import DeleteTokensModal from './modals/DeleteTokensModal';
+import SortPriorityPopover from '../../common/ui/SortPriorityPopover';
+import { TOKEN_SORT_APPLY_COUNT } from '../../../hooks/tokens/useTokensData';
+
+// 排序维度的展示名。key 与 useTokensData 里的 sortOrder 元素一一对应，
+// 也与后端 model.tokenSortColumns 的键一致。
+const SORT_DIMENSION_ITEMS = {
+  id: { label: '使用ID排序' },
+  name: { label: '名称排序' },
+  group: { label: '按分组排序' },
+  accessed_time: { label: '按最后使用时间排序' },
+  concurrency: { label: '按并发排序' },
+  created_time: { label: '按创建时间排序' },
+  expired_time: { label: '按过期时间排序' },
+  status: { label: '按状态排序' },
+};
 
 const TokensActions = ({
   selectedKeys,
@@ -30,6 +45,9 @@ const TokensActions = ({
   batchCopyTokens,
   batchDeleteTokens,
   setShowColumnSelector,
+  setShowTokenGroupManage,
+  sortOrder,
+  reorderSortDimensions,
   t,
 }) => {
   // Modal states
@@ -103,6 +121,25 @@ const TokensActions = ({
         >
           {t('列设置')}
         </Button>
+
+        <Button
+          type='tertiary'
+          className='w-full md:w-auto'
+          onClick={() => setShowTokenGroupManage(true)}
+          size='small'
+        >
+          {t('分组管理')}
+        </Button>
+      </div>
+
+      <div className='flex flex-col md:flex-row items-start md:items-center gap-2 w-full md:w-auto order-1 md:order-2'>
+        <SortPriorityPopover
+          order={sortOrder}
+          items={SORT_DIMENSION_ITEMS}
+          applyCount={TOKEN_SORT_APPLY_COUNT}
+          onReorder={reorderSortDimensions}
+          t={t}
+        />
       </div>
 
       <CopyTokensModal

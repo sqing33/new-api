@@ -129,6 +129,25 @@ func validateTokenGroup(c *gin.Context, group string) bool {
 	return true
 }
 
+// resolveTokenGroup 校验组织分组名并确保它在用户的分组目录里。
+// 组织分组与路由分组无关：它只是用户给令牌打的标签，用于按设备/工具归类。
+// 返回清洗后的分组名，空串表示未分组。
+func resolveTokenGroup(c *gin.Context, userId int, name string) (string, bool) {
+	normalized, err := model.NormalizeTokenGroupName(name)
+	if err != nil {
+		respondTokenGroupError(c, err, name)
+		return "", false
+	}
+	if normalized == "" {
+		return "", true
+	}
+	if _, err := model.EnsureUserTokenGroup(userId, normalized); err != nil {
+		respondTokenGroupError(c, err, normalized)
+		return "", false
+	}
+	return normalized, true
+}
+
 func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) bool {
 	if len(groups) == 0 {
 		if err := token.SetAutoGroups(nil); err != nil {
@@ -377,6 +396,10 @@ func AddToken(c *gin.Context) {
 		common.SysLog("failed to generate token key: " + err.Error())
 		return
 	}
+	tokenGroup, ok := resolveTokenGroup(c, c.GetInt("id"), token.TokenGroup)
+	if !ok {
+		return
+	}
 	cleanToken := model.Token{
 		UserId:             c.GetInt("id"),
 		Name:               token.Name,
@@ -392,6 +415,7 @@ func AddToken(c *gin.Context) {
 		Group:              token.Group,
 		CrossGroupRetry:    token.CrossGroupRetry,
 		AutoGroups:         token.AutoGroups,
+		TokenGroup:         tokenGroup,
 	}
 	err = cleanToken.Insert()
 	if err != nil {
@@ -487,6 +511,11 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
+		tokenGroup, ok := resolveTokenGroup(c, userId, token.TokenGroup)
+		if !ok {
+			return
+		}
+		cleanToken.TokenGroup = tokenGroup
 		if token.Group != "auto" {
 			cleanToken.CrossGroupRetry = false
 			_ = cleanToken.SetAutoGroups(nil)
@@ -522,6 +551,7 @@ func UpdateToken(c *gin.Context) {
 			{"allow_ips", (previous.AllowIps == nil) != (cleanToken.AllowIps == nil) ||
 				(previous.AllowIps != nil && cleanToken.AllowIps != nil && *previous.AllowIps != *cleanToken.AllowIps)},
 			{"group", previous.Group != cleanToken.Group},
+			{"token_group", previous.TokenGroup != cleanToken.TokenGroup},
 			{"cross_group_retry", previous.CrossGroupRetry != cleanToken.CrossGroupRetry},
 			{"auto_groups", previous.AutoGroups != cleanToken.AutoGroups},
 		} {

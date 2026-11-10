@@ -27,7 +27,7 @@ import {
   Select,
 } from '@douyinfe/semi-ui';
 import CompactModeToggle from '../../common/ui/CompactModeToggle';
-import ChannelSortPriorityPopover from './ChannelSortPriorityPopover';
+import SortPriorityPopover from '../../common/ui/SortPriorityPopover';
 import { CHANNEL_SORT_APPLY_COUNT } from '../../../hooks/channels/useChannelsData';
 
 // 排序维度的展示名。key 与 useChannelsData 里的 sortOrder 元素一一对应。
@@ -277,7 +277,7 @@ const ChannelsActions = ({
         {/* 右侧：设置开关区域 */}
         <div className='flex flex-col md:flex-row items-start md:items-center gap-2 w-full md:w-auto order-1 md:order-2'>
           {/* 四个排序维度收进一个可拖拽的优先级弹层 */}
-          <ChannelSortPriorityPopover
+          <SortPriorityPopover
             order={sortOrder}
             items={SORT_DIMENSION_ITEMS}
             applyCount={CHANNEL_SORT_APPLY_COUNT}

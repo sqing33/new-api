@@ -61,6 +61,11 @@ const (
 	MsgTokenAutoGroupsDuplicate  = "token.auto_groups_duplicate"
 	MsgTokenAutoGroupsInvalid    = "token.auto_groups_invalid"
 	MsgTokenGroupNotSelectable   = "token.group_not_selectable"
+	MsgTokenGroupNameEmpty       = "token.group_name_empty"
+	MsgTokenGroupNameTooLong     = "token.group_name_too_long"
+	MsgTokenGroupNameInvalid     = "token.group_name_invalid"
+	MsgTokenGroupNameExists      = "token.group_name_exists"
+	MsgTokenGroupNotFound        = "token.group_not_found"
 )
 
 // Redemption related messages

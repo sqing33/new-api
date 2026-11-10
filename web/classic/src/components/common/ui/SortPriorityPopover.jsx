@@ -21,12 +21,12 @@ import React, { useState } from 'react';
 import { Button, Popover, Typography } from '@douyinfe/semi-ui';
 import { IconSort } from '@douyinfe/semi-icons';
 
-// 渠道列表的排序入口：4 个维度收进一个弹层，拖拽顺序即优先级。
+// 列表排序入口：多个维度收进一个弹层，拖拽顺序即优先级。
 //
-// 排序完全由顺序决定，没有勾选开关：排在前 CHANNEL_SORT_APPLY_COUNT 个的维度
+// 排序完全由顺序决定，没有勾选开关：排在前 applyCount 个的维度
 // 真正参与排序（多级 ORDER BY），后面的仅作为候选。当前生效的那几行用灰色背景
 // 标出，所以顺序本身就是「是否启用」的唯一表达。
-const ChannelSortPriorityPopover = ({
+const SortPriorityPopover = ({
   order,
   items,
   applyCount,
@@ -156,4 +156,4 @@ const ChannelSortPriorityPopover = ({
   );
 };
 
-export default ChannelSortPriorityPopover;
+export default SortPriorityPopover;

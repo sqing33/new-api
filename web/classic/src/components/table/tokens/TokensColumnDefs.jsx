@@ -118,6 +118,20 @@ const renderGroupColumn = (text, record, t, groupRatios = {}) => {
   );
 };
 
+// Render the organizational group column (the label the user gave a key).
+// It is unrelated to the routing group above, so it uses a uniform colour
+// instead of renderGroup()'s per-name colouring.
+const renderTokenGroupColumn = (text, t) => {
+  if (!text) {
+    return <span className='text-gray-400'>{t('未分组')}</span>;
+  }
+  return (
+    <Tag color='light-blue' shape='circle' type='light'>
+      {text}
+    </Tag>
+  );
+};
+
 // Render token key column with show/hide and copy functionality
 const renderTokenKey = (
   text,
@@ -492,6 +506,11 @@ export const getTokensColumns = ({
 }) => {
   return [
     {
+      key: 'id',
+      title: t('ID'),
+      dataIndex: 'id',
+    },
+    {
       title: t('名称'),
       dataIndex: 'name',
       key: 'name',
@@ -508,10 +527,16 @@ export const getTokensColumns = ({
       render: (text, record) => renderQuotaUsage(text, record, t),
     },
     {
-      title: t('分组'),
+      title: t('令牌分组'),
       dataIndex: 'group',
       key: 'group',
       render: (text, record) => renderGroupColumn(text, record, t, groupRatios),
+    },
+    {
+      title: t('分组'),
+      dataIndex: 'token_group',
+      key: 'token_group',
+      render: (text) => renderTokenGroupColumn(text, t),
     },
     {
       title: t('并发'),

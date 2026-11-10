@@ -325,6 +325,19 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.POST("/batch/keys", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKeysBatch)
 		}
 
+		// 组织分组（用户给令牌打的标签）的 CRUD。
+		// 用独立前缀而不是 /api/token/groups：Gin 不允许同一层同时存在静态段与
+		// :id 通配段，而 /api/token/:id 已经被令牌详情占用。
+		tokenGroupRoute := apiRouter.Group("/token_group")
+		tokenGroupRoute.Use(middleware.UserAuth())
+		tokenGroupRoute.Use(middleware.TokenOperationAudit())
+		{
+			tokenGroupRoute.GET("/", controller.GetTokenGroups)
+			tokenGroupRoute.POST("/", controller.CreateTokenGroup)
+			tokenGroupRoute.PUT("/:id", controller.UpdateTokenGroup)
+			tokenGroupRoute.DELETE("/:id", controller.DeleteTokenGroup)
+		}
+
 		toolInstallRoute := apiRouter.Group("/tool-install")
 		{
 			toolInstallRoute.GET("/tools", middleware.UserAuth(), controller.GetToolInstallTools)

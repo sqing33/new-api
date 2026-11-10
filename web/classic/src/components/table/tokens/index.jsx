@@ -40,6 +40,7 @@ import TokensDescription from './TokensDescription';
 import EditTokenModal from './modals/EditTokenModal';
 import CCSwitchModal from './modals/CCSwitchModal';
 import ColumnSelectorModal from './modals/ColumnSelectorModal';
+import TokenGroupManageModal from './modals/TokenGroupManageModal';
 import { useTokensData } from '../../../hooks/tokens/useTokensData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -388,6 +389,8 @@ function TokensPage() {
 
       <ColumnSelectorModal {...tokensData} t={t} />
 
+      <TokenGroupManageModal {...tokensData} t={t} />
+
       <CCSwitchModal
         visible={ccSwitchVisible}
         onClose={() => setCCSwitchVisible(false)}
@@ -413,6 +416,9 @@ function TokensPage() {
               batchCopyTokens={batchCopyTokens}
               batchDeleteTokens={batchDeleteTokens}
               setShowColumnSelector={setShowColumnSelector}
+              setShowTokenGroupManage={tokensData.setShowTokenGroupManage}
+              sortOrder={tokensData.sortOrder}
+              reorderSortDimensions={tokensData.reorderSortDimensions}
               t={t}
             />
 

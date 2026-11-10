@@ -3,6 +3,8 @@ package model
 import (
 	"errors"
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -35,6 +37,9 @@ type Token struct {
 	// CurrentConcurrency is the number of in-flight relay requests observed for
 	// this token at list time. It is server-computed and never persisted.
 	CurrentConcurrency int `json:"current_concurrency" gorm:"-:all"`
+	// TokenGroup 是用户给令牌打的组织分组（按设备/工具归类），与上面的 Group
+	// （路由分组）无关。这里存分组名字而不是 id，便于直接按列排序。
+	TokenGroup string `json:"token_group" gorm:"type:varchar(64);index;default:''"`
 }
 
 func (token *Token) GetAutoGroups() ([]string, error) {
@@ -112,6 +117,13 @@ func (token *Token) GetIpLimits() []string {
 // 命中它时改走内存排序。
 const TokenSortByConcurrency = "concurrency"
 
+// TokenSortByGroup 是组织分组的排序列，对应 tokens.token_group 列。
+const TokenSortByGroup = "group"
+
+// TokenSortMaxLevels 限制排序链长度，与前端「取优先级前 N 个」一致，
+// 避免恶意请求构造超长 ORDER BY。
+const TokenSortMaxLevels = 2
+
 // tokenSortColumns 是令牌列表允许的排序列白名单，避免任意列名注入。
 var tokenSortColumns = map[string]string{
 	"id":            "id",
@@ -120,41 +132,237 @@ var tokenSortColumns = map[string]string{
 	"created_time":  "created_time",
 	"accessed_time": "accessed_time",
 	"expired_time":  "expired_time",
+	"group":         "token_group",
+}
+
+// tokenSortAscending 声明各维度「自然的」排序方向。
+//
+// 排序链里的每一级各自使用自己的方向，而不是共用一个全局 sort_order：
+// 名称与分组是字典序，升序（A→Z）才符合直觉；状态 1=启用，升序把可用令牌
+// 排在前面；其余维度（ID、并发、时间）都是「大的/新的在前」更有用。
+//
+// 未列出的维度默认降序。
+var tokenSortAscending = map[string]bool{
+	"name":   true,
+	"group":  true,
+	"status": true,
 }
 
 // TokenSortOptions 描述令牌列表的排序方式。
 type TokenSortOptions struct {
+	// SortBy 是逗号分隔的排序链，例如 "name,group"。为空表示不指定。
 	SortBy    string
 	SortOrder string
 }
 
-// NewTokenSortOptions 归一化排序参数；无法识别的列回落到 id desc。
+// NewTokenSortOptions 归一化排序参数；无法识别的列会在解析排序链时被丢弃。
 func NewTokenSortOptions(sortBy string, sortOrder string) TokenSortOptions {
 	normalizedSortBy := strings.ToLower(strings.TrimSpace(sortBy))
 	normalizedSortOrder := strings.ToLower(strings.TrimSpace(sortOrder))
-	if normalizedSortBy != TokenSortByConcurrency {
-		if _, ok := tokenSortColumns[normalizedSortBy]; !ok {
-			normalizedSortBy = "id"
-			normalizedSortOrder = "desc"
-		}
-	}
 	if normalizedSortOrder != "asc" {
 		normalizedSortOrder = "desc"
 	}
+
 	return TokenSortOptions{SortBy: normalizedSortBy, SortOrder: normalizedSortOrder}
 }
 
-// Order 返回可直接用于 GORM 的排序子句；并发排序不在 SQL 上生效，
-// 由调用方改走 SortByConcurrencyDesc。
-func (options TokenSortOptions) Order() clause.OrderByColumn {
-	columnName, ok := tokenSortColumns[options.SortBy]
-	if !ok {
-		columnName = "id"
+// defaultTokenSortLevels 是列表的默认排序链：并发降序、并发相同再按最后使用时间降序。
+func defaultTokenSortLevels() []sortLevel {
+	return []sortLevel{
+		{column: TokenSortByConcurrency, asc: false},
+		{column: "accessed_time", asc: false},
 	}
-	return clause.OrderByColumn{
-		Column: clause.Column{Name: columnName},
-		Desc:   options.SortOrder != "asc",
+}
+
+// sortLevels 把 SortBy 解析成有序、去重、长度受限的排序级列表。
+// 每级的方向优先取请求显式给出的 sort_order（仅当链长为 1 时才有意义），
+// 否则用该维度的自然方向。请求没给出可用链时回落到默认排序链。
+func (options TokenSortOptions) sortLevels() []sortLevel {
+	if options.SortBy == "" {
+		return defaultTokenSortLevels()
 	}
+
+	columns := make([]string, 0, TokenSortMaxLevels)
+	seen := make(map[string]bool, TokenSortMaxLevels)
+	for raw := range strings.SplitSeq(options.SortBy, ",") {
+		column := strings.ToLower(strings.TrimSpace(raw))
+		if column == "" || seen[column] {
+			continue
+		}
+		if column != TokenSortByConcurrency {
+			if _, ok := tokenSortColumns[column]; !ok {
+				continue
+			}
+		}
+		seen[column] = true
+		columns = append(columns, column)
+		if len(columns) == TokenSortMaxLevels {
+			break
+		}
+	}
+	if len(columns) == 0 {
+		return defaultTokenSortLevels()
+	}
+
+	// 单级排序时尊重调用方显式指定的方向；多级排序时各级用自然方向，
+	// 否则一个全局方向会把某一级排反。
+	explicitAsc := options.SortOrder == "asc"
+	single := len(columns) == 1
+
+	levels := make([]sortLevel, 0, len(columns))
+	for _, column := range columns {
+		asc := tokenSortAscending[column]
+		if single {
+			asc = explicitAsc
+		}
+		levels = append(levels, sortLevel{column: column, asc: asc})
+	}
+	return levels
+}
+
+// HasConcurrency 判断排序链里是否含并发维度。命中时必须走内存排序。
+func (options TokenSortOptions) HasConcurrency() bool {
+	return slices.ContainsFunc(options.sortLevels(), sortLevel.isConcurrency)
+}
+
+// Apply 把排序链逐级追加到查询上。并发维度跳过：它由 SortTokensInMemory
+// 处理，这里的 SQL 排序只负责数据库列。
+func (options TokenSortOptions) Apply(query *gorm.DB) *gorm.DB {
+	applied := false
+	for _, level := range options.sortLevels() {
+		switch level.column {
+		case TokenSortByConcurrency:
+			continue
+		case TokenSortByGroup:
+			// 未分组的令牌排在最后：先按「是否为空」分组，再按名字排。
+			// 两段都是标准 SQL，SQLite/MySQL/PostgreSQL 都支持。
+			query = query.Order(clause.OrderByColumn{Column: clause.Column{
+				Name: "CASE WHEN COALESCE(token_group, '') = '' THEN 1 ELSE 0 END", Raw: true,
+			}})
+			query = query.Order(clause.OrderByColumn{Column: clause.Column{
+				Name: "COALESCE(token_group, '')", Raw: true,
+			}, Desc: !level.asc})
+			applied = true
+		default:
+			columnName, ok := tokenSortColumns[level.column]
+			if !ok {
+				continue
+			}
+			query = query.Order(clause.OrderByColumn{
+				Column: clause.Column{Name: columnName},
+				Desc:   !level.asc,
+			})
+			applied = true
+		}
+	}
+	if applied {
+		return query
+	}
+	// 没有任何数据库列参与时给一个稳定的兜底顺序，内存排序才有确定的基准。
+	return query.Order(clause.OrderByColumn{
+		Column: clause.Column{Name: "id"},
+		Desc:   true,
+	})
+}
+
+// compareTokensByLevel 比较两个令牌在指定维度上的大小。
+// 返回值已经按该级的方向折算：负数表示 a 排在 b 前面。
+func compareTokensByLevel(a *Token, b *Token, column string, counts map[int]int, asc bool) int {
+	switch column {
+	case "id":
+		return applySortDirection(compareInt64(int64(a.Id), int64(b.Id)), asc)
+	case "name":
+		return applySortDirection(strings.Compare(a.Name, b.Name), asc)
+	case "status":
+		return applySortDirection(compareInt64(int64(a.Status), int64(b.Status)), asc)
+	case "created_time":
+		return applySortDirection(compareInt64(a.CreatedTime, b.CreatedTime), asc)
+	case "accessed_time":
+		return applySortDirection(compareInt64(a.AccessedTime, b.AccessedTime), asc)
+	case "expired_time":
+		return applySortDirection(compareInt64(a.ExpiredTime, b.ExpiredTime), asc)
+	case TokenSortByGroup:
+		// 未分组永远排在最后，与该级的方向无关。
+		if a.TokenGroup == "" || b.TokenGroup == "" {
+			if a.TokenGroup == b.TokenGroup {
+				return 0
+			}
+			if a.TokenGroup == "" {
+				return 1
+			}
+			return -1
+		}
+		return applySortDirection(strings.Compare(a.TokenGroup, b.TokenGroup), asc)
+	case TokenSortByConcurrency:
+		return applySortDirection(compareInt64(int64(counts[a.Id]), int64(counts[b.Id])), asc)
+	default:
+		return 0
+	}
+}
+
+// applySortDirection 把「自然大小」折算成该级方向下的大小。
+func applySortDirection(cmp int, asc bool) int {
+	if asc {
+		return cmp
+	}
+	return -cmp
+}
+
+func compareInt64(a int64, b int64) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// SortTokensInMemory 按完整排序链在内存里重排令牌并分页。
+//
+// 并发数来自 Redis，无法用 SQL ORDER BY，因此只要排序链里出现并发维度，
+// 就必须取出全部候选行后在内存里按链逐级比较。令牌数量在用户列表场景有限，
+// 全量取行可接受。
+//
+// 不含并发维度时调用方应直接用 Apply 下推 SQL，不要走这里。
+func SortTokensInMemory(tokens []*Token, options TokenSortOptions, startIdx int, num int) []*Token {
+	levels := options.sortLevels()
+	if len(levels) == 0 {
+		levels = defaultTokenSortLevels()
+	}
+
+	var counts map[int]int
+	if options.HasConcurrency() {
+		ids := make([]int, 0, len(tokens))
+		for _, token := range tokens {
+			ids = append(ids, token.Id)
+		}
+		counts = concurrency.BatchCount(concurrency.DimensionToken, ids)
+	}
+
+	sorted := make([]*Token, len(tokens))
+	copy(sorted, tokens)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		// 逐级比较，每级用它自己的方向：只有当某一级相等时才看下一级。
+		for _, level := range levels {
+			cmp := compareTokensByLevel(sorted[i], sorted[j], level.column, counts, level.asc)
+			if cmp == 0 {
+				continue
+			}
+			return cmp < 0
+		}
+		return false
+	})
+
+	if startIdx >= len(sorted) {
+		return []*Token{}
+	}
+	end := len(sorted)
+	if num >= 0 && startIdx+num < end {
+		end = startIdx + num
+	}
+	return sorted[startIdx:end]
 }
 
 func GetAllUserTokens(userId int, startIdx int, num int, sortOptions ...TokenSortOptions) ([]*Token, error) {
@@ -164,17 +372,15 @@ func GetAllUserTokens(userId int, startIdx int, num int, sortOptions ...TokenSor
 	if len(sortOptions) > 0 {
 		order = sortOptions[0]
 	}
-	if order.SortBy == TokenSortByConcurrency {
+	if order.HasConcurrency() {
+		// 并发数在 Redis 里，先取全量再内存排序分页
 		var all []*Token
-		if err = DB.Where("user_id = ?", userId).Order(order.Order()).Find(&all).Error; err != nil {
+		if err = order.Apply(DB.Where("user_id = ?", userId)).Find(&all).Error; err != nil {
 			return nil, err
 		}
-		return SortByConcurrencyDesc(all, concurrency.DimensionToken,
-			func(t *Token) int { return t.Id },
-			func(t *Token) int64 { return t.AccessedTime },
-			startIdx, num), nil
+		return SortTokensInMemory(all, order, startIdx, num), nil
 	}
-	err = DB.Where("user_id = ?", userId).Order(order.Order()).Limit(num).Offset(startIdx).Find(&tokens).Error
+	err = order.Apply(DB.Where("user_id = ?", userId)).Limit(num).Offset(startIdx).Find(&tokens).Error
 	return tokens, err
 }
 
@@ -281,19 +487,17 @@ func SearchUserTokens(userId int, keyword string, token string, offset int, limi
 	if len(sortOptions) > 0 {
 		order = sortOptions[0]
 	}
-	if order.SortBy == TokenSortByConcurrency {
+	if order.HasConcurrency() {
+		// 并发数在 Redis 里，先取全量再内存排序分页
 		var all []*Token
-		if err = baseQuery.Order(order.Order()).Find(&all).Error; err != nil {
+		if err = order.Apply(baseQuery).Find(&all).Error; err != nil {
 			common.SysError("failed to search tokens: " + err.Error())
 			return nil, 0, errors.New("搜索令牌失败")
 		}
-		tokens = SortByConcurrencyDesc(all, concurrency.DimensionToken,
-			func(t *Token) int { return t.Id },
-			func(t *Token) int64 { return t.AccessedTime },
-			offset, limit)
+		tokens = SortTokensInMemory(all, order, offset, limit)
 		return tokens, total, nil
 	}
-	err = baseQuery.Order(order.Order()).Offset(offset).Limit(limit).Find(&tokens).Error
+	err = order.Apply(baseQuery).Offset(offset).Limit(limit).Find(&tokens).Error
 	if err != nil {
 		common.SysError("failed to search tokens: " + err.Error())
 		return nil, 0, errors.New("搜索令牌失败")
@@ -397,7 +601,8 @@ func (token *Token) Update() (err error) {
 		common.SysLog("failed to invalidate token cache before update: " + cacheErr.Error())
 	}
 	return DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups",
+		"token_group").Updates(token).Error
 }
 
 func (token *Token) SelectUpdate() (err error) {

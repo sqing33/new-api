@@ -44,11 +44,80 @@ const TOKEN_PAGE_SIZE_KEY = 'token-page-size';
 // 列设置持久化键
 const TOKENS_COLUMNS_STORAGE_KEY = 'tokens-table-columns';
 
+// 排序优先级的顺序单独存一个 key：只加顺序 key 可以天然兼容老用户
+// （无该 key 时回退默认顺序）。
+const TOKEN_SORT_ORDER_KEY = 'tokens-sort-order';
+
+// 排序维度。顺序完全由拖动决定：排在前面的优先参与排序，不再有勾选开关。
+// 默认顺序的前两项（并发、最后使用时间）与改动前的列表顺序完全一致。
+export const TOKEN_SORT_DEFAULT_ORDER = [
+  'concurrency',
+  'accessed_time',
+  'id',
+  'name',
+  'group',
+  'created_time',
+  'expired_time',
+  'status',
+];
+
+// 生效的排序级数：拖动顺序的前 N 个维度真正参与排序。
+// 与后端 model.TokenSortMaxLevels 保持一致。
+export const TOKEN_SORT_APPLY_COUNT = 2;
+
+// 读回排序顺序并做容错：元素必须合法、去重、补齐缺失项。
+// 顺序被写坏时不能让工具栏整个消失，所以任何异常都回退默认顺序。
+export const parseTokenSortOrder = (raw) => {
+  if (!raw) return [...TOKEN_SORT_DEFAULT_ORDER];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [...TOKEN_SORT_DEFAULT_ORDER];
+    const seen = new Set();
+    const order = [];
+    for (const item of parsed) {
+      if (
+        TOKEN_SORT_DEFAULT_ORDER.includes(item) &&
+        !seen.has(item)
+      ) {
+        seen.add(item);
+        order.push(item);
+      }
+    }
+    for (const item of TOKEN_SORT_DEFAULT_ORDER) {
+      if (!seen.has(item)) {
+        order.push(item);
+      }
+    }
+    return order;
+  } catch (e) {
+    console.error('Failed to parse saved token sort order', e);
+    return [...TOKEN_SORT_DEFAULT_ORDER];
+  }
+};
+
+// 排序链 = 拖动顺序的前 N 个维度。
+export const pickActiveTokenSort = (order) =>
+  order.slice(0, TOKEN_SORT_APPLY_COUNT);
+
+// 把排序链转成后端参数。
+// sort_order 只在单级排序时下发：多级排序里每一级有自己的自然方向
+// （名称升序、并发降序），后端会忽略全局方向，前端发了也是误导。
+const buildTokenSortParam = (chain) => {
+  if (chain.length === 0) return '';
+  const sortBy = `&sort_by=${chain.join(',')}`;
+  if (chain.length > 1) return sortBy;
+  // 单级：名称/分组/状态升序（字典序、启用在前），其余降序（大的/新的在前）
+  const ascending = ['name', 'group', 'status'].includes(chain[0]);
+  return `${sortBy}&sort_order=${ascending ? 'asc' : 'desc'}`;
+};
+
 const TOKEN_COLUMN_KEYS = {
+  ID: 'id',
   NAME: 'name',
   STATUS: 'status',
   QUOTA_USAGE: 'quota_usage',
   GROUP: 'group',
+  TOKEN_GROUP: 'token_group',
   TOKEN_KEY: 'token_key',
   MODEL_LIMITS: 'model_limits',
   ALLOW_IPS: 'allow_ips',
@@ -60,10 +129,12 @@ const TOKEN_COLUMN_KEYS = {
 
 // 默认展示的列；密钥、IP 限制、过期时间等信息量较低，默认隐藏
 const getDefaultTokenColumnVisibility = () => ({
+  [TOKEN_COLUMN_KEYS.ID]: true,
   [TOKEN_COLUMN_KEYS.NAME]: true,
   [TOKEN_COLUMN_KEYS.STATUS]: true,
   [TOKEN_COLUMN_KEYS.QUOTA_USAGE]: true,
   [TOKEN_COLUMN_KEYS.GROUP]: true,
+  [TOKEN_COLUMN_KEYS.TOKEN_GROUP]: true,
   [TOKEN_COLUMN_KEYS.TOKEN_KEY]: true,
   [TOKEN_COLUMN_KEYS.MODEL_LIMITS]: false,
   [TOKEN_COLUMN_KEYS.ALLOW_IPS]: false,
@@ -86,8 +157,16 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const [searching, setSearching] = useState(false);
   const [searchMode, setSearchMode] = useState(false); // 是否处于搜索结果视图
 
-  // 列表固定按并发降序、并发相同再按最后使用时间降序
-  const buildTokenSortParam = () => '&sort_by=concurrency';
+  // 排序顺序：拖动后写回 localStorage，刷新后保持。
+  // 这是排序的唯一状态来源——不再有 id/name/concurrency 三个勾选布尔位。
+  const [sortOrder, setSortOrder] = useState(() =>
+    parseTokenSortOrder(localStorage.getItem(TOKEN_SORT_ORDER_KEY)),
+  );
+  // 请求构造函数通过位置参数传递排序，这里用 ref 让 URL 始终读到最新值。
+  const activeSortRef = useRef([]);
+
+  // 组织分组目录：用户给令牌打的标签（与「令牌分组」= 路由分组无关）
+  const [tokenGroups, setTokenGroups] = useState([]);
 
   // Column visibility
   const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -109,6 +188,9 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const [editingToken, setEditingToken] = useState({
     id: undefined,
   });
+
+  // 分组管理弹窗
+  const [showTokenGroupManage, setShowTokenGroupManage] = useState(false);
 
   // UI state
   const [compactMode, setCompactMode] = useTableCompactMode('tokens');
@@ -166,7 +248,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
       setSearchMode(false);
     }
     const res = await API.get(
-      `/api/token/?p=${page}&size=${size}${buildTokenSortParam()}`,
+      `/api/token/?p=${page}&size=${size}${buildTokenSortParam(activeSortRef.current)}`,
       { skipErrorHandler: silent },
     );
     const { success, message, data } = res.data;
@@ -386,7 +468,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
       setSearching(true);
     }
     const res = await API.get(
-      `/api/token/search?keyword=${encodeURIComponent(searchKeyword)}&token=${encodeURIComponent(searchToken)}&p=${normalizedPage}&size=${normalizedSize}${buildTokenSortParam()}`,
+      `/api/token/search?keyword=${encodeURIComponent(searchKeyword)}&token=${encodeURIComponent(searchToken)}&p=${normalizedPage}&size=${normalizedSize}${buildTokenSortParam(activeSortRef.current)}`,
       { skipErrorHandler: silent },
     );
     const { success, message, data } = res.data;
@@ -428,19 +510,88 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     onRefresh: refreshSilently,
   });
 
-  // Sort tokens function
-  const sortToken = (key) => {
-    if (tokens.length === 0) return;
-    setLoading(true);
-    let sortedTokens = [...tokens];
-    sortedTokens.sort((a, b) => {
-      return ('' + a[key]).localeCompare(b[key]);
-    });
-    if (sortedTokens[0].id === tokens[0].id) {
-      sortedTokens.reverse();
+  // 拖拽后重排优先级。排序链取顺序前 N 个，所以重排可能改变生效的排序，
+  // 由 activeSort 的 effect 负责重新拉取。
+  const reorderSortDimensions = (sourceKey, targetKey, position) => {
+    if (!sourceKey || sourceKey === targetKey) return;
+    const next = sortOrder.filter((key) => key !== sourceKey);
+    const targetIndex = next.indexOf(targetKey);
+    if (targetIndex < 0) return;
+    next.splice(position === 'after' ? targetIndex + 1 : targetIndex, 0, sourceKey);
+    localStorage.setItem(TOKEN_SORT_ORDER_KEY, JSON.stringify(next));
+    setSortOrder(next);
+  };
+
+  // 排序链 = 拖动顺序的前 N 个维度。
+  const activeSort = pickActiveTokenSort(sortOrder);
+  activeSortRef.current = activeSort;
+
+  // 排序链变化后重新拉取。必须放在 effect 里而不是 onChange 里直接调用：
+  // setState 是异步的，同一事件循环内 ref 还是旧值，请求会带上旧排序。
+  const sortInitialized = useRef(false);
+  useEffect(() => {
+    if (!sortInitialized.current) {
+      sortInitialized.current = true;
+      return;
     }
-    setTokens(sortedTokens);
-    setLoading(false);
+    const { searchKeyword, searchToken } = getFormValues();
+    if (searchKeyword === '' && searchToken === '') {
+      loadTokens(1, pageSize).then();
+    } else {
+      searchTokens(1, pageSize).then();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSort.join(',')]);
+
+  // 组织分组目录
+  const loadTokenGroups = async () => {
+    try {
+      const res = await API.get('/api/token_group/');
+      const { success, message, data } = res.data || {};
+      if (success) {
+        setTokenGroups(data || []);
+      } else {
+        showError(message);
+      }
+    } catch (e) {
+      showError(e.message || t('获取分组列表失败'));
+    }
+  };
+
+  const createTokenGroup = async (name) => {
+    const res = await API.post('/api/token_group/', { name });
+    const { success, message, data } = res.data || {};
+    if (!success) {
+      showError(message);
+      return null;
+    }
+    await loadTokenGroups();
+    return data;
+  };
+
+  const renameTokenGroup = async (id, name) => {
+    const res = await API.put(`/api/token_group/${id}`, { name });
+    const { success, message } = res.data || {};
+    if (!success) {
+      showError(message);
+      return false;
+    }
+    // 分组名同时写在令牌上，改名后要刷新列表才能看到新名字
+    await Promise.all([loadTokenGroups(), refresh()]);
+    showSuccess(t('分组已更新'));
+    return true;
+  };
+
+  const deleteTokenGroup = async (id) => {
+    const res = await API.delete(`/api/token_group/${id}`);
+    const { success, message } = res.data || {};
+    if (!success) {
+      showError(message);
+      return false;
+    }
+    await Promise.all([loadTokenGroups(), refresh()]);
+    showSuccess(t('分组已删除'));
+    return true;
   };
 
   // Page handlers
@@ -576,11 +727,18 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     const localPageSize =
       parseInt(localStorage.getItem(TOKEN_PAGE_SIZE_KEY)) || ITEMS_PER_PAGE;
     setPageSize(localPageSize);
+    // 首个请求必须直接带上回读的排序链，否则会用默认排序发一次再被 effect 重发。
+    const localSortOrder = parseTokenSortOrder(
+      localStorage.getItem(TOKEN_SORT_ORDER_KEY),
+    );
+    setSortOrder(localSortOrder);
+    activeSortRef.current = pickActiveTokenSort(localSortOrder);
     loadTokens(1, localPageSize)
       .then()
       .catch((reason) => {
         showError(reason);
       });
+    loadTokenGroups().catch(() => {});
     API.get('/api/user/self/groups')
       .then((res) => {
         if (res.data.success && res.data.data) {
@@ -612,6 +770,20 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     handleSelectAllColumns,
     initDefaultColumns,
     groupRatios,
+
+    // 排序：拖动顺序 + 当前生效的排序链
+    sortOrder,
+    activeSort,
+    reorderSortDimensions,
+
+    // 组织分组
+    tokenGroups,
+    loadTokenGroups,
+    createTokenGroup,
+    renameTokenGroup,
+    deleteTokenGroup,
+    showTokenGroupManage,
+    setShowTokenGroupManage,
 
     // Selection state
     selectedKeys,
@@ -649,7 +821,6 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     onOpenLink,
     manageToken,
     searchTokens,
-    sortToken,
     handlePageChange,
     handlePageSizeChange,
     rowSelection,
