@@ -162,6 +162,25 @@ func IsGroupUnlimited(group string) bool {
 	return ok && unlimited
 }
 
+// EnsureUnlimitedGroupsInRatio 保证被标记为无限额度的分组同时存在于分组倍率表中，
+// 缺失的分组以倍率 1 补齐，返回是否发生了补齐。
+// 存量安装的 GroupRatio 选项是整体覆盖代码默认值的，代码默认里带的无限额度分组
+// （如 Free）会因此从倍率表中消失：它仍被标记为无限额度，却无法分配给任何用户。
+func EnsureUnlimitedGroupsInRatio() bool {
+	changed := false
+	for name, unlimited := range groupUnlimitedMap.ReadAll() {
+		if !unlimited {
+			continue
+		}
+		if _, exists := groupRatioMap.Get(name); exists {
+			continue
+		}
+		groupRatioMap.Set(name, 1)
+		changed = true
+	}
+	return changed
+}
+
 // ResolveGroupRatio 计算一次请求最终生效的分组倍率。
 // 优先级：分组特殊倍率（用户分组 × 令牌分组，覆盖语义）> 令牌分组倍率 × 用户分组倍率。
 // 用户分组倍率是乘数而非覆盖值，因此用户既享受身份折扣，也保留令牌分组自身的优惠。

@@ -219,6 +219,33 @@ func loadOptionsFromDatabase() {
 		}
 	}
 	applyPasskeyDomainOptions(passkeyOptions)
+	repairUnlimitedGroupRatio()
+}
+
+// repairUnlimitedGroupRatio 保证被标记为无限额度的分组同时存在于分组倍率表中。
+// 存量安装的 GroupRatio 选项会整体覆盖代码默认值，导致默认的无限额度分组（Free）
+// 从倍率表中消失：它仍被标记为无限额度，却无法分配给任何用户。补齐后刷新 OptionMap
+// 让设置页与分组下拉立即看到真实存在的分组，主节点再把修复结果回写数据库，
+// 使分组集合在运行态与数据库中保持一致。
+func repairUnlimitedGroupRatio() {
+	if !ratio_setting.EnsureUnlimitedGroupsInRatio() {
+		return
+	}
+	encoded := ratio_setting.GroupRatio2JSONString()
+	common.OptionMapRWMutex.Lock()
+	common.OptionMap["GroupRatio"] = encoded
+	common.OptionMap["group_ratio_setting.group_ratio"] = encoded
+	common.OptionMapRWMutex.Unlock()
+	common.SysLog("group ratio repaired, unlimited groups restored into group ratio table: " + encoded)
+	if !common.IsMasterNode {
+		return
+	}
+	// 只回写已存在的选项行，避免新建 UI 从不写入的选项键。
+	for _, key := range []string{"GroupRatio", "group_ratio_setting.group_ratio"} {
+		if err := DB.Model(&Option{}).Where(&Option{Key: key}).Update("value", encoded).Error; err != nil {
+			common.SysError("failed to persist repaired group ratio to option " + key + ": " + err.Error())
+		}
+	}
 }
 
 func SyncOptions(frequency int) {
