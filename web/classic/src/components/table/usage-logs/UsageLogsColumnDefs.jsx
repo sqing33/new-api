@@ -666,7 +666,7 @@ export const getLogsColumns = ({
           record.type === 2 ||
           record.type === 5 ||
           record.type === 6 ? (
-          <div className='flex items-center gap-1'>
+          <div className='flex items-center justify-center gap-1'>
             <Tag
               color='grey'
               shape='circle'
@@ -882,7 +882,7 @@ export const getLogsColumns = ({
     {
       key: COLUMN_KEYS.IP,
       title: (
-        <div className='flex items-center gap-1'>
+        <div className='flex items-center justify-center gap-1'>
           {t('IP')}
           <Tooltip
             content={t(
