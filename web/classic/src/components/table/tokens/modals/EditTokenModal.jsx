@@ -82,7 +82,7 @@ const EditTokenModal = (props) => {
     allow_ips: '',
     // 留空表示跟随用户分组；用 undefined 而非空串，避免 Semi 生成 label 为空的幽灵选中项
     group: undefined,
-    // 组织分组：留空表示未分组
+    // 标签：留空表示无标签
     token_group: undefined,
     cross_group_retry: false,
     tokenCount: 1,
@@ -162,7 +162,7 @@ const EditTokenModal = (props) => {
     }
   };
 
-  // 组织分组目录：用户给令牌打的标签，与上面的「令牌分组」无关
+  // 标签目录：用户给令牌打的标签，与上面的「令牌分组」无关
   const loadTokenGroups = async () => {
     try {
       const res = await API.get('/api/token_group/');
@@ -438,8 +438,8 @@ const EditTokenModal = (props) => {
                   <Col span={24}>
                     <Form.Select
                       field='token_group'
-                      label={t('分组')}
-                      placeholder={t('分组，用于按设备或工具归类')}
+                      label={t('标签')}
+                      placeholder={t('标签，用于按设备或工具归类')}
                       optionList={tokenGroups}
                       allowCreate
                       filter

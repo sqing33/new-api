@@ -33,8 +33,8 @@ import {
 import { IconDelete, IconEdit } from '@douyinfe/semi-icons';
 import { showError, groupTagColor } from '../../../../helpers';
 
-// 分组管理弹窗：新建 / 重命名 / 删除组织分组。
-// 分组可以暂时没有任何令牌（用户可以先把「游戏」建出来，之后再往里放 key）。
+// 标签管理弹窗：新建 / 重命名 / 删除令牌标签。
+// 标签可以暂时没有任何令牌（用户可以先把「游戏」建出来，之后再往里放 key）。
 const TokenGroupManageModal = ({
   showTokenGroupManage,
   setShowTokenGroupManage,
@@ -59,7 +59,7 @@ const TokenGroupManageModal = ({
   const handleCreate = async () => {
     const name = newGroupName.trim();
     if (!name) {
-      showError(t('分组名称不能为空'));
+      showError(t('标签名称不能为空'));
       return;
     }
     setSubmitting(true);
@@ -92,8 +92,8 @@ const TokenGroupManageModal = ({
 
   const handleDelete = (group) => {
     Modal.confirm({
-      title: t('确认删除分组？'),
-      content: t('删除分组后，该分组下的令牌将变为未分组'),
+      title: t('确认删除标签？'),
+      content: t('删除标签后，该标签下的令牌将变为无标签'),
       onOk: () => {
         deleteTokenGroup(group.id);
       },
@@ -102,7 +102,7 @@ const TokenGroupManageModal = ({
 
   return (
     <Modal
-      title={t('分组管理')}
+      title={t('标签管理')}
       visible={showTokenGroupManage}
       onCancel={handleClose}
       footer={
@@ -115,7 +115,7 @@ const TokenGroupManageModal = ({
         <Input
           value={newGroupName}
           onChange={setNewGroupName}
-          placeholder={t('请输入分组名称')}
+          placeholder={t('请输入标签名称')}
           maxLength={32}
           showClear
           onEnterPress={handleCreate}
@@ -128,7 +128,7 @@ const TokenGroupManageModal = ({
           disabled={!newGroupName.trim()}
           onClick={handleCreate}
         >
-          {t('新建分组')}
+          {t('新建标签')}
         </Button>
       </div>
 
@@ -138,7 +138,7 @@ const TokenGroupManageModal = ({
           darkModeImage={
             <IllustrationNoResultDark style={{ width: 120, height: 120 }} />
           }
-          description={t('暂无分组')}
+          description={t('暂无标签')}
           style={{ padding: 20 }}
         />
       ) : (
@@ -190,7 +190,7 @@ const TokenGroupManageModal = ({
                       size='small'
                       type='tertiary'
                       icon={<IconEdit />}
-                      aria-label={t('重命名分组')}
+                      aria-label={t('重命名标签')}
                       onClick={() => {
                         setEditingId(group.id);
                         setEditingName(group.name);
@@ -200,7 +200,7 @@ const TokenGroupManageModal = ({
                       size='small'
                       type='danger'
                       icon={<IconDelete />}
-                      aria-label={t('删除分组')}
+                      aria-label={t('删除标签')}
                       onClick={() => handleDelete(group)}
                     />
                   </Space>

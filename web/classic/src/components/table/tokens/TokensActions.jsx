@@ -128,7 +128,7 @@ const TokensActions = ({
           onClick={() => setShowTokenGroupManage(true)}
           size='small'
         >
-          {t('分组管理')}
+          {t('标签管理')}
         </Button>
       </div>
 

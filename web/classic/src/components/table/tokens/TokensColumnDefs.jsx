@@ -119,12 +119,12 @@ const renderGroupColumn = (text, record, t, groupRatios = {}) => {
   );
 };
 
-// Render the organizational group column (the label the user gave a key).
+// Render the tag column (the label the user gave a key).
 // It is unrelated to the routing group above, but reuses the same per-name
-// colouring so the same group name looks the same in both columns.
+// colouring so the same label looks the same in both columns.
 const renderTokenGroupColumn = (text, t) => {
   if (!text) {
-    return <span className='text-gray-400'>{t('未分组')}</span>;
+    return <span className='text-gray-400'>{t('无标签')}</span>;
   }
   return (
     <Tag color={groupTagColor(text)} shape='circle' type='light'>
@@ -534,7 +534,7 @@ export const getTokensColumns = ({
       render: (text, record) => renderGroupColumn(text, record, t, groupRatios),
     },
     {
-      title: t('组织分组'),
+      title: t('标签'),
       dataIndex: 'token_group',
       key: 'token_group',
       render: (text) => renderTokenGroupColumn(text, t),

@@ -165,7 +165,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   // 请求构造函数通过位置参数传递排序，这里用 ref 让 URL 始终读到最新值。
   const activeSortRef = useRef([]);
 
-  // 组织分组目录：用户给令牌打的标签（与「令牌分组」= 路由分组无关）
+  // 标签目录：用户给令牌打的标签（与「令牌分组」= 路由分组无关）
   const [tokenGroups, setTokenGroups] = useState([]);
 
   // Column visibility
@@ -543,7 +543,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSort.join(',')]);
 
-  // 组织分组目录
+  // 标签目录
   const loadTokenGroups = async () => {
     try {
       const res = await API.get('/api/token_group/');
@@ -776,7 +776,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     activeSort,
     reorderSortDimensions,
 
-    // 组织分组
+    // 标签
     tokenGroups,
     loadTokenGroups,
     createTokenGroup,

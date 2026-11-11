@@ -665,7 +665,7 @@ export const getLogsColumns = ({
           record.type === 2 ||
           record.type === 5 ||
           record.type === 6 ? (
-          <div>
+          <div className='flex items-center gap-1'>
             <Tag
               color='grey'
               shape='circle'
@@ -676,25 +676,15 @@ export const getLogsColumns = ({
               {' '}
               {t(text)}{' '}
             </Tag>
+            {/* 令牌标签是用户自建的标记，跟在令牌名右边，不另开一列 */}
+            {record.token_group && (
+              <Tag color={groupTagColor(record.token_group)} shape='circle' type='light'>
+                {record.token_group}
+              </Tag>
+            )}
           </div>
         ) : (
           <></>
-        );
-      },
-    },
-    {
-      key: COLUMN_KEYS.TOKEN_GROUP,
-      title: t('组织分组'),
-      dataIndex: 'token_group',
-      render: (text, record) => {
-        // 令牌的组织分组是用户自建的标签，只在有令牌的日志上出现。
-        if (!text) {
-          return <></>;
-        }
-        return (
-          <Tag color={groupTagColor(text)} shape='circle' type='light'>
-            {text}
-          </Tag>
         );
       },
     },
