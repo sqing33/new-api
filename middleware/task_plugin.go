@@ -25,6 +25,7 @@ import (
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
@@ -32,6 +33,33 @@ import (
 const contextKeyTaskPluginEndpointModel = "task_plugin_endpoint_model_request"
 
 var errTaskPluginUnsupportedMediaType = errors.New("unsupported task plugin media type")
+
+// pluginServesConfiguredVideoModel reports whether plugin may serve modelName
+// under administrator configuration rather than the plugin's own meta.models.
+//
+// Configuration alone is never sufficient: the plugin must also own one of the
+// channel types that can actually serve the model, otherwise any plugin would
+// accept any configured model name. Returns false for every other case,
+// including an unconfigured model, so callers keep their existing rejection.
+func pluginServesConfiguredVideoModel(generation *pluginruntime.RoutingGeneration, plugin *pluginruntime.LoadedPlugin, modelName string) bool {
+	if generation == nil || plugin == nil || strings.TrimSpace(modelName) == "" {
+		return false
+	}
+	if !setting.ImageModelSupportsVideo(modelName) {
+		return false
+	}
+	// A model the plugin already declares needs no configuration-driven path.
+	if slices.Contains(plugin.Meta.Models, modelName) {
+		return false
+	}
+	for _, channelType := range model.GetEnabledChannelTypesForModel(modelName) {
+		owner, ok := generation.GetByChannelType(channelType)
+		if ok && owner == plugin {
+			return true
+		}
+	}
+	return false
+}
 
 const taskPluginInvalidRouteResult = "plugin returned an invalid route result"
 
@@ -192,6 +220,9 @@ func PrepareTaskPluginRoute() gin.HandlerFunc {
 				return
 			}
 			owned := slices.Contains(pinned.Plugin.Meta.Models, modelName)
+			if !owned && pluginServesConfiguredVideoModel(pinned.Generation, pinned.Plugin, modelName) {
+				owned = true
+			}
 			if !owned {
 				logger.LogWarn(
 					c,
@@ -342,7 +373,9 @@ func PinTaskPluginEndpoint() gin.HandlerFunc {
 		pinModel := claimedModel
 		mappedModel := ""
 		rewriteTo := ""
+		pluginDeclared := false
 		if declared, ok := generation.CanonicalModel(claimedModel); ok {
+			pluginDeclared = true
 			lookupModel = declared
 			pinModel = declared
 			if claimedModel != declared {
@@ -354,6 +387,7 @@ func PinTaskPluginEndpoint() gin.HandlerFunc {
 				c.Next()
 				return
 			}
+			pluginDeclared = true
 			lookupModel = target.Declared
 			pinModel = target.Alias
 			mappedModel = target.Declared
@@ -361,7 +395,39 @@ func PinTaskPluginEndpoint() gin.HandlerFunc {
 				rewriteTo = target.Alias
 			}
 		}
-		binding, found := generation.LookupEndpoint(c.Request.Method, c.Request.URL.Path, lookupModel)
+		var binding pluginruntime.ProtocolBinding
+		var found bool
+		var candidates []pluginruntime.ProtocolBinding
+		if pluginDeclared {
+			binding, found = generation.LookupEndpoint(c.Request.Method, c.Request.URL.Path, lookupModel)
+			if found && binding.Plugin != nil {
+				candidates = generation.LookupEndpointCandidates(c.Request.Method, c.Request.URL.Path, lookupModel)
+			}
+		} else if setting.ImageModelSupportsVideo(claimedModel) {
+			// Administrator configuration admitted this model without any plugin
+			// declaring it, so the driving plugin is inferred from the channel
+			// types that can serve the model. The model name is never rewritten:
+			// there is no declared spelling to fold it to.
+			channelTypes := model.GetEnabledChannelTypesForModel(claimedModel)
+			candidates = generation.EndpointBindingsForChannelTypes(c.Request.Method, c.Request.URL.Path, claimedModel, channelTypes)
+			if len(candidates) == 0 {
+				abortWithOpenAiMessage(c, http.StatusBadRequest, fmt.Sprintf(
+					"model %q is configured for video generation but no task plugin can serve it (enabled channel types: %v)",
+					claimedModel, channelTypes,
+				))
+				return
+			}
+			logger.LogDebug(
+				c,
+				"task_plugin subsystem=endpoint event=config_driven_inference generation=%d model=%q channel_types=%v candidates=%d",
+				generation.Number,
+				claimedModel,
+				channelTypes,
+				len(candidates),
+			)
+			binding = candidates[0]
+			found = true
+		}
 		if !found || binding.Plugin == nil {
 			c.Set(contextKeyTaskPluginEndpointModel, *modelRequest)
 			c.Next()
@@ -375,7 +441,6 @@ func PinTaskPluginEndpoint() gin.HandlerFunc {
 		}
 		modelRequest.Model = pinModel
 		c.Set(contextKeyTaskPluginEndpointModel, *modelRequest)
-		candidates := generation.LookupEndpointCandidates(c.Request.Method, c.Request.URL.Path, lookupModel)
 		if len(candidates) == 0 {
 			candidates = []pluginruntime.ProtocolBinding{binding}
 		}
@@ -640,7 +705,8 @@ func PrepareTaskPluginEndpoint() gin.HandlerFunc {
 			} else if model, _ := result["model"].(string); strings.TrimSpace(model) == "" {
 				reason = "invalid_model"
 				detail = "decoded request is missing a model"
-			} else if model != pinned.Model || (pinned.MappedModel == "" && !slices.Contains(candidate.Plugin.Meta.Models, model)) {
+			} else if model != pinned.Model || (pinned.MappedModel == "" && !slices.Contains(candidate.Plugin.Meta.Models, model) &&
+				!pluginServesConfiguredVideoModel(pinned.Generation, candidate.Plugin, model)) {
 				reason = "resolved_model_not_owned"
 				detail = fmt.Sprintf("model %q is not served by this plugin", model)
 			}
@@ -1424,6 +1490,11 @@ func PrepareTaskPluginSubmit() gin.HandlerFunc {
 		exactAlias := false
 		if target, resolved := model.ResolveTaskModelAlias(generation, modelName); resolved && target.Alias == modelName && target.PluginKey == plugin.Meta.Key {
 			exactAlias = true
+		}
+		// A configured video model is served as spelled: there is no declared
+		// name to fold it to, so it bypasses the folding block entirely.
+		if !exactOwned && !exactAlias && pluginServesConfiguredVideoModel(generation, plugin, modelName) {
+			exactOwned = true
 		}
 		if !exactOwned && !exactAlias {
 			folded := ""

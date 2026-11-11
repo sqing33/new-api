@@ -420,3 +420,90 @@ func TestHandleASRResponseSubtitlePassthrough(t *testing.T) {
 		})
 	}
 }
+
+// TestMiniMaxImageBusinessErrorMapsToRealHTTPStatus 覆盖图像业务错误的状态码：
+// MiniMax 把「不支持的模型」这类失败放在 HTTP 200 + base_resp 里。若把上游的
+// 200 原样透传，客户端会拿到一个携带错误体的成功响应并当成功处理，因此必须按
+// chat 链路的同一张表映射成真实 HTTP 状态。
+func TestMiniMaxImageBusinessErrorMapsToRealHTTPStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	testCases := []struct {
+		name           string
+		body           string
+		wantStatusCode int
+		wantContains   string
+	}{
+		{
+			name:           "unmapped business code becomes bad gateway",
+			body:           `{"base_resp":{"status_code":2013,"status_msg":"invalid params, unsupported model: H3-Image"}}`,
+			wantStatusCode: http.StatusBadGateway,
+			wantContains:   "unsupported model: H3-Image",
+		},
+		{
+			name:           "unauthorized business code is preserved",
+			body:           `{"base_resp":{"status_code":1004,"status_msg":"authentication failed"}}`,
+			wantStatusCode: http.StatusUnauthorized,
+			wantContains:   "authentication failed",
+		},
+		{
+			name:           "rate limited business code is preserved",
+			body:           `{"base_resp":{"status_code":2056,"status_msg":"rate limited"}}`,
+			wantStatusCode: http.StatusTooManyRequests,
+			wantContains:   "rate limited",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			info := &relaycommon.RelayInfo{
+				RelayMode: relayconstant.RelayModeImagesGenerations,
+				StartTime: time.Unix(1700000000, 0),
+			}
+			// The upstream really does answer 200 while reporting a failure.
+			resp := &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       ioNopCloser(testCase.body),
+			}
+
+			usage, apiErr := (&Adaptor{}).DoResponse(c, resp, info)
+
+			require.Nil(t, usage)
+			require.NotNil(t, apiErr)
+			assert.Equal(t, testCase.wantStatusCode, apiErr.StatusCode)
+			assert.NotEqual(t, http.StatusOK, apiErr.StatusCode,
+				"a business failure must never be reported to the client as HTTP 200")
+			assert.Contains(t, apiErr.Error(), testCase.wantContains)
+		})
+	}
+}
+
+// TestMiniMaxImageSuccessKeepsUpstreamStatus 覆盖成功路径不受影响：
+// base_resp.status_code 为 0 时仍按上游状态返回成功。
+func TestMiniMaxImageSuccessKeepsUpstreamStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	info := &relaycommon.RelayInfo{
+		RelayMode: relayconstant.RelayModeImagesGenerations,
+		StartTime: time.Unix(1700000000, 0),
+	}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body: ioNopCloser(
+			`{"base_resp":{"status_code":0,"status_msg":"success"},"data":{"image_urls":["https://example.com/a.png"]}}`,
+		),
+	}
+
+	usage, apiErr := (&Adaptor{}).DoResponse(c, resp, info)
+
+	require.Nil(t, apiErr)
+	require.NotNil(t, usage)
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"url":"https://example.com/a.png"`)
+}

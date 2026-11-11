@@ -492,6 +492,65 @@ func (g *RoutingGeneration) LookupEndpointCandidates(method, path, model string)
 	return append([]ProtocolBinding(nil), bindings...)
 }
 
+// EndpointBindingsForChannelTypes builds the protocol bindings a set of channel
+// types can serve for a model that no plugin declares in meta.models. Callers
+// reach this path only for models admitted by administrator configuration
+// instead of a plugin's factory model list, so the protocol claim is resolved
+// per plugin and the model name is the caller's own spelling.
+//
+// Bindings are deduplicated by plugin key and returned in ascending key order to
+// match LookupEndpointCandidates. Channel types without an owning plugin, and
+// plugins that do not claim the requested protocol operation, contribute
+// nothing; an empty result means no plugin can drive this model.
+func (g *RoutingGeneration) EndpointBindingsForChannelTypes(method, path, model string, channelTypes []int) []ProtocolBinding {
+	if g == nil || model == "" || len(channelTypes) == 0 {
+		return nil
+	}
+	normalizedMethod, err := normalizeRouteMethod(method)
+	if err != nil {
+		return nil
+	}
+	candidates := make(map[string]ProtocolBinding)
+	for _, channelType := range channelTypes {
+		plugin, ok := g.GetByChannelType(channelType)
+		if !ok || plugin == nil {
+			continue
+		}
+		if _, duplicate := candidates[plugin.Meta.Key]; duplicate {
+			continue
+		}
+		for _, claim := range plugin.Meta.Protocols {
+			definition, known := HostProtocol(claim.Name)
+			if !known {
+				continue
+			}
+			for _, operation := range definition.Operations {
+				if operation.Path != path || operation.ModelField == "" {
+					continue
+				}
+				if !slices.Contains(operation.Methods, normalizedMethod) {
+					continue
+				}
+				candidates[plugin.Meta.Key] = ProtocolBinding{
+					Plugin:    plugin,
+					Protocol:  claim.Name,
+					Operation: operation,
+					Model:     model,
+				}
+			}
+		}
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	keys := slices.Sorted(maps.Keys(candidates))
+	bindings := make([]ProtocolBinding, 0, len(keys))
+	for _, key := range keys {
+		bindings = append(bindings, candidates[key])
+	}
+	return bindings
+}
+
 func (g *RoutingGeneration) Plugins() []*LoadedPlugin {
 	if g == nil {
 		return nil

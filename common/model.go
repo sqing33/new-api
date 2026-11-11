@@ -32,6 +32,9 @@ var (
 		"prefix:imagen-",
 		"flux-",
 		"flux.1-",
+		// MiniMax image models. Matching is substring-based, so this entry also
+		// covers image-01-live; no separate entry is needed.
+		"image-01",
 	}
 	OpenAITextModels = []string{
 		"gpt-",

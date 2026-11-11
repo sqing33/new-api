@@ -51,3 +51,23 @@ func TestImageModelSpeechCapabilitiesOmitEmptyModes(t *testing.T) {
 	assert.NotContains(t, serialized, "tts_modes")
 	assert.NotContains(t, serialized, "asr_modes")
 }
+
+// TestImageModelSupportsVideo 覆盖视频能力判定：只有配置了非空 video_modes 的
+// 模型才算视频模型；该判定是任务插件配置驱动路由的唯一准入开关，误判会让
+// 任意模型进入视频链路，因此未配置与空数组都必须返回 false。
+func TestImageModelSupportsVideo(t *testing.T) {
+	original := ImageModelSettings
+	t.Cleanup(func() { ImageModelSettings = original })
+
+	require.NoError(t, UpdateImageModelSettingsByJsonString(`[
+		{"model":"video-model","modes":[],"max_n":1,"video_modes":["text_to_video"]},
+		{"model":"image-only","modes":["generations"],"max_n":1},
+		{"model":"empty-video","modes":[],"max_n":1,"video_modes":[]}
+	]`))
+
+	assert.True(t, ImageModelSupportsVideo("video-model"))
+	assert.False(t, ImageModelSupportsVideo("image-only"))
+	assert.False(t, ImageModelSupportsVideo("empty-video"))
+	assert.False(t, ImageModelSupportsVideo("not-configured"))
+	assert.False(t, ImageModelSupportsVideo(""))
+}

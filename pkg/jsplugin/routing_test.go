@@ -1015,3 +1015,57 @@ func routingProtocolExport(name string) string {
 		renderFinal: function(ctx, task) { return task; }
 	}};`, name)
 }
+
+// TestEndpointBindingsForChannelTypes 覆盖配置驱动的候选插件推断：模型名不在任何
+// 插件的 meta.models 里，只能靠「可用渠道类型 → 插件」推断出驱动。绑定结果按
+// 插件 key 升序去重，且必须为调用方自己的模型名而非任何声明名。
+func TestEndpointBindingsForChannelTypes(t *testing.T) {
+	registry := NewRegistry()
+	alpha := mustCompileRoutingPlugin(t, "config-alpha", 50, `["declared-alpha"]`,
+		`protocols: [{name: "openai_responses", supports: ["stream", "sync", "background"]}],`,
+		routingProtocolExport("openai_responses"))
+	bravo := mustCompileRoutingPlugin(t, "config-bravo", 51, `["declared-bravo"]`,
+		`protocols: [{name: "openai_responses", supports: ["stream", "sync", "background"]}],`,
+		routingProtocolExport("openai_responses"))
+	require.NoError(t, registry.ReplaceOverrides([]*LoadedPlugin{alpha, bravo}))
+	generation := registry.Generation()
+
+	t.Run("unclaimed model is absent from the declared index", func(t *testing.T) {
+		_, declared := generation.CanonicalModel("configured-video-model")
+		assert.False(t, declared)
+		assert.Empty(t, generation.LookupEndpointCandidates("POST", "/v1/responses", "configured-video-model"))
+	})
+
+	t.Run("infers owning plugins from channel types", func(t *testing.T) {
+		bindings := generation.EndpointBindingsForChannelTypes(
+			"POST", "/v1/responses", "configured-video-model", []int{51, 50})
+		require.Len(t, bindings, 2)
+		assert.Equal(t, "config-alpha", bindings[0].Plugin.Meta.Key)
+		assert.Equal(t, "config-bravo", bindings[1].Plugin.Meta.Key)
+		assert.Equal(t, "configured-video-model", bindings[0].Model)
+		assert.Equal(t, "openai_responses", bindings[0].Protocol)
+		assert.Equal(t, "create", bindings[0].Operation.Name)
+	})
+
+	t.Run("deduplicates repeated channel types of one plugin", func(t *testing.T) {
+		bindings := generation.EndpointBindingsForChannelTypes(
+			"POST", "/v1/responses", "configured-video-model", []int{50, 50, 51})
+		require.Len(t, bindings, 2)
+	})
+
+	t.Run("channel types without an owner contribute nothing", func(t *testing.T) {
+		assert.Empty(t, generation.EndpointBindingsForChannelTypes(
+			"POST", "/v1/responses", "configured-video-model", []int{9999}))
+		assert.Empty(t, generation.EndpointBindingsForChannelTypes(
+			"POST", "/v1/responses", "configured-video-model", nil))
+	})
+
+	t.Run("unknown operation and empty model yield no binding", func(t *testing.T) {
+		assert.Empty(t, generation.EndpointBindingsForChannelTypes(
+			"POST", "/v1/unknown", "configured-video-model", []int{50}))
+		assert.Empty(t, generation.EndpointBindingsForChannelTypes(
+			"GET", "/v1/responses", "configured-video-model", []int{50}))
+		assert.Empty(t, generation.EndpointBindingsForChannelTypes(
+			"POST", "/v1/responses", "", []int{50}))
+	})
+}

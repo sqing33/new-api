@@ -80,6 +80,11 @@ func modelSettingHasMode(modelName string, modesOf func(*ImageModelSetting) []st
 	return false
 }
 
+// ImageModelSupportsVideo reports whether the model is configured with video generation capability.
+func ImageModelSupportsVideo(modelName string) bool {
+	return modelSettingHasMode(modelName, func(s *ImageModelSetting) []string { return s.VideoModes })
+}
+
 // ImageModelSupportsTTS reports whether the model is configured with speech synthesis capability.
 func ImageModelSupportsTTS(modelName string) bool {
 	return modelSettingHasMode(modelName, func(s *ImageModelSetting) []string { return s.TTSModes })

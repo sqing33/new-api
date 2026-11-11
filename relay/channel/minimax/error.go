@@ -132,6 +132,16 @@ func readFirstStreamFrame(reader *bufio.Reader) streamFrame {
 	}
 }
 
+// miniMaxBusinessHTTPStatus maps an upstream business status code to the HTTP
+// status the gateway should return. Unmapped codes become 502 because the
+// upstream answered with something that is not a valid success.
+func miniMaxBusinessHTTPStatus(statusCode int64) int {
+	if mapped, ok := miniMaxBusinessStatusCodes[statusCode]; ok {
+		return mapped
+	}
+	return http.StatusBadGateway
+}
+
 func miniMaxBusinessError(body []byte) *types.NewAPIError {
 	line := strings.TrimSpace(string(body))
 	line = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
@@ -147,13 +157,9 @@ func miniMaxBusinessError(body []byte) *types.NewAPIError {
 	if envelope.BaseResp.StatusCode == 0 {
 		return nil
 	}
-	statusCode, ok := miniMaxBusinessStatusCodes[envelope.BaseResp.StatusCode]
-	if !ok {
-		statusCode = http.StatusBadGateway
-	}
 	return types.NewErrorWithStatusCode(
 		fmt.Errorf("minimax error: %d - %s", envelope.BaseResp.StatusCode, envelope.BaseResp.StatusMsg),
 		types.ErrorCodeBadResponse,
-		statusCode,
+		miniMaxBusinessHTTPStatus(envelope.BaseResp.StatusCode),
 	)
 }
