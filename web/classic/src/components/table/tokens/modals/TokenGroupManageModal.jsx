@@ -25,14 +25,13 @@ import {
   Modal,
   Space,
   Tag,
-  Typography,
 } from '@douyinfe/semi-ui';
 import {
   IllustrationNoResult,
   IllustrationNoResultDark,
 } from '@douyinfe/semi-illustrations';
 import { IconDelete, IconEdit } from '@douyinfe/semi-icons';
-import { showError } from '../../../../helpers';
+import { showError, groupTagColor } from '../../../../helpers';
 
 // 分组管理弹窗：新建 / 重命名 / 删除组织分组。
 // 分组可以暂时没有任何令牌（用户可以先把「游戏」建出来，之后再往里放 key）。
@@ -175,9 +174,14 @@ const TokenGroupManageModal = ({
                 </>
               ) : (
                 <>
-                  <Typography.Text className='flex-1' strong>
+                  <Tag
+                    color={groupTagColor(group.name)}
+                    shape='circle'
+                    type='light'
+                    className='flex-1'
+                  >
                     {group.name}
-                  </Typography.Text>
+                  </Tag>
                   <Tag color='grey' shape='circle' type='light'>
                     {t('令牌数量')}: {group.count}
                   </Tag>

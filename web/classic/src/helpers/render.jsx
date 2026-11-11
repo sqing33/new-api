@@ -809,6 +809,18 @@ export function renderText(text, limit) {
   return text;
 }
 
+// 常见分组的固定配色，其余分组按名称稳定散列，保证同一个分组在任何页面颜色一致。
+const groupTagColors = {
+  vip: 'yellow',
+  pro: 'yellow',
+  svip: 'red',
+  premium: 'red',
+};
+
+export function groupTagColor(group) {
+  return groupTagColors[group] || stringToColor(group);
+}
+
 /**
  * Render group tags based on the input group string
  * @param {string} group - The input group string
@@ -823,20 +835,13 @@ export function renderGroup(group) {
     );
   }
 
-  const tagColors = {
-    vip: 'yellow',
-    pro: 'yellow',
-    svip: 'red',
-    premium: 'red',
-  };
-
   const groups = group.split(',').sort();
 
   return (
       <span key={group}>
       {groups.map((group) => (
           <Tag
-              color={tagColors[group] || stringToColor(group)}
+              color={groupTagColor(group)}
               key={group}
               shape='circle'
               onClick={async (event) => {

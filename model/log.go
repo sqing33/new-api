@@ -97,6 +97,7 @@ type Log struct {
 	ChannelId         int    `json:"channel" gorm:"index"`
 	ChannelName       string `json:"channel_name" gorm:"->"`
 	TokenId           int    `json:"token_id" gorm:"default:0;index"`
+	TokenGroup        string `json:"token_group" gorm:"-"`
 	Group             string `json:"group" gorm:"index"`
 	Ip                string `json:"ip" gorm:"index;default:''"`
 	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
@@ -485,6 +486,36 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
+// assignLogTokenGroups 批量补齐日志所属令牌的组织分组（用户自建的标签）。
+// 日志表体量很大，日志库还可能独立部署甚至不是同一个数据库，所以不在 SQL 里
+// JOIN 令牌表，而是按当前页涉及的令牌 id 批量查询一次；令牌已被删除时留空。
+func assignLogTokenGroups(logs []*Log) {
+	tokenIds := types.NewSet[int]()
+	for _, log := range logs {
+		if log.TokenId > 0 {
+			tokenIds.Add(log.TokenId)
+		}
+	}
+	if tokenIds.Len() == 0 {
+		return
+	}
+	var tokens []struct {
+		Id         int    `gorm:"column:id"`
+		TokenGroup string `gorm:"column:token_group"`
+	}
+	if err := DB.Table("tokens").Select("id, token_group").Where("id IN ?", tokenIds.Items()).Find(&tokens).Error; err != nil {
+		common.SysError("failed to load token groups for logs: " + err.Error())
+		return
+	}
+	groupMap := make(map[int]string, len(tokens))
+	for _, token := range tokens {
+		groupMap[token.Id] = token.TokenGroup
+	}
+	for _, log := range logs {
+		log.TokenGroup = groupMap[log.TokenId]
+	}
+}
+
 func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, modelNames []string, excludeModelNames []string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
@@ -577,6 +608,8 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		}
 	}
 
+	assignLogTokenGroups(logs)
+
 	return logs, total, err
 }
 
@@ -628,6 +661,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 
 	formatUserLogs(logs, startIdx)
+	assignLogTokenGroups(logs)
 	return logs, total, err
 }
 

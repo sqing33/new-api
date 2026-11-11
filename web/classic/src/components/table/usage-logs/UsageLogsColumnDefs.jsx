@@ -34,6 +34,7 @@ import {
   renderModelTag,
   renderModelPriceSimple,
   renderTieredModelPriceSimple,
+  groupTagColor,
 } from '../../../helpers';
 import { formatThroughput } from '../../performance/format';
 import { IconHelpCircle } from '@douyinfe/semi-icons';
@@ -678,6 +679,22 @@ export const getLogsColumns = ({
           </div>
         ) : (
           <></>
+        );
+      },
+    },
+    {
+      key: COLUMN_KEYS.TOKEN_GROUP,
+      title: t('组织分组'),
+      dataIndex: 'token_group',
+      render: (text, record) => {
+        // 令牌的组织分组是用户自建的标签，只在有令牌的日志上出现。
+        if (!text) {
+          return <></>;
+        }
+        return (
+          <Tag color={groupTagColor(text)} shape='circle' type='light'>
+            {text}
+          </Tag>
         );
       },
     },
