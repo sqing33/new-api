@@ -26,6 +26,7 @@ import ColumnSelectorModal from './modals/ColumnSelectorModal';
 import UserInfoModal from './modals/UserInfoModal';
 import ChannelAffinityUsageCacheModal from './modals/ChannelAffinityUsageCacheModal';
 import ParamOverrideModal from './modals/ParamOverrideModal';
+import RequestPayloadModal from './modals/RequestPayloadModal';
 import { useLogsData } from '../../../hooks/usage-logs/useUsageLogsData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -41,6 +42,12 @@ const LogsPage = (props) => {
       <UserInfoModal {...logsData} />
       <ChannelAffinityUsageCacheModal {...logsData} />
       <ParamOverrideModal {...logsData} />
+      <RequestPayloadModal
+        visible={logsData.showRequestPayloadModal}
+        requestId={logsData.requestPayloadTarget}
+        onClose={() => logsData.setShowRequestPayloadModal(false)}
+        t={logsData.t}
+      />
 
       {/* Main Content */}
       <CardPro

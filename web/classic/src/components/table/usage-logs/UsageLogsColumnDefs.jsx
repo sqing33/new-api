@@ -526,6 +526,7 @@ export const getLogsColumns = ({
   copyText,
   showUserInfoFunc,
   openChannelAffinityUsageCacheModal,
+  openRequestPayloadModal,
   isAdminUser,
   billingDisplayMode = 'price',
 }) => {
@@ -967,6 +968,42 @@ export const getLogsColumns = ({
         }
 
         return renderCompactDetailSummary(detailSummary.segments);
+      },
+    },
+    {
+      key: COLUMN_KEYS.PAYLOAD,
+      title: (
+        <div className='flex items-center gap-1'>
+          {t('上下文')}
+          <Tooltip
+            content={t(
+              '查看该次请求的客户端请求体、发往上游的请求体与上游响应。需在设置中开启载荷采集。',
+            )}
+          >
+            <IconHelpCircle className='text-gray-400 cursor-help' />
+          </Tooltip>
+        </div>
+      ),
+      dataIndex: 'request_id',
+      width: 110,
+      render: (text, record) => {
+        // 载荷接口只对管理员开放，普通用户即使拿到入口也会被服务端拒绝。
+        if (!isAdminUser || !text) {
+          return null;
+        }
+        return (
+          <Tag
+            color='blue'
+            shape='circle'
+            style={{ cursor: 'pointer' }}
+            onClick={(event) => {
+              event.stopPropagation();
+              openRequestPayloadModal?.(record);
+            }}
+          >
+            {t('查看')}
+          </Tag>
+        );
       },
     },
     {

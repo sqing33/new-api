@@ -78,6 +78,7 @@ export const useLogsData = ({
     IP: 'ip',
     DETAILS: 'details',
     ERROR: 'error',
+    PAYLOAD: 'payload',
   };
 
   // Basic state
@@ -149,6 +150,8 @@ export const useLogsData = ({
       [COLUMN_KEYS.IP]: true,
       [COLUMN_KEYS.DETAILS]: true,
     [COLUMN_KEYS.ERROR]: true,
+      // 请求上下文载荷只对管理员开放，因此默认列也只对管理员可见。
+      [COLUMN_KEYS.PAYLOAD]: isAdminUser,
     };
   };
 
@@ -212,6 +215,8 @@ export const useLogsData = ({
     useState(null);
   const [showParamOverrideModal, setShowParamOverrideModal] = useState(false);
   const [paramOverrideTarget, setParamOverrideTarget] = useState(null);
+  const [showRequestPayloadModal, setShowRequestPayloadModal] = useState(false);
+  const [requestPayloadTarget, setRequestPayloadTarget] = useState(null);
   // 分组可搜索筛选：管理员从 /api/group/ 拉取全量分组供下拉搜索
   const [groupOptions, setGroupOptions] = useState([]);
 
@@ -465,6 +470,17 @@ export const useLogsData = ({
       requestPath: other?.request_path || '',
     });
     setShowParamOverrideModal(true);
+  };
+
+  // 请求上下文载荷：按 request_id 打开。可能一个 request_id 下有多个 attempt
+  // （每个失败 attempt 一条记录），弹窗内以标签页切换。
+  const openRequestPayloadModal = (log) => {
+    const requestId = log?.request_id || '';
+    if (!requestId) {
+      return;
+    }
+    setRequestPayloadTarget(requestId);
+    setShowRequestPayloadModal(true);
   };
 
   // Format logs data
@@ -1102,6 +1118,9 @@ export const useLogsData = ({
     showParamOverrideModal,
     setShowParamOverrideModal,
     paramOverrideTarget,
+    showRequestPayloadModal,
+    setShowRequestPayloadModal,
+    requestPayloadTarget,
 
     // Functions
     loadLogs,
@@ -1114,6 +1133,7 @@ export const useLogsData = ({
     hasExpandableRows,
     setLogType,
     openParamOverrideModal,
+    openRequestPayloadModal,
 
     // Translation
     t,

@@ -27,6 +27,7 @@ import {
   DatePicker,
   Typography,
   Modal,
+  Banner,
 } from '@douyinfe/semi-ui';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -46,6 +47,15 @@ export default function SettingsLog(props) {
   const [loadingCleanHistoryLog, setLoadingCleanHistoryLog] = useState(false);
   const [inputs, setInputs] = useState({
     LogConsumeEnabled: false,
+    'payload_capture_setting.enabled': false,
+    'payload_capture_setting.capture_client_request': true,
+    'payload_capture_setting.capture_upstream_request': true,
+    'payload_capture_setting.capture_upstream_response': true,
+    'payload_capture_setting.capture_raw_upstream_response': false,
+    'payload_capture_setting.capture_binary': false,
+    'payload_capture_setting.max_payload_bytes': 49152,
+    'payload_capture_setting.retention_days': 7,
+    'payload_capture_setting.session_gap_minutes': 30,
     historyTimestamp: dayjs().subtract(1, 'month').toDate(),
   });
   const refForm = useRef();
@@ -58,12 +68,13 @@ export default function SettingsLog(props) {
 
     if (!updateArray.length) return showWarning(t('你似乎并没有修改什么'));
     const requestQueue = updateArray.map((item) => {
-      let value = '';
-      if (typeof inputs[item.key] === 'boolean') {
-        value = String(inputs[item.key]);
-      } else {
-        value = inputs[item.key];
-      }
+      const raw = inputs[item.key];
+      // option 接口只接受字符串：布尔与数字都要显式转换，否则 axios 会传
+      // 非字符串值，后端 updateOptionMap 的分层配置解析会失败。
+      const value =
+        typeof raw === 'boolean' || typeof raw === 'number'
+          ? String(raw)
+          : raw;
       return API.put('/api/option/', {
         key: item.key,
         value,
@@ -245,6 +256,208 @@ export default function SettingsLog(props) {
                     {t('清除历史日志')}
                   </Button>
                 </Spin>
+              </Col>
+            </Row>
+
+            <Row>
+              <Button size='default' onClick={onSubmit}>
+                {t('保存日志设置')}
+              </Button>
+            </Row>
+          </Form.Section>
+
+          <Form.Section text={t('请求上下文采集')}>
+            <Banner
+              type='warning'
+              closeIcon={null}
+              className='mb-3'
+              description={t(
+                '请求正文包含用户对话内容与潜在凭据，默认关闭。开启后仅管理员可查看，凭据字段会被脱敏，但存储体积会显著增加。',
+              )}
+            />
+            <Row gutter={16}>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'payload_capture_setting.enabled'}
+                  label={t('启用请求上下文采集')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      'payload_capture_setting.enabled': value,
+                    });
+                  }}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'payload_capture_setting.capture_client_request'}
+                  label={t('采集客户端请求体')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  disabled={!inputs['payload_capture_setting.enabled']}
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      'payload_capture_setting.capture_client_request': value,
+                    });
+                  }}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'payload_capture_setting.capture_upstream_request'}
+                  label={t('采集发往上游的请求体')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  disabled={!inputs['payload_capture_setting.enabled']}
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      'payload_capture_setting.capture_upstream_request': value,
+                    });
+                  }}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'payload_capture_setting.capture_upstream_response'}
+                  label={t('采集上游响应内容')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  disabled={!inputs['payload_capture_setting.enabled']}
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      'payload_capture_setting.capture_upstream_response': value,
+                    });
+                  }}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'payload_capture_setting.capture_raw_upstream_response'}
+                  label={t('采集上游原始字节')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  disabled={
+                    !inputs['payload_capture_setting.enabled'] ||
+                    !inputs['payload_capture_setting.capture_upstream_response']
+                  }
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      'payload_capture_setting.capture_raw_upstream_response':
+                        value,
+                    });
+                  }}
+                />
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ display: 'block', marginTop: 4 }}
+                >
+                  {t(
+                    '开启后改用原始字节采集。已知限制：会替换响应体的渠道（如 MiniMax）将采集不到响应内容。',
+                  )}
+                </Text>
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'payload_capture_setting.capture_binary'}
+                  label={t('采集多模态与二进制内容')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  disabled={!inputs['payload_capture_setting.enabled']}
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      'payload_capture_setting.capture_binary': value,
+                    });
+                  }}
+                />
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ display: 'block', marginTop: 4 }}
+                >
+                  {t('关闭时图片、音频等二进制内容会被替换为占位符。')}
+                </Text>
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'payload_capture_setting.max_payload_bytes'}
+                  label={t('单份正文上限（字节）')}
+                  min={1024}
+                  max={60000}
+                  disabled={!inputs['payload_capture_setting.enabled']}
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      'payload_capture_setting.max_payload_bytes': value,
+                    });
+                  }}
+                />
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ display: 'block', marginTop: 4 }}
+                >
+                  {t(
+                    '超出即截断并标记。上限受 MySQL TEXT 列限制，不应超过 60000。',
+                  )}
+                </Text>
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'payload_capture_setting.retention_days'}
+                  label={t('保留天数')}
+                  min={0}
+                  max={3650}
+                  disabled={!inputs['payload_capture_setting.enabled']}
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      'payload_capture_setting.retention_days': value,
+                    });
+                  }}
+                />
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ display: 'block', marginTop: 4 }}
+                >
+                  {t('0 表示不自动清理。每次请求最多占用三份正文。')}
+                </Text>
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'payload_capture_setting.session_gap_minutes'}
+                  label={t('会话切分间隔（分钟）')}
+                  min={0}
+                  max={1440}
+                  disabled={!inputs['payload_capture_setting.enabled']}
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      'payload_capture_setting.session_gap_minutes': value,
+                    });
+                  }}
+                />
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ display: 'block', marginTop: 4 }}
+                >
+                  {t('超过该间隔无新请求即视为新会话。')}
+                </Text>
               </Col>
             </Row>
 

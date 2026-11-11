@@ -388,6 +388,15 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
 		logRoute.GET("/self/search", middleware.UserAuth(), middleware.SearchRateLimit(), controller.SearchUserLogs)
 
+		// 请求上下文载荷。正文含用户对话内容与潜在凭据，因此读取收紧到管理员，
+		// 删除收紧到超级管理员；详情接口返回体可达 3 * MaxPayloadBytes，
+		// 复用搜索限流防滥用。普通用户接口（/self、/token）不暴露任何正文字段。
+		payloadRoute := logRoute.Group("/payload")
+		payloadRoute.GET("/session", middleware.AdminAuth(), controller.GetRequestPayloadSessions)
+		payloadRoute.GET("/session/:session_key", middleware.AdminAuth(), controller.GetRequestPayloadSessionRequests)
+		payloadRoute.GET("/:request_id", middleware.AdminAuth(), middleware.SearchRateLimit(), controller.GetRequestPayloads)
+		payloadRoute.DELETE("", middleware.RootAuth(), controller.DeleteRequestPayloads)
+
 		systemTaskRoute := apiRouter.Group("/system-task")
 		systemTaskRoute.Use(middleware.RootAuth())
 		{

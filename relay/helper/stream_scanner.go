@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/pkg/relaycapture"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -271,6 +272,12 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			if !strings.HasPrefix(data, "[DONE]") {
 				info.SetFirstResponseTime()
 				info.ReceivedResponseCount++
+				// 旁路采集转发给客户端的帧。不包装 resp.Body，因此不受任何替换
+				// resp.Body 的渠道实现影响。此处只做一次有界 append，不做任何
+				// I/O 或数据库写入，以免挤占转发节奏。
+				if capture := relaycapture.FromContext(c); capture != nil {
+					capture.CaptureStreamFrame(data)
+				}
 
 				select {
 				case dataChan <- data:

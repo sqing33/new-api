@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	pluginruntime "github.com/QuantumNous/new-api/pkg/jsplugin"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
+	"github.com/QuantumNous/new-api/pkg/relaycapture"
 	"github.com/QuantumNous/new-api/relay"
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -132,6 +133,34 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	// 请求上下文载荷采集。默认关闭：Enabled 为 false 时这里只做一次判断，
+	// 不创建 Recorder、不读取任何 body 副本，代码路径与关闭前完全一致。
+	// 采集是纯旁路，任何失败都只记录日志，不影响主请求。
+	var capture *relaycapture.Recorder
+	if relaycapture.Enabled(relayInfo.TokenId) {
+		capture = relaycapture.Attach(c, requestId, relaycapture.RequestMeta{
+			UserId:      relayInfo.UserId,
+			TokenId:     relayInfo.TokenId,
+			TokenName:   relayInfo.TokenName,
+			ModelName:   relayInfo.OriginModelName,
+			Group:       relayInfo.UsingGroup,
+			RelayFormat: string(relayFormat),
+			RequestPath: relaycommon.SanitizeURLForLog(c.Request.URL.Path),
+			IsStream:    relayInfo.IsStream,
+		})
+		capture.SetSessionKey(relaycapture.DeriveSessionKey(
+			relaycapture.SessionKeyInputForRequest(relayInfo.TokenId, relayInfo.OriginModelName, request),
+		))
+		// 客户端请求体只采集一次。NewReader() 返回独立游标的副本，
+		// 不会移动 storage 自身的读位置，后续转换与转发不受影响。
+		if storage, storageErr := common.GetBodyStorage(c); storageErr == nil {
+			capture.CaptureClientRequest(storage)
+		}
+		// Finalize 必须早于 BodyStorageCleanup（最外层中间件）执行，
+		// 因此挂在 handler 的 defer 上即可。
+		defer capture.Finalize()
+	}
+
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
@@ -243,6 +272,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
+		// 每次 attempt 独立成行：BeginAttempt 会先把上一个 attempt 落库，
+		// 再重建缓冲。attempt 序号对应 relayInfo.RetryIndex。
+		if capture != nil {
+			capture.BeginAttempt(relayInfo.RetryIndex)
+			capture.SetChannelId(channel.Id)
+		}
+
 		attemptStart := time.Now()
 		switch relayFormat {
 		case types.RelayFormatOpenAIRealtime:
@@ -262,6 +298,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		newAPIError = service.NormalizeViolationFeeError(newAPIError)
 		relayInfo.LastError = newAPIError
+
+		// 失败 attempt 同样落库：上游请求体与错误响应体是排查故障最关键的证据。
+		if capture != nil {
+			capture.MarkAttemptFailed()
+		}
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, relayInfo)
 
@@ -488,6 +529,10 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		other.SetPublic("error_type", err.GetErrorType())
 		other.SetPublic("error_code", err.GetErrorCode())
 		other.SetPublic("status_code", err.StatusCode)
+		// 一次客户端请求可能产生多条错误日志（每个失败 attempt 一条），而请求载荷
+		// 按 (request_id, attempt_index) 存储。记录 attempt 序号让管理员能把具体
+		// 日志行与具体载荷行对应起来。放在 admin_info 下，普通用户查询时会被剥离。
+		other.SetAdmin("attempt_index", relayInfo.RetryIndex)
 		service.AppendRelayLogAdminInfo(c, relayInfo, other)
 		service.AppendTaskPluginContextAuditInfo(c, other)
 		startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)

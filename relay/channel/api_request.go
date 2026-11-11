@@ -13,6 +13,7 @@ import (
 
 	common2 "github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/pkg/relaycapture"
 	"github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -529,6 +530,14 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		}
 	}
 
+	// 采集发往上游的请求体。必须在 relayClient.Do 之前，且只能用 req.GetBody()
+	// 取独立副本——读 req.Body 会消费掉真正要发送的 body，导致上游收到空请求。
+	// req.GetBody 为 nil（bodyless 请求）时 CaptureUpstreamRequest 内部直接跳过。
+	// 采集对上游无感知：不多发请求、不改 body 字节、不改请求头。
+	if capture := relaycapture.FromContext(c); capture != nil {
+		capture.CaptureUpstreamRequest(req)
+	}
+
 	resp, err := relayClient.Do(req)
 	if err != nil {
 		logger.LogError(c, "do request failed: "+err.Error())
@@ -536,6 +545,12 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	}
 	if resp == nil {
 		return nil, errors.New("resp is nil")
+	}
+
+	// 原始字节模式：旁路 Tee 采集上游响应，不接管 resp.Body 的所有权与 Close 语义。
+	// 已知限制：会替换 resp.Body 的渠道（minimax）会丢弃该包装。
+	if capture := relaycapture.FromContext(c); capture != nil {
+		capture.WrapResponseBody(resp)
 	}
 	if common2.DebugEnabled {
 		policy := service.NormalizeHTTPTransportPolicy(info.ChannelSetting)
@@ -551,6 +566,9 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 
 	if upID := resp.Header.Get(common2.RequestIdKey); upID != "" {
 		c.Set(common2.UpstreamRequestIdKey, upID)
+		if capture := relaycapture.FromContext(c); capture != nil {
+			capture.SetUpstreamRequestId(upID)
+		}
 	}
 
 	_ = req.Body.Close()
