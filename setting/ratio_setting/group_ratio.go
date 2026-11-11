@@ -41,8 +41,10 @@ var groupUserRatioMap = types.NewRWMap[string, float64]()
 
 // defaultGroupUnlimited 列出默认的无限额度分组。无限额度分组成员的余额被
 // 置为 common.UnlimitedQuota，消耗照常统计但不受限制。
+// Admin（超级管理员分组）与 Free 一样默认不限额，站点所有者不受自己的余额限制。
 var defaultGroupUnlimited = map[string]bool{
 	common.DefaultUnlimitedGroup: true,
+	common.DefaultRootGroup:      true,
 }
 
 var groupUnlimitedMap = types.NewRWMap[string, bool]()

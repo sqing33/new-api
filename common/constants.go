@@ -219,6 +219,7 @@ const (
 
 // DefaultRootGroup 是超级管理员默认所属的分组。该分组默认受保护，
 // 仅本组用户可用，管理员可把指定用户显式指派进来。
+// 该分组同时是默认的无限额度分组（见 setting/ratio_setting 的默认无限额度分组）。
 const DefaultRootGroup = "Admin"
 
 // DefaultUserGroup 是普通用户默认所属的分组。
