@@ -532,7 +532,10 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		// 一次客户端请求可能产生多条错误日志（每个失败 attempt 一条），而请求载荷
 		// 按 (request_id, attempt_index) 存储。记录 attempt 序号让管理员能把具体
 		// 日志行与具体载荷行对应起来。放在 admin_info 下，普通用户查询时会被剥离。
-		other.SetAdmin("attempt_index", relayInfo.RetryIndex)
+		// relayInfo 允许为 nil（见 AppendRelayLogAdminInfo 的同样约定），因此必须先判空。
+		if relayInfo != nil {
+			other.SetAdmin("attempt_index", relayInfo.RetryIndex)
+		}
 		service.AppendRelayLogAdminInfo(c, relayInfo, other)
 		service.AppendTaskPluginContextAuditInfo(c, other)
 		startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
