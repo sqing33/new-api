@@ -21,14 +21,21 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Banner,
   Descriptions,
-  SideSheet,
+  Modal,
   Spin,
   Tabs,
   TabPane,
   Tag,
   Typography,
 } from '@douyinfe/semi-ui';
-import { API, copy, showError, showSuccess } from '../../../../helpers';
+import {
+  API,
+  copy,
+  groupTagColor,
+  showError,
+  showSuccess,
+} from '../../../../helpers';
+import { prettifyBody } from './prettifyBody';
 
 const { Text } = Typography;
 
@@ -41,20 +48,26 @@ const SESSION_KIND_META = {
   empty: { color: 'grey', label: '未分组' },
 };
 
-const prettifyBody = (raw) => {
-  if (!raw) {
-    return '';
-  }
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2);
-  } catch {
-    // 流式响应是逐帧拼接的，不保证是合法 JSON，原样展示即可。
-    return raw;
-  }
-};
+// 正文区高度。用视口比例而非固定像素，兼顾大屏与小窗口。
+const BODY_MAX_HEIGHT = '52vh';
 
+// 让 Semi Tabs 的内容区参与 flex 高度分配：
+// 默认 Tabs 内容是「按内容高度收缩」的，正文区无法占满弹窗剩余空间。
+//
+// 真实 DOM 嵌套是 tabs > tabs-content > tabs-pane > tabs-pane-motion-overlay，
+// 四层都要允许收缩，BodyBlock 的 flex:1 才能把剩余高度吃掉。
+const TAB_STYLE = `
+.payload-tabs { display: flex; flex-direction: column; min-height: 0; }
+.payload-tabs > .semi-tabs-bar { flex: 0 0 auto; }
+.payload-tabs > .semi-tabs-content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.payload-tabs .semi-tabs-pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.payload-tabs .semi-tabs-pane-motion-overlay { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+`;
 const BodyBlock = ({ title, body, truncated, bytes, t }) => {
-  const formatted = useMemo(() => prettifyBody(body), [body]);
+  const formatted = useMemo(
+    () => prettifyBody(body, truncated),
+    [body, truncated],
+  );
 
   const handleCopy = useCallback(async () => {
     if (!formatted) {
@@ -76,7 +89,16 @@ const BodyBlock = ({ title, body, truncated, bytes, t }) => {
   }
 
   return (
-    <div>
+    // flex 列布局 + 正文区 flex:1，使正文占满弹窗剩余高度，
+    // 而不是只按内容高度收缩成一小块。
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+      }}
+    >
       {truncated ? (
         <Banner
           type='warning'
@@ -100,7 +122,9 @@ const BodyBlock = ({ title, body, truncated, bytes, t }) => {
       </div>
       <pre
         style={{
-          maxHeight: 420,
+          flex: 1,
+          minHeight: BODY_MAX_HEIGHT,
+          maxHeight: BODY_MAX_HEIGHT,
           overflow: 'auto',
           background: 'var(--semi-color-fill-0)',
           padding: 12,
@@ -118,10 +142,15 @@ const BodyBlock = ({ title, body, truncated, bytes, t }) => {
   );
 };
 
-const RequestPayloadModal = ({ visible, requestId, onClose, t }) => {
+const RequestPayloadModal = ({ visible, target, onClose, t }) => {
   const [loading, setLoading] = useState(false);
   const [attempts, setAttempts] = useState([]);
   const [activeAttempt, setActiveAttempt] = useState(0);
+
+  const requestId = target?.requestId || '';
+  const channelName = target?.channelName || '';
+  const logTokenName = target?.tokenName || '';
+  const tokenGroup = target?.tokenGroup || '';
 
   useEffect(() => {
     if (!visible || !requestId) {
@@ -162,22 +191,43 @@ const RequestPayloadModal = ({ visible, requestId, onClose, t }) => {
   const sessionMeta =
     SESSION_KIND_META[current?.session_key_kind] ?? SESSION_KIND_META.empty;
 
+  // 渠道展示为「名称（#序号）」；日志行没带名称时退回仅序号。
+  const channelValue =
+    current?.channel_id === undefined || current?.channel_id === null
+      ? '-'
+      : channelName
+        ? `${channelName}（#${current.channel_id}）`
+        : `#${current.channel_id}`;
+
+  // 令牌名右侧并入令牌标签，与日志页「令牌」单元格的呈现保持一致。
+  const tokenValue = (
+    <span className='inline-flex items-center gap-1'>
+      <span>{current?.token_name || logTokenName || '-'}</span>
+      {tokenGroup ? (
+        <Tag color={groupTagColor(tokenGroup)} shape='circle' type='light'>
+          {tokenGroup}
+        </Tag>
+      ) : null}
+    </span>
+  );
+
   return (
-    <SideSheet
+    <Modal
       title={t('请求上下文')}
       visible={visible}
       onCancel={onClose}
-      width={760}
       footer={null}
+      centered
       closable
       maskClosable
+      width={960}
+      bodyStyle={{ maxHeight: '78vh', overflow: 'auto' }}
     >
+      <style>{TAB_STYLE}</style>
       <Spin spinning={loading}>
         {attempts.length === 0 && !loading ? (
           <div className='py-10 text-center'>
-            <Text type='tertiary'>
-              {t('该请求没有采集到上下文内容')}
-            </Text>
+            <Text type='tertiary'>{t('该请求没有采集到上下文内容')}</Text>
           </div>
         ) : null}
 
@@ -211,8 +261,8 @@ const RequestPayloadModal = ({ visible, requestId, onClose, t }) => {
                   value: String(current.attempt_index ?? 0),
                 },
                 { key: t('模型'), value: current.model_name || '-' },
-                { key: t('渠道'), value: String(current.channel_id ?? 0) },
-                { key: t('令牌'), value: current.token_name || '-' },
+                { key: t('渠道'), value: channelValue },
+                { key: t('令牌'), value: tokenValue },
                 {
                   key: t('分组依据'),
                   value: (
@@ -244,7 +294,11 @@ const RequestPayloadModal = ({ visible, requestId, onClose, t }) => {
               />
             ) : null}
 
-            <Tabs type='line'>
+            <Tabs
+              type='line'
+              // 让 Tab 内容区继承剩余高度，BodyBlock 才能用 flex:1 撑满。
+              className='payload-tabs'
+            >
               <TabPane tab={t('客户端请求')} itemKey='client'>
                 <BodyBlock
                   title={t('客户端原始请求体')}
@@ -276,7 +330,7 @@ const RequestPayloadModal = ({ visible, requestId, onClose, t }) => {
           </div>
         ) : null}
       </Spin>
-    </SideSheet>
+    </Modal>
   );
 };
 

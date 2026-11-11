@@ -44,7 +44,7 @@ const LogsPage = (props) => {
       <ParamOverrideModal {...logsData} />
       <RequestPayloadModal
         visible={logsData.showRequestPayloadModal}
-        requestId={logsData.requestPayloadTarget}
+        target={logsData.requestPayloadTarget}
         onClose={() => logsData.setShowRequestPayloadModal(false)}
         t={logsData.t}
       />

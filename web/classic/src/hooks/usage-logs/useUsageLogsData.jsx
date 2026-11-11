@@ -479,7 +479,15 @@ export const useLogsData = ({
     if (!requestId) {
       return;
     }
-    setRequestPayloadTarget(requestId);
+    // 传整行日志而非只传 request_id：载荷表不存渠道名与令牌标签（它们属于
+    // 渠道表与令牌表），而日志行已经带上了 channel_name 与 token_group，
+    // 直接复用可避免额外接口调用。
+    setRequestPayloadTarget({
+      requestId,
+      channelName: log?.channel_name || '',
+      tokenName: log?.token_name || '',
+      tokenGroup: log?.token_group || '',
+    });
     setShowRequestPayloadModal(true);
   };
 
