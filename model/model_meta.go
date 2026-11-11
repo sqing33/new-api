@@ -508,13 +508,17 @@ func SearchModels(keyword string, vendor string, status string, syncOfficial str
 	db := DB.Model(&Model{})
 	if keyword != "" {
 		like := "%" + keyword + "%"
-		db = db.Where("model_name LIKE ? OR description LIKE ? OR tags LIKE ?", like, like, like)
+		// 列名要带 models. 前缀：按供应商排序时 vendors 也会被 JOIN 进来，
+		// 而 vendors 与 models 都有 description 列，不限定表名就成了歧义列。
+		db = db.Where("models.model_name LIKE ? OR models.description LIKE ? OR models.tags LIKE ?", like, like, like)
 	}
 	if vendor != "" {
 		if vid, err := strconv.Atoi(vendor); err == nil {
 			db = db.Where("models.vendor_id = ?", vid)
 		} else {
-			db = db.Joins("JOIN vendors ON vendors.id = models.vendor_id").Where("vendors.name LIKE ?", "%"+vendor+"%")
+			// 用子查询筛供应商，不 JOIN vendors：applyModelSort 在按供应商排序时
+			// 还会 LEFT JOIN 同一张表，两次 JOIN 会让 vendors.name 变成歧义列。
+			db = db.Where("models.vendor_id IN (SELECT id FROM vendors WHERE name LIKE ?)", "%"+vendor+"%")
 		}
 	}
 	if statusValue, ok := parseModelStatusFilter(status); ok {

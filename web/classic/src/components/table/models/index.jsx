@@ -207,6 +207,10 @@ const ModelsPage = () => {
               compactMode={compactMode}
               setCompactMode={setCompactMode}
               setShowColumnSelector={setShowColumnSelector}
+              nameSort={modelsData.nameSort}
+              setNameSort={modelsData.setNameSort}
+              vendorSort={modelsData.vendorSort}
+              setVendorSort={modelsData.setVendorSort}
               t={t}
             />
 
