@@ -36,6 +36,7 @@ import {
   showSuccess,
 } from '../../../../helpers';
 import { prettifyBody } from './prettifyBody';
+import { extractInlineImages, formatBytes } from './inlineImages';
 
 const { Text } = Typography;
 
@@ -51,22 +52,57 @@ const SESSION_KIND_META = {
 // 正文区高度。用视口比例而非固定像素，兼顾大屏与小窗口。
 const BODY_MAX_HEIGHT = '52vh';
 
-// 让 Semi Tabs 的内容区参与 flex 高度分配：
-// 默认 Tabs 内容是「按内容高度收缩」的，正文区无法占满弹窗剩余空间。
+// Semi Tabs 的默认内容区按内容高度收缩，正文区无法占满弹窗剩余空间。
+// 真实 DOM 嵌套是 tabs > tabs-content > tabs-pane > tabs-pane-motion-overlay
+// （读 TabPane.js 源码确认），四层都要参与 flex 高度分配。
 //
-// 真实 DOM 嵌套是 tabs > tabs-content > tabs-pane > tabs-pane-motion-overlay，
-// 四层都要允许收缩，BodyBlock 的 flex:1 才能把剩余高度吃掉。
+// 关键：只能对「激活」的 pane 设 display:flex。若对 .semi-tabs-pane 无条件设
+// display，会因为选择器特异性(0,2,0) 高于 Semi 的 .semi-tabs-pane-inactive
+// (0,1,0) 而覆盖它的 display:none，导致三个标签页的内容全部同时显示。
 const TAB_STYLE = `
-.payload-tabs { display: flex; flex-direction: column; min-height: 0; }
+.payload-tabs { display: flex; flex-direction: column; min-height: 0; height: 100%; }
 .payload-tabs > .semi-tabs-bar { flex: 0 0 auto; }
 .payload-tabs > .semi-tabs-content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.payload-tabs .semi-tabs-pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.payload-tabs .semi-tabs-pane-motion-overlay { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.payload-tabs .semi-tabs-pane.semi-tabs-pane-active > .semi-tabs-pane-motion-overlay {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; height: 100%;
+}
+.payload-tabs .semi-tabs-pane.semi-tabs-pane-active {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+}
+
+/* Spin 与 Modal body 也需要参与 flex，否则内层 height:100% 无从计算。
+   Semi 的 Modal 只暴露 bodyStyle，没有 bodyClassName，因此用根节点 className
+   作用域化地选中 .semi-modal-body。 */
+.payload-modal-root .semi-modal-body { display: flex; flex-direction: column; overflow: hidden; }
+.payload-modal-root .semi-spin,
+.payload-modal-root .semi-spin-container,
+.payload-modal-root .semi-spin-children {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+}
+
+/* 细滚动条：仅作用于载荷正文区，避免影响全局。 */
+.payload-body-scroll { scrollbar-width: thin; scrollbar-color: var(--semi-color-fill-2) transparent; }
+.payload-body-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.payload-body-scroll::-webkit-scrollbar-track { background: transparent; }
+.payload-body-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--semi-color-fill-2);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.payload-body-scroll::-webkit-scrollbar-thumb:hover { background-color: var(--semi-color-tertiary-light-default); }
+.payload-body-scroll::-webkit-scrollbar-corner { background: transparent; }
 `;
 const BodyBlock = ({ title, body, truncated, bytes, t }) => {
+  // 先把内联图片抽出来再格式化：base64 会撑爆正文，抽出来交给 <img> 渲染。
+  const { text: withoutImages, images } = useMemo(
+    () => extractInlineImages(body),
+    [body],
+  );
+
   const formatted = useMemo(
-    () => prettifyBody(body, truncated),
-    [body, truncated],
+    () => prettifyBody(withoutImages, truncated),
+    [withoutImages, truncated],
   );
 
   const handleCopy = useCallback(async () => {
@@ -82,7 +118,15 @@ const BodyBlock = ({ title, body, truncated, bytes, t }) => {
 
   if (!body) {
     return (
-      <div className='py-6 text-center'>
+      <div
+        className='py-6 text-center'
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+        }}
+      >
         <Text type='tertiary'>{t('未采集该内容')}</Text>
       </div>
     );
@@ -104,7 +148,10 @@ const BodyBlock = ({ title, body, truncated, bytes, t }) => {
           type='warning'
           closeIcon={null}
           className='mb-2'
-          description={t('内容已截断，原始 {{bytes}} 字节', { bytes })}
+          description={t(
+            '内容已截断，原始 {{bytes}}。开头与结尾保留，中间以大段文本省略标记跳过。',
+            { bytes: formatBytes(bytes) },
+          )}
         />
       ) : null}
       <div className='flex justify-between items-center mb-1'>
@@ -121,23 +168,59 @@ const BodyBlock = ({ title, body, truncated, bytes, t }) => {
         </Text>
       </div>
       <pre
+        className='payload-body-scroll'
         style={{
           flex: 1,
-          minHeight: BODY_MAX_HEIGHT,
-          maxHeight: BODY_MAX_HEIGHT,
-          overflow: 'auto',
+          minHeight: 0,
+          overflowY: 'auto',
+          overflowX: 'hidden',
           background: 'var(--semi-color-fill-0)',
           padding: 12,
           borderRadius: 6,
           fontSize: 12,
           lineHeight: 1.6,
           whiteSpace: 'pre-wrap',
-          wordBreak: 'break-all',
+          wordBreak: 'break-word',
           margin: 0,
         }}
       >
         {formatted}
       </pre>
+      {images.length > 0 ? (
+        <div
+          style={{
+            marginTop: 8,
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            flex: '0 0 auto',
+          }}
+        >
+          {images.map((image, index) => (
+            <a
+              key={`${image.mime}-${index}`}
+              href={image.src}
+              target='_blank'
+              rel='noreferrer'
+              title={`${image.mime} · ${formatBytes(image.bytes)}`}
+              style={{ display: 'block', lineHeight: 0 }}
+            >
+              <img
+                src={image.src}
+                alt={`${image.mime} ${index + 1}`}
+                style={{
+                  maxWidth: 160,
+                  maxHeight: 120,
+                  borderRadius: 6,
+                  border: '1px solid var(--semi-color-border)',
+                  objectFit: 'contain',
+                  background: 'var(--semi-color-fill-0)',
+                }}
+              />
+            </a>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -220,8 +303,9 @@ const RequestPayloadModal = ({ visible, target, onClose, t }) => {
       centered
       closable
       maskClosable
+      className='payload-modal-root'
       width={960}
-      bodyStyle={{ maxHeight: '78vh', overflow: 'auto' }}
+      bodyStyle={{ height: '70vh', paddingTop: 8 }}
     >
       <style>{TAB_STYLE}</style>
       <Spin spinning={loading}>
@@ -249,7 +333,14 @@ const RequestPayloadModal = ({ visible, target, onClose, t }) => {
         ) : null}
 
         {current ? (
-          <div>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+              minHeight: 0,
+            }}
+          >
             <Descriptions
               row
               size='small'
@@ -298,6 +389,7 @@ const RequestPayloadModal = ({ visible, target, onClose, t }) => {
               type='line'
               // 让 Tab 内容区继承剩余高度，BodyBlock 才能用 flex:1 撑满。
               className='payload-tabs'
+              style={{ flex: 1, minHeight: 0 }}
             >
               <TabPane tab={t('客户端请求')} itemKey='client'>
                 <BodyBlock

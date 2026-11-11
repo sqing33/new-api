@@ -1,6 +1,7 @@
 package relaycapture
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 
@@ -27,47 +28,125 @@ const (
 	StatusFailed = "failed"
 )
 
-// boundedBuffer 是有上限的字节缓冲。超过上限后停止累积并置 truncated，
-// 因此单个请求的额外内存占用不会超过 limit。
+// boundedBuffer 是有上限的字节缓冲。
+//
+// 两个关键设计：
+//
+//  1. 当 stripBinary 为真时，写入的字节先经过 binaryStripper 剔除内联二进制，
+//     再占用配额。这一步必须在截断之前完成：否则 base64 图片会先吃掉配额，
+//     缓冲在图片中间被截断，之后任何 JSON 解析都会失败，用户只能看到乱码。
+//
+//  2. 超限时保留「头部 + 尾部」而不是只留头部。LLM 请求的结构决定了
+//     最有价值的信息分布在两端：system prompt 在开头，最新一条用户消息在
+//     结尾。只留头部会让管理员恰好错过最想看的最后一条消息，因此这里按
+//     headRatio 切成 head + tail，中间用显式标记表示丢弃的字节数。
 type boundedBuffer struct {
 	limit     int
-	buf       []byte
-	total     int
-	truncated bool
+	headLimit int
+	tailLimit int
+
+	head []byte // 前段内容
+	tail []byte // 后段内容（滚动保留末尾 tailLimit 字节）
+
+	total       int
+	truncated   bool
+	stripBinary bool
+	stripper    *binaryStripper
 }
+
+// headRatio 是超限时留给前段的比例。0.6 让开头能看到完整的 system prompt 与
+// 首轮消息，同时把 40% 留给结尾的最新用户输入。
+const headRatioNum, headRatioDen = 6, 10
 
 func newBoundedBuffer(limit int) *boundedBuffer {
 	if limit < 0 {
 		limit = 0
 	}
-	return &boundedBuffer{limit: limit}
+	headLimit := limit * headRatioNum / headRatioDen
+	return &boundedBuffer{
+		limit:     limit,
+		headLimit: headLimit,
+		tailLimit: limit - headLimit,
+	}
 }
 
+// newStripBoundedBuffer 返回一个先剔除二进制再计配额的缓冲。
+//
+// total（原始字节数）与存储内容刻意分开统计：
+// total 用于告诉管理员「这段本来有多大」，存储内容用于展示。
+func newStripBoundedBuffer(limit int) *boundedBuffer {
+	b := newBoundedBuffer(limit)
+	b.stripBinary = true
+	b.stripper = newBinaryStripper(writerFunc(func(p []byte) (int, error) {
+		b.rawWrite(p)
+		return len(p), nil
+	}))
+	return b
+}
+
+// writerFunc 让普通函数满足 writerOnly。
+type writerFunc func(p []byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
 // Write 实现 io.Writer，供 io.Copy 与 io.TeeReader 使用。
-// 超过 limit 后仍返回 len(p) 并置 truncated，因此 io.Copy 不会因短写而报错，
-// 调用方也不会把它当成真实的写入字节数。
+// 始终返回 len(p)，因此 io.Copy 不会因短写而报错。
 func (b *boundedBuffer) Write(p []byte) (int, error) {
 	b.total += len(p)
-	if b.truncated || len(b.buf) >= b.limit {
-		b.truncated = true
-		return len(p), nil
+	if b.stripBinary && b.stripper != nil {
+		return b.stripper.Write(p)
 	}
-	remaining := b.limit - len(b.buf)
-	if len(p) > remaining {
-		b.buf = append(b.buf, p[:remaining]...)
-		b.truncated = true
-		return len(p), nil
-	}
-	b.buf = append(b.buf, p...)
+	b.rawWrite(p)
 	return len(p), nil
+}
+
+// rawWrite 按 head/tail 两段策略写入。
+func (b *boundedBuffer) rawWrite(p []byte) {
+	if len(p) == 0 {
+		return
+	}
+
+	// 先填 head。
+	if len(b.head) < b.headLimit {
+		remaining := b.headLimit - len(b.head)
+		if len(p) <= remaining {
+			b.head = append(b.head, p...)
+			return
+		}
+		b.head = append(b.head, p[:remaining]...)
+		p = p[remaining:]
+	}
+
+	// 余下内容进入 tail 滚动窗口。
+	b.truncated = true
+	if b.tailLimit <= 0 {
+		return
+	}
+	b.tail = append(b.tail, p...)
+	if len(b.tail) > b.tailLimit {
+		b.tail = append(b.tail[:0], b.tail[len(b.tail)-b.tailLimit:]...)
+	}
+}
+
+// truncatedMarker 是内容中间被丢弃部分的说明，让读者明确知道不连续。
+func (b *boundedBuffer) truncatedMarker() string {
+	dropped := b.total - len(b.head) - len(b.tail)
+	if dropped < 0 {
+		dropped = 0
+	}
+	return fmt.Sprintf("\n\n...[truncated %d bytes]...\n\n", dropped)
 }
 
 func (b *boundedBuffer) appendString(value string) {
 	_, _ = b.Write(common.StringToByteSlice(value))
 }
 
+// String 返回可展示内容。超限时返回 head + 标记 + tail。
 func (b *boundedBuffer) String() string {
-	return string(b.buf)
+	if !b.truncated {
+		return string(b.head)
+	}
+	return string(b.head) + b.truncatedMarker() + string(b.tail)
 }
 
 func (b *boundedBuffer) Total() int {
@@ -76,6 +155,16 @@ func (b *boundedBuffer) Total() int {
 
 func (b *boundedBuffer) Truncated() bool {
 	return b.truncated
+}
+
+// newBufferForCapture 按配置选择是否在截断前剥离内联二进制。
+//
+// CaptureBinary 为 true 表示管理员希望保留二进制原文，此时不做剥离。
+func newBufferForCapture(limit int, captureBinary bool) *boundedBuffer {
+	if captureBinary {
+		return newBoundedBuffer(limit)
+	}
+	return newStripBoundedBuffer(limit)
 }
 
 // Recorder 采集一次客户端请求下所有 attempt 的载荷。
@@ -239,7 +328,7 @@ func (r *Recorder) CaptureClientRequest(storage common.BodyStorage) {
 	}
 	defer reader.Close()
 
-	buffer := newBoundedBuffer(limit)
+	buffer := newBufferForCapture(limit, r.setting.CaptureBinary)
 	if _, err := io.Copy(buffer, reader); err != nil {
 		common.SysError("relay capture: failed to read client request body: " + err.Error())
 		return
@@ -302,7 +391,7 @@ func (r *Recorder) CaptureUpstreamRequest(req *http.Request) {
 		return
 	}
 
-	buffer := newBoundedBuffer(limit)
+	buffer := newBufferForCapture(limit, r.setting.CaptureBinary)
 	if _, err := io.Copy(buffer, reader); err != nil {
 		common.SysError("relay capture: failed to read upstream request body: " + err.Error())
 		return
@@ -336,7 +425,7 @@ func (r *Recorder) CaptureStreamFrame(data string) {
 		return
 	}
 	if r.upstreamResp == nil {
-		r.upstreamResp = newBoundedBuffer(r.limit)
+		r.upstreamResp = newBufferForCapture(r.limit, r.setting.CaptureBinary)
 	}
 	r.upstreamResp.appendString(data)
 	r.upstreamResp.appendString("\n")
@@ -361,7 +450,7 @@ func (r *Recorder) WrapResponseBody(resp *http.Response) {
 		r.mu.Unlock()
 		return
 	}
-	buffer := newBoundedBuffer(r.limit)
+	buffer := newBufferForCapture(r.limit, r.setting.CaptureBinary)
 	r.upstreamResp = buffer
 	r.attemptHasResp = true
 	r.mu.Unlock()

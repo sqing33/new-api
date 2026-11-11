@@ -165,8 +165,7 @@ const repairTruncatedJSON = (text) => {
 };
 
 /**
- * 无法解析为 JSON 时的兜底：按行做轻量缩进。
- * 用于流式响应等多段拼接的文本，至少保证换行与结构可读。
+ * 最后的兜底：去掉空行并统一缩进，至少保证换行可读。
  */
 const indentLooseText = (raw) =>
   raw
@@ -174,6 +173,48 @@ const indentLooseText = (raw) =>
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .join('\n');
+
+/**
+ * 把 SSE 帧序列整理成可读结构。
+ *
+ * 流式响应是 `data: {...}` 逐行拼接的，本身不是单个合法 JSON。
+ * 这里把每帧的 JSON 提取出来，输出为「帧序号 + 缩进后的帧内容」，
+ * 比逐行原样展示更容易读。
+ */
+const formatSSEFrames = (raw) => {
+  const frames = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed === 'data: [DONE]') {
+      continue;
+    }
+    if (trimmed.startsWith('data:')) {
+      const payload = trimmed.slice(5).trim();
+      if (!payload) {
+        continue;
+      }
+      frames.push(payload);
+      continue;
+    }
+    // event: xxx 之类的非数据行忽略，它们对阅读正文没有帮助。
+  }
+
+  if (frames.length === 0) {
+    return null;
+  }
+
+  return frames
+    .map((frame, index) => {
+      let body;
+      try {
+        body = JSON.stringify(JSON.parse(frame), null, 2);
+      } catch {
+        body = frame;
+      }
+      return `── frame ${index + 1} ──\n${body}`;
+    })
+    .join('\n\n');
+};
 
 /**
  * 格式化载荷正文。永不抛错。
@@ -206,7 +247,13 @@ export const prettifyBody = (raw, truncated = false) => {
     }
   }
 
-  // 非截断但也不合法的内容（例如逐帧拼接的流式响应）：逐行美化。
+  // 流式帧序列：按帧整理，比逐行原样输出可读得多。
+  const sse = formatSSEFrames(raw);
+  if (sse) {
+    return sse;
+  }
+
+  // 其他不合法内容：逐行美化。
   const loose = indentLooseText(raw);
   try {
     return JSON.stringify(JSON.parse(loose), null, 2);

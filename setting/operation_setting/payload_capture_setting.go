@@ -7,6 +7,11 @@ import "github.com/QuantumNous/new-api/setting/config"
 // 48KB 的取值来自 MySQL TEXT 的 65535 字节硬上限：列类型在三库统一用 text，
 // 留出 UTF-8 编码与行开销余量后 48KB 可确保任何一份正文都不会触及该上限。
 // 需要更大的正文时应先补 mediumtext 的三库迁移，而不是直接抬高此值。
+//
+// 该上限只约束「存下来的内容」，不约束原始请求大小：内联二进制（base64
+// 图片/音频）会在占用配额之前先被替换成占位符，超长文本则按「保留开头与
+// 结尾、中间标记省略」截断，因此 LLM 请求通常能保留完整的 system prompt
+// 与最新一条用户消息。
 const DefaultMaxPayloadBytes = 49152
 
 // PayloadCaptureSetting 控制请求上下文载荷的采集范围。
@@ -31,7 +36,8 @@ type PayloadCaptureSetting struct {
 	// CaptureBinary 为 false 时，多模态/base64/二进制内容被替换为占位符，
 	// 只保留文本部分，避免图片与音频撑爆存储。
 	CaptureBinary bool `json:"capture_binary"`
-	// MaxPayloadBytes 是单份正文的存储上限，超出即截断并标记。
+	// MaxPayloadBytes 是单份正文的存储上限，超出即按「保留开头与结尾、
+	// 中间标记省略」的方式截断并标记。
 	MaxPayloadBytes int `json:"max_payload_bytes"`
 	// RetentionDays 是正文保留天数，0 表示不自动清理。
 	RetentionDays int `json:"retention_days"`

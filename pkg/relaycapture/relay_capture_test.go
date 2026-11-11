@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -129,7 +130,30 @@ func TestBoundedBufferTruncatesAndRecordsOriginalSize(t *testing.T) {
 	assert.Equal(t, 500, written, "Write 必须报告全部消费字节，否则 io.Copy 会报错")
 	assert.Equal(t, 500, buffer.Total(), "应记录原始长度供 UI 展示")
 	assert.True(t, buffer.Truncated())
-	assert.Len(t, buffer.String(), 100, "存储长度不得超过上限")
+
+	// 超限时保留 head + tail：内容字节不超过上限（另有中间标记不计入）。
+	content := string(buffer.head) + string(buffer.tail)
+	assert.LessOrEqual(t, len(content), 100, "内容字节不得超过上限")
+	assert.NotEmpty(t, buffer.head, "必须保留开头（system prompt 所在）")
+	assert.NotEmpty(t, buffer.tail, "必须保留结尾（最新用户消息所在）")
+	assert.Contains(t, buffer.String(), "truncated", "必须显式标注中间被丢弃")
+}
+
+func TestBoundedBufferKeepsHeadAndTail(t *testing.T) {
+	// 结构化内容：开头是关键指令，结尾是最新提问，中间是大段历史。
+	head := `{"model":"gpt-test","messages":[{"role":"system","content":"RULES-MARKER"},`
+	tail := `{"role":"user","content":"LATEST-QUESTION-MARKER"}]}`
+	middle := strings.Repeat("h", 5000)
+
+	buffer := newBoundedBuffer(400)
+	_, err := buffer.Write([]byte(head + middle + tail))
+	require.NoError(t, err)
+
+	out := buffer.String()
+	assert.Contains(t, out, "RULES-MARKER", "开头必须保留")
+	assert.Contains(t, out, "LATEST-QUESTION-MARKER", "结尾必须保留")
+	assert.Contains(t, out, "truncated", "中间必须有截断标记")
+	assert.NotContains(t, out, strings.Repeat("h", 200), "大段中间内容应被丢弃")
 }
 
 func TestCaptureClientRequestDoesNotDisturbStorageCursor(t *testing.T) {
@@ -229,10 +253,11 @@ func TestStreamFramesAccumulateInOrderAndTruncate(t *testing.T) {
 	require.NotNil(t, buffer)
 
 	text := buffer.String()
-	assert.True(t, strings.HasPrefix(text, `{"delta":"a"}`), "帧顺序必须保持")
-	assert.Contains(t, text, `{"delta":"b"}`)
+	assert.True(t, strings.HasPrefix(text, `{"delta":"a"}`), "开头帧必须保留")
 	assert.True(t, buffer.Truncated())
-	assert.LessOrEqual(t, len(text), 40)
+	assert.Contains(t, text, "truncated", "必须显式标注中间被丢弃")
+	// 内容字节（head + tail）不超过上限；中间标记是额外的说明文字。
+	assert.LessOrEqual(t, len(buffer.head)+len(buffer.tail), 40)
 }
 
 func TestStreamFrameSkippedInRawMode(t *testing.T) {
@@ -532,3 +557,9 @@ func (b *trackingBody) Close() error {
 	b.closed = true
 	return nil
 }
+
+// persist 走 gopool 异步落库，端到端测试需要等待它完成。
+const (
+	asyncPersistTimeout  = 3 * time.Second
+	asyncPersistInterval = 20 * time.Millisecond
+)
