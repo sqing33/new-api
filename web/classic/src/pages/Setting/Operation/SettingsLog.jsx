@@ -41,21 +41,29 @@ import {
 
 const { Text } = Typography;
 
+// INITIAL_INPUTS 是本表单的字段清单与默认值。
+//
+// 提为模块级常量，使 baseline 构建可以遍历「全部字段」而不是只遍历
+// props.options 里出现的键——后者会让尚未落库的字段永远无法被提交。
+const INITIAL_INPUTS = {
+  LogConsumeEnabled: false,
+  'payload_capture_setting.enabled': false,
+  'payload_capture_setting.capture_client_request': true,
+  'payload_capture_setting.capture_upstream_request': true,
+  'payload_capture_setting.capture_upstream_response': true,
+  'payload_capture_setting.capture_raw_upstream_response': false,
+  'payload_capture_setting.capture_binary': false,
+  'payload_capture_setting.max_payload_bytes': 49152,
+  'payload_capture_setting.retention_days': 7,
+  'payload_capture_setting.session_gap_minutes': 30,
+};
+
 export default function SettingsLog(props) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [loadingCleanHistoryLog, setLoadingCleanHistoryLog] = useState(false);
   const [inputs, setInputs] = useState({
-    LogConsumeEnabled: false,
-    'payload_capture_setting.enabled': false,
-    'payload_capture_setting.capture_client_request': true,
-    'payload_capture_setting.capture_upstream_request': true,
-    'payload_capture_setting.capture_upstream_response': true,
-    'payload_capture_setting.capture_raw_upstream_response': false,
-    'payload_capture_setting.capture_binary': false,
-    'payload_capture_setting.max_payload_bytes': 49152,
-    'payload_capture_setting.retention_days': 7,
-    'payload_capture_setting.session_gap_minutes': 30,
+    ...INITIAL_INPUTS,
     historyTimestamp: dayjs().subtract(1, 'month').toDate(),
   });
   const refForm = useRef();
@@ -190,15 +198,44 @@ export default function SettingsLog(props) {
     });
   }
 
+  // 把后端返回的字符串值转换成与 inputs 初始值一致的类型。
+  //
+  // /api/option/ 返回的值全是字符串（"false"、"49152"），而 inputs 的初始值是
+  // 布尔与数字。若不归一化，compareObjects 的严格比较会把「值其实没变」的项
+  // 也当成已修改，导致每次保存都提交全部字段。
+  const coerceLikeInitial = (key, value) => {
+    const initial = INITIAL_INPUTS[key];
+    if (typeof initial === 'boolean') {
+      if (typeof value === 'boolean') return value;
+      return String(value).toLowerCase() === 'true';
+    }
+    if (typeof initial === 'number') {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : initial;
+    }
+    return value;
+  };
+
   useEffect(() => {
+    // baseline 必须覆盖 inputs 的全部键。
+    //
+    // 原实现只从 props.options 里挑「inputs 已有的键」建立基线，于是 options 表
+    // 中尚不存在的键（首次启用采集时 payload_capture_setting.* 就是这种情况）
+    // 根本不会进入基线；而 compareObjects 要求新旧对象都拥有该键才比较，
+    // 结果这些字段永远不会被提交——表现为「开关打开并保存了，但采集从未生效」。
+    // 因此缺失的键用 inputs 的初始值兜底，保证每个字段都可被比较与提交。
     const currentInputs = {};
-    for (let key in props.options) {
-      if (Object.keys(inputs).includes(key)) {
-        currentInputs[key] = props.options[key];
-      }
+    for (const key of Object.keys(INITIAL_INPUTS)) {
+      currentInputs[key] = Object.prototype.hasOwnProperty.call(
+        props.options,
+        key,
+      )
+        ? coerceLikeInitial(key, props.options[key])
+        : INITIAL_INPUTS[key];
     }
     currentInputs['historyTimestamp'] = inputs.historyTimestamp;
-    setInputs(Object.assign(inputs, currentInputs));
+
+    setInputs((previous) => ({ ...previous, ...currentInputs }));
     setInputsRow(structuredClone(currentInputs));
     refForm.current.setValues(currentInputs);
   }, [props.options]);
