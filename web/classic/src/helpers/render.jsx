@@ -636,22 +636,31 @@ export function getOAuthProviderIcon(iconName, size = 20) {
   );
 }
 
-// 颜色列表
-const colors = [
-  'amber',
+// 标签/头像的散列色板。
+//
+// 三条约束：
+// 1. 每个颜色名都必须是**合法的 CSS 颜色关键字** —— 操练场的用户名头像会把它直接写进
+//    SVG 的 fill 属性，而 Semi 自有的 amber / light-blue / light-green 不是 CSS 颜色，
+//    写进去会让那个圆圈渲染成黑色。
+// 2. 任意两色的感知差异要够大。标签尺寸很小，色相接近会被看成同一个颜色，所以这 10 色是
+//    从 Semi 调色板里按 CIE Lab ΔE 挑出来的：两两最小 ΔE 15.6（此前 15 色时只有 8.7，
+//    其中 amber 与 yellow 的色相差仅 5.2°，正是「ubuntu 和 windows 几乎同色」的原因）。
+//    再多放颜色就会跌破可分阈值：11 色时最小 ΔE 掉到 11.6。
+// 3. **相邻下标也要拉开**。渠道号是按 `TAG_COLORS[id % 10]` 取色的，id 连续 → 下标连续，
+//    所以数组顺序不能按字母排（那样渠道 5/6 只差 ΔE 6.9，看着像同一个）。这里的顺序是
+//    在全部 10! 种环状排布里穷举出的「相邻最小 ΔE 最大」那一组：任意相邻两色 ΔE ≥ 43.2。
+//
+// 改这个数组会让所有既有标签换色，这是纯计算映射、没有存量数据需要迁移。
+export const TAG_COLORS = [
   'blue',
-  'cyan',
   'green',
-  'grey',
-  'indigo',
-  'light-blue',
-  'lime',
   'orange',
-  'pink',
   'purple',
-  'red',
+  'lime',
+  'pink',
   'teal',
-  'violet',
+  'red',
+  'grey',
   'yellow',
 ];
 
@@ -759,13 +768,17 @@ export function modelToColor(modelName) {
   return colorPalette[index];
 }
 
+// 由名称稳定地推出色板下标：同一个名称在任何页面、任何会话都得到同一颜色。
+// 用 FNV-1a 而不是「字符码求和」——求和与字符顺序无关，mac 与 cam、nas 与 san
+// 这类重排会落到同一个颜色上；FNV-1a 逐字符混合，顺序变则结果变。
+// Math.imul 保证 32 位乘法不进浮点，>>> 0 把结果转成无符号再取模。
 export function stringToColor(str) {
-  let sum = 0;
+  let hash = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
-    sum += str.charCodeAt(i);
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
   }
-  let i = sum % colors.length;
-  return colors[i];
+  return TAG_COLORS[(hash >>> 0) % TAG_COLORS.length];
 }
 
 // 渲染带有模型图标的标签

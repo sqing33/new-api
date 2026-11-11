@@ -35,28 +35,11 @@ import {
   renderModelPriceSimple,
   renderTieredModelPriceSimple,
   groupTagColor,
+  TAG_COLORS,
 } from '../../../helpers';
 import { formatThroughput } from '../../performance/format';
 import { IconHelpCircle } from '@douyinfe/semi-icons';
 import { CircleAlert, Route, Sparkles } from 'lucide-react';
-
-const colors = [
-  'amber',
-  'blue',
-  'cyan',
-  'green',
-  'grey',
-  'indigo',
-  'light-blue',
-  'lime',
-  'orange',
-  'pink',
-  'purple',
-  'red',
-  'teal',
-  'violet',
-  'yellow',
-];
 
 function formatRatio(ratio) {
   if (ratio === undefined || ratio === null) {
@@ -575,7 +558,9 @@ export const getLogsColumns = ({
               <Tooltip content={record.channel_name || t('未知渠道')}>
                 <span>
                   <Tag
-                    color={colors[parseInt(text) % colors.length]}
+                    color={
+                      TAG_COLORS[parseInt(text) % TAG_COLORS.length]
+                    }
                     shape='circle'
                   >
                     {text}
