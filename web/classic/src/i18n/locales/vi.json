@@ -5120,7 +5120,12 @@
     "跟随全局": "Theo cấu hình toàn cục",
     "优先亲和": "Ưu tiên gắn kết",
     "严格亲和": "Gắn kết nghiêm ngặt",
-    "inherit 使用全局默认；prefer 尽量复用同一渠道；strict 命中后失败也不再切换渠道": "inherit dùng mặc định toàn cục; prefer ưu tiên cùng kênh; strict không đổi kênh sau khi khớp"
+    "inherit 使用全局默认；prefer 尽量复用同一渠道；strict 命中后失败也不再切换渠道": "inherit dùng mặc định toàn cục; prefer ưu tiên cùng kênh; strict không đổi kênh sau khi khớp",
+    "优先级排序": "Thứ tự ưu tiên",
+    "调整渠道优先级": "Điều chỉnh ưu tiên kênh",
+    "优先级已更新": "Đã cập nhật ưu tiên",
+    "列表按优先级从高到低排列，向上移动会排到上一条之前；改动立即生效，仅影响优先级本身。": "Danh sách sắp xếp từ ưu tiên cao xuống thấp; di chuyển lên sẽ đặt kênh trước mục phía trên. Thay đổi có hiệu lực ngay và chỉ ảnh hưởng đến ưu tiên.",
+    "暂无渠道": "Chưa có kênh"
   },
   "启用TTS": "Bật TTS",
   "启用ASR": "Bật ASR",

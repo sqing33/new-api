@@ -29,7 +29,8 @@ import {
 import CompactModeToggle from '../../common/ui/CompactModeToggle';
 import SortPriorityPopover from '../../common/ui/SortPriorityPopover';
 import { CHANNEL_SORT_APPLY_COUNT } from '../../../hooks/channels/useChannelsData';
-import { IconRefresh } from '@douyinfe/semi-icons';
+import { IconRefresh, IconSort } from '@douyinfe/semi-icons';
+import ChannelPriorityModal from './modals/ChannelPriorityModal';
 
 // 排序维度的展示名。key 与 useChannelsData 里的 sortOrder 元素一一对应。
 const SORT_DIMENSION_ITEMS = {
@@ -69,6 +70,7 @@ const ChannelsActions = ({
   getFormValues,
   loadChannels,
   refresh,
+  channels = [],
   searchChannels,
   activeTypeKey,
   activePage,
@@ -76,6 +78,7 @@ const ChannelsActions = ({
   setActivePage,
   t,
 }) => {
+  const [showPriorityModal, setShowPriorityModal] = React.useState(false);
   return (
     <div className='flex flex-col gap-2'>
       {/* 第一行：批量操作按钮 + 设置开关 */}
@@ -288,6 +291,15 @@ const ChannelsActions = ({
             {t('刷新')}
           </Button>
 
+          <Button
+            size='small'
+            type='tertiary'
+            icon={<IconSort />}
+            onClick={() => setShowPriorityModal(true)}
+          >
+            {t('优先级排序')}
+          </Button>
+
           <SortPriorityPopover
             order={sortOrder}
             items={SORT_DIMENSION_ITEMS}
@@ -356,6 +368,14 @@ const ChannelsActions = ({
           </div>
         </div>
       </div>
+
+      <ChannelPriorityModal
+        visible={showPriorityModal}
+        onClose={() => setShowPriorityModal(false)}
+        onSaved={() => (refresh ? refresh() : loadChannels())}
+        channels={channels}
+        t={t}
+      />
     </div>
   );
 };
