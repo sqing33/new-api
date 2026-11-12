@@ -32,6 +32,8 @@ import {
   renderQuota,
   renderNumber,
   getLogOther,
+  renderLogContentParts,
+  translateServerText,
   copy,
   renderClaudeLogContent,
   renderLogContent,
@@ -573,7 +575,10 @@ export const useLogsData = ({
         if (logs[i]?.content) {
           expandDataLocal.push({
             key: t('其他详情'),
-            value: logs[i].content,
+            // 有新式结构化正文时按当前语言渲染，历史行保留英文原文。
+            value:
+              renderLogContentParts(other, (key) => translateServerText(key)) ||
+              logs[i].content,
           });
         }
         if (isAdminUser && other?.reject_reason) {

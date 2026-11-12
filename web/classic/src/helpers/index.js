@@ -31,3 +31,4 @@ export * from './dashboard';
 export * from './passkey';
 export * from './statusCodeRules';
 export * from './logExport';
+export * from './serverMessage';
