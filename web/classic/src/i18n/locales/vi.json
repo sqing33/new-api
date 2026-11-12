@@ -5134,7 +5134,10 @@
     "额外绑定的任务插件": "Plugin tác vụ gắn thêm",
     "可选，可多选": "Tùy chọn, có thể chọn nhiều",
     "New API 渠道可额外透传多个任务插件；单个插件请填写在上方的任务插件 key": "Kênh New API có thể truyền thêm nhiều plugin tác vụ; nếu chỉ một, hãy điền ở ô phía trên",
-    "高级自定义": "Tùy chỉnh nâng cao"
+    "高级自定义": "Tùy chỉnh nâng cao",
+    "上游返回模型": "Model phía trên trả về",
+    "上游返回模型不一致": "Phía trên trả về model khác",
+    "映射": "ánh xạ"
   },
   "启用TTS": "Bật TTS",
   "启用ASR": "Bật ASR",

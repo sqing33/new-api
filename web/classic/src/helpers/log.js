@@ -54,3 +54,22 @@ export function getLogOther(otherStr) {
     return null;
   }
 }
+
+/**
+ * 上游在响应里声明的模型与请求/映射模型不一致时标记出来。
+ * 后端只保存三个名字，比对规则在这里重现：忽略大小写，允许带日期/变体后缀与带提供商路径的同名模型。
+ */
+export function responseModelMismatch(observation) {
+  if (!observation || !observation.returned_model) {
+    return false;
+  }
+  const returned = String(observation.returned_model).toLowerCase();
+  const candidates = [observation.requested_model, observation.upstream_model];
+  for (const candidate of candidates) {
+    const expected = String(candidate || '').toLowerCase();
+    if (expected && (returned.startsWith(expected) || returned.endsWith(expected))) {
+      return false;
+    }
+  }
+  return true;
+}

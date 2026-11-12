@@ -33,6 +33,7 @@ import {
   renderNumber,
   getLogOther,
   renderLogContentParts,
+  responseModelMismatch,
   translateServerText,
   copy,
   renderClaudeLogContent,
@@ -636,6 +637,17 @@ export const useLogsData = ({
           expandDataLocal.push({
             key: t('Reasoning Effort'),
             value: other.reasoning_effort,
+          });
+        }
+        // 上游在响应里声明的模型：与请求/映射模型不同时给出警示，便于排查上游换模型。
+        if (other?.response_model?.returned_model) {
+          const observation = other.response_model;
+          const mismatched = responseModelMismatch(observation);
+          expandDataLocal.push({
+            key: mismatched ? t('上游返回模型不一致') : t('上游返回模型'),
+            value: mismatched
+              ? `${observation.returned_model}（${t('请求')} ${observation.requested_model || '-'}，${t('映射')} ${observation.upstream_model || '-'}）`
+              : observation.returned_model,
           });
         }
         if (other?.billing_mode === 'tiered_expr' && other?.expr_b64) {

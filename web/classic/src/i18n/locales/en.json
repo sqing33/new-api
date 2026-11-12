@@ -4753,7 +4753,11 @@
     "额外绑定的任务插件": "Additional bound task plugins",
     "可选，可多选": "Optional, multiple allowed",
     "New API 渠道可额外透传多个任务插件；单个插件请填写在上方的任务插件 key": "A New API channel can forward additional task plugins; put a single plugin in the task plugin key above",
-    "高级自定义": "Advanced custom"
+    "高级自定义": "Advanced custom",
+    "上游返回模型": "Model returned upstream",
+    "上游返回模型不一致": "Upstream returned a different model",
+    "请求": "requested",
+    "映射": "mapped"
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",

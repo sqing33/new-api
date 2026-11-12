@@ -4624,7 +4624,11 @@
     "额外绑定的任务插件": "Plugins de tâche liés en plus",
     "可选，可多选": "Facultatif, plusieurs choix possibles",
     "New API 渠道可额外透传多个任务插件；单个插件请填写在上方的任务插件 key": "Un canal New API peut transmettre plusieurs plugins de tâche supplémentaires ; pour un seul plugin, utilisez le champ ci-dessus",
-    "高级自定义": "Personnalisé avancé"
+    "高级自定义": "Personnalisé avancé",
+    "上游返回模型": "Modèle renvoyé par l’amont",
+    "上游返回模型不一致": "L’amont a renvoyé un autre modèle",
+    "请求": "demandé",
+    "映射": "mappé"
   },
   "启用TTS": "Activer TTS",
   "启用ASR": "Activer ASR",
