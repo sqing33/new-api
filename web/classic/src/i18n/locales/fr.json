@@ -4586,7 +4586,11 @@
     "访问令牌已生成": "Jeton d’accès créé",
     "吊销": "Révoquer",
     "管理用户": "Gérer l’utilisateur",
-    "重置二步验证": "Réinitialiser la vérification en deux étapes"
+    "重置二步验证": "Réinitialiser la vérification en deux étapes",
+    "日志已导出": "Journaux exportés",
+    "没有可导出的日志": "Aucun journal à exporter",
+    "导出日志": "Exporter les journaux",
+    "允许查询账户额度": "Autoriser la consultation du quota du compte"
   },
   "启用TTS": "Activer TTS",
   "启用ASR": "Activer ASR",

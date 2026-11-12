@@ -5096,7 +5096,11 @@
     "访问令牌已生成并复制到剪贴板": "Đã tạo token truy cập và sao chép vào clipboard",
     "访问令牌已生成": "Đã tạo token truy cập",
     "吊销": "Thu hồi",
-    "重置二步验证": "Đặt lại xác thực hai lớp"
+    "重置二步验证": "Đặt lại xác thực hai lớp",
+    "日志已导出": "Đã xuất nhật ký",
+    "没有可导出的日志": "Không có nhật ký để xuất",
+    "导出日志": "Xuất nhật ký",
+    "允许查询账户额度": "Cho phép truy vấn hạn mức tài khoản"
   },
   "启用TTS": "Bật TTS",
   "启用ASR": "Bật ASR",

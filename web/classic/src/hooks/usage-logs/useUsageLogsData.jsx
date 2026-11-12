@@ -26,6 +26,8 @@ import {
   isAdmin,
   showError,
   showSuccess,
+  showWarning,
+  exportLogsToCsv,
   timestamp2string,
   renderQuota,
   renderNumber,
@@ -85,6 +87,7 @@ export const useLogsData = ({
   const [logs, setLogs] = useState([]);
   const [expandData, setExpandData] = useState({});
   const [showStat, setShowStat] = useState(false);
+  const [exportingLogs, setExportingLogs] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingStat, setLoadingStat] = useState(false);
   const [activePage, setActivePage] = useState(1);
@@ -1020,6 +1023,41 @@ export const useLogsData = ({
   });
 
   // Copy text function
+  // 按当前筛选条件导出日志为 CSV。后端以 NDJSON 流式返回，最后一行是结果包装。
+  const exportLogs = async () => {
+    if (exportingLogs) {
+      return;
+    }
+    setExportingLogs(true);
+    try {
+      const values = getFormValues();
+      const count = await exportLogsToCsv({
+        isAdminUser,
+        params: {
+          type: values.logType ? parseInt(values.logType) : 0,
+          username: values.username || '',
+          token_name: values.token_name || '',
+          model_name: values.model_name || '',
+          start_timestamp: values.start_timestamp || '',
+          end_timestamp: values.end_timestamp || '',
+          channel: values.channel || '',
+          group: values.group || '',
+          request_id: values.request_id || '',
+        },
+        t,
+      });
+      if (count > 0) {
+        showSuccess(t('日志已导出'));
+      } else {
+        showWarning(t('没有可导出的日志'));
+      }
+    } catch (error) {
+      showError(error);
+    } finally {
+      setExportingLogs(false);
+    }
+  };
+
   const copyText = async (e, text) => {
     e.stopPropagation();
     if (await copy(text)) {
@@ -1132,6 +1170,8 @@ export const useLogsData = ({
 
     // Functions
     loadLogs,
+    exportLogs,
+    exportingLogs,
     handlePageChange,
     handlePageSizeChange,
     refresh,

@@ -4715,7 +4715,11 @@
     "访问令牌已生成": "Access token created",
     "吊销": "Revoke",
     "管理用户": "Manage user",
-    "重置二步验证": "Reset two-factor authentication"
+    "重置二步验证": "Reset two-factor authentication",
+    "日志已导出": "Logs exported",
+    "没有可导出的日志": "No logs to export",
+    "导出日志": "Export logs",
+    "允许查询账户额度": "Allow querying the account quota"
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",
