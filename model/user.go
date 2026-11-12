@@ -456,7 +456,7 @@ func GetAllUsers(pageInfo *common.PageInfo, sortOptions ...UserSortOptions) (use
 	if order.SortBy == UserSortByConcurrency {
 		// 并发数在 Redis 里，先取全量再内存排序分页
 		var all []*User
-		if err = order.Apply(DB.Unscoped()).Omit("password", "access_token", "avatar").Find(&all).Error; err != nil {
+		if err = order.Apply(DB.Unscoped()).Omit("password", "access_token").Find(&all).Error; err != nil {
 			return nil, 0, err
 		}
 		users = SortByConcurrencyDesc(all, concurrency.DimensionUser,
@@ -465,7 +465,7 @@ func GetAllUsers(pageInfo *common.PageInfo, sortOptions ...UserSortOptions) (use
 			pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 		return users, total, nil
 	}
-	err = order.Apply(DB.Unscoped()).Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password", "access_token", "avatar").Find(&users).Error
+	err = order.Apply(DB.Unscoped()).Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password", "access_token").Find(&users).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -561,7 +561,7 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	order := resolveUserSortOptions(sortOptions)
 	if order.SortBy == UserSortByConcurrency {
 		var all []*User
-		if err = order.Apply(query.Omit("password", "access_token", "avatar")).Find(&all).Error; err != nil {
+		if err = order.Apply(query.Omit("password", "access_token")).Find(&all).Error; err != nil {
 			return nil, 0, err
 		}
 		users = SortByConcurrencyDesc(all, concurrency.DimensionUser,
@@ -570,7 +570,7 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 			startIdx, num)
 		return users, total, nil
 	}
-	err = order.Apply(query.Omit("password", "access_token", "avatar")).Limit(num).Offset(startIdx).Find(&users).Error
+	err = order.Apply(query.Omit("password", "access_token")).Limit(num).Offset(startIdx).Find(&users).Error
 	if err != nil {
 		return nil, 0, err
 	}

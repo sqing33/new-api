@@ -4613,5 +4613,6 @@
   "移除头像": "Supprimer l'avatar",
   "头像已更新": "Avatar mis à jour",
   "头像已移除": "Avatar supprimé",
-  "请选择图片文件": "Veuillez choisir un fichier image"
+  "请选择图片文件": "Veuillez choisir un fichier image",
+  "头像": "Avatar"
 }

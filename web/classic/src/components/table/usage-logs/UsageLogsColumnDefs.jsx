@@ -625,6 +625,7 @@ export const getLogsColumns = ({
             <Avatar
               size='extra-small'
               color={stringToColor(text)}
+              src={record.user_avatar || undefined}
               style={{ marginRight: 4 }}
               onClick={(event) => {
                 event.stopPropagation();

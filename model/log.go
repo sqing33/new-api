@@ -103,6 +103,10 @@ type Log struct {
 	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
 	Other             string `json:"other"`
+
+	// UserAvatar 是管理端日志列表展示用的瞬时字段：头像存在 users 表，
+	// 日志表（可能独立的日志库）只存 username，因此按页批量补齐，不落库。
+	UserAvatar string `json:"user_avatar,omitempty" gorm:"-"`
 }
 
 // don't use iota, avoid change log type value
@@ -159,6 +163,62 @@ func FormatAdminLogs(logs []*Log) {
 func FormatRootLogs(logs []*Log) {
 	for i := range logs {
 		logs[i].Other = formatLogOtherJSON(logs[i].Other, logOtherVisibilityRoot)
+	}
+}
+
+// maxLogUserAvatarsBytes 限制单页日志内联头像的总量。头像以 data URL 存在
+// 用户行上（最大约 60 KiB），一页里用户各不相同的话整页响应会被撑爆，
+// 超出预算的行保持空头像，前端回退到用户名首字母。
+const maxLogUserAvatarsBytes = 512 << 10
+
+// AttachLogUserAvatars 按页补齐日志行的瞬时头像字段。日志（可能在独立日志库）
+// 只存用户名，头像在主库 users 表上，因此按本页出现的用户 ID 批量查询一次。
+// 这是展示用信息，查询失败只记录日志，不影响日志列表本身。
+func AttachLogUserAvatars(logs []*Log) {
+	if len(logs) == 0 {
+		return
+	}
+	userIds := make([]int, 0, len(logs))
+	seen := make(map[int]bool, len(logs))
+	for _, log := range logs {
+		if log == nil || log.UserId <= 0 || seen[log.UserId] {
+			continue
+		}
+		seen[log.UserId] = true
+		userIds = append(userIds, log.UserId)
+	}
+	if len(userIds) == 0 {
+		return
+	}
+
+	var rows []struct {
+		Id     int
+		Avatar string
+	}
+	if err := DB.Model(&User{}).Select("id", "avatar").Where("id IN ?", userIds).Find(&rows).Error; err != nil {
+		common.SysLog("failed to load avatars for log page: " + err.Error())
+		return
+	}
+
+	avatars := make(map[int]string, len(rows))
+	budget := maxLogUserAvatarsBytes
+	for _, row := range rows {
+		if row.Avatar == "" || len(row.Avatar) > budget {
+			continue
+		}
+		budget -= len(row.Avatar)
+		avatars[row.Id] = row.Avatar
+	}
+	if len(avatars) == 0 {
+		return
+	}
+	for _, log := range logs {
+		if log == nil {
+			continue
+		}
+		if avatar, ok := avatars[log.UserId]; ok {
+			log.UserAvatar = avatar
+		}
 	}
 }
 

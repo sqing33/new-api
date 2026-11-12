@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React from 'react';
 import {
+  Avatar,
   Button,
   Space,
   Tag,
@@ -34,6 +35,7 @@ import {
   renderConcurrency,
   renderNumber,
   renderQuota,
+  stringToColor,
   timestamp2string,
 } from '../../../helpers';
 
@@ -337,6 +339,23 @@ export const getUsersColumns = ({
       dataIndex: 'username',
       key: 'username',
       render: (text, record) => renderUsername(text, record),
+    },
+    {
+      title: t('头像'),
+      dataIndex: 'avatar',
+      key: 'avatar',
+      width: 60,
+      render: (text, record) => (
+        <Avatar
+          size='extra-small'
+          src={text || undefined}
+          color={stringToColor(record.username)}
+        >
+          {typeof record.username === 'string'
+            ? record.username.slice(0, 1)
+            : ''}
+        </Avatar>
+      ),
     },
     {
       title: t('状态'),

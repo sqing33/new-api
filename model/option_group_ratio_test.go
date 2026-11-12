@@ -80,3 +80,53 @@ func TestLoadOptionsKeepsRemovedUnlimitedGroups(t *testing.T) {
 	require.NoError(t, db.Where(&Option{Key: "GroupRatio"}).First(&stored).Error)
 	assert.Equal(t, `{"Admin":1,"User":1}`, stored.Value)
 }
+
+// TestMigrateAdminUnlimitedGroupAddsAdminToStoredConfig 覆盖存量安装：选项行是整份
+// JSON 覆盖代码默认值的，上一次只勾了 Free 时 Admin 拿不到无限额度，升级后必须补上。
+func TestMigrateAdminUnlimitedGroupAddsAdminToStoredConfig(t *testing.T) {
+	db := useGroupRatioOptionDB(t)
+	require.NoError(t, db.Create(&Option{Key: groupUnlimitedOptionKey, Value: `{"Free":true}`}).Error)
+
+	require.NoError(t, migrateAdminUnlimitedGroup(db))
+
+	var stored Option
+	require.NoError(t, db.Where(&Option{Key: groupUnlimitedOptionKey}).First(&stored).Error)
+	var unlimited map[string]bool
+	require.NoError(t, common.UnmarshalJsonStr(stored.Value, &unlimited))
+	assert.Equal(t, map[string]bool{"Free": true, "Admin": true}, unlimited)
+
+	var marker Option
+	require.NoError(t, db.Where(&Option{Key: adminUnlimitedMigrationMarkerKey}).First(&marker).Error)
+
+	// 重复执行不再改写配置，迁移幂等。
+	require.NoError(t, migrateAdminUnlimitedGroup(db))
+	require.NoError(t, db.Where(&Option{Key: groupUnlimitedOptionKey}).First(&stored).Error)
+	assert.Equal(t, `{"Admin":true,"Free":true}`, stored.Value)
+}
+
+// TestMigrateAdminUnlimitedGroupRespectsExplicitOptOut 覆盖管理员取消勾选后的情况：
+// 迁移只执行一次，之后 Admin 不应被重新补回。
+func TestMigrateAdminUnlimitedGroupRespectsExplicitOptOut(t *testing.T) {
+	db := useGroupRatioOptionDB(t)
+	require.NoError(t, db.Create(&Option{Key: groupUnlimitedOptionKey, Value: `{"Free":true}`}).Error)
+	require.NoError(t, db.Create(&Option{Key: adminUnlimitedMigrationMarkerKey, Value: "true"}).Error)
+
+	require.NoError(t, migrateAdminUnlimitedGroup(db))
+
+	var stored Option
+	require.NoError(t, db.Where(&Option{Key: groupUnlimitedOptionKey}).First(&stored).Error)
+	assert.Equal(t, `{"Free":true}`, stored.Value)
+}
+
+// TestMigrateAdminUnlimitedGroupWithoutStoredConfig 覆盖新装/从未保存过的安装：
+// 代码默认值已包含 Admin，迁移只落标记，不凭空创建配置行。
+func TestMigrateAdminUnlimitedGroupWithoutStoredConfig(t *testing.T) {
+	db := useGroupRatioOptionDB(t)
+
+	require.NoError(t, migrateAdminUnlimitedGroup(db))
+
+	var marker Option
+	require.NoError(t, db.Where(&Option{Key: adminUnlimitedMigrationMarkerKey}).First(&marker).Error)
+	var stored Option
+	assert.ErrorIs(t, db.Where(&Option{Key: groupUnlimitedOptionKey}).First(&stored).Error, gorm.ErrRecordNotFound)
+}

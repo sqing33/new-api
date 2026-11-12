@@ -31,6 +31,7 @@ const USERS_COLUMNS_STORAGE_KEY = 'users-table-columns';
 const USER_COLUMN_KEYS = {
   ID: 'id',
   USERNAME: 'username',
+  AVATAR: 'avatar',
   INFO: 'info',
   QUOTA_USAGE: 'quota_usage',
   GROUP: 'group',
@@ -46,6 +47,7 @@ const USER_COLUMN_KEYS = {
 const getDefaultUserColumnVisibility = () => ({
   [USER_COLUMN_KEYS.ID]: false,
   [USER_COLUMN_KEYS.USERNAME]: true,
+  [USER_COLUMN_KEYS.AVATAR]: true,
   [USER_COLUMN_KEYS.INFO]: true,
   [USER_COLUMN_KEYS.QUOTA_USAGE]: true,
   [USER_COLUMN_KEYS.GROUP]: true,

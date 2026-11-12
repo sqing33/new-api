@@ -481,6 +481,10 @@ func migrateDB() error {
 	if err := migrateLogGroupRename(DB); err != nil {
 		return err
 	}
+	// Admin 分组的无限额度默认值同样要在选项载入内存之前补进存量配置。
+	if err := migrateAdminUnlimitedGroup(DB); err != nil {
+		return err
+	}
 	return nil
 }
 
