@@ -4765,7 +4765,11 @@
     "全部渠道：每轮测试所有已启用渠道；仅自动禁用：只测被自动禁用的渠道；被动恢复：等待上游请求成功后再恢复": "All channels tests every enabled channel each round; auto-disabled only tests channels disabled automatically; passive recovery waits for a successful upstream request before restoring",
     "定时测试并发数": "Scheduled test concurrency",
     "一轮定时测试同时测试的渠道数量，过大会加重上游压力": "How many channels one scheduled round tests at once; a large value loads upstreams heavily",
-    "最多可查询最近 {{days}} 天的日志": "You can query at most the last {{days}} days of logs"
+    "最多可查询最近 {{days}} 天的日志": "You can query at most the last {{days}} days of logs",
+    "免预扣余额门槛（美元）": "No-reservation balance threshold (USD)",
+    "钱包余额高于该值时不预扣额度，改为请求结束后直接结算；填 0 表示始终预扣": "Above this wallet balance no quota is reserved and the request settles when it ends; 0 always reserves",
+    "预扣倍率": "Reservation multiplier",
+    "按预计输入费用乘以该倍率预扣额度，仅影响预留金额，不影响最终结算": "Reserves the estimated input cost times this multiplier; it only affects the reserved amount, not the final charge"
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",

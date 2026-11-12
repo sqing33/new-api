@@ -37,6 +37,8 @@ export default function SettingsCreditLimit(props) {
     QuotaForInviter: '',
     QuotaForInvitee: '',
     'quota_setting.enable_free_model_pre_consume': true,
+    'quota_setting.trust_quota_usd': 10,
+    'quota_setting.pre_consume_multiplier': 1,
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -198,6 +200,45 @@ export default function SettingsCreditLimit(props) {
                       'quota_setting.enable_free_model_pre_consume': value,
                     })
                   }
+                />
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'quota_setting.trust_quota_usd'}
+                  label={t('免预扣余额门槛（美元）')}
+                  min={0}
+                  precision={2}
+                  style={{ width: '100%' }}
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      'quota_setting.trust_quota_usd': value,
+                    })
+                  }
+                  extraText={t(
+                    '钱包余额高于该值时不预扣额度，改为请求结束后直接结算；填 0 表示始终预扣',
+                  )}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'quota_setting.pre_consume_multiplier'}
+                  label={t('预扣倍率')}
+                  min={0.1}
+                  step={0.1}
+                  precision={2}
+                  style={{ width: '100%' }}
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      'quota_setting.pre_consume_multiplier': value,
+                    })
+                  }
+                  extraText={t(
+                    '按预计输入费用乘以该倍率预扣额度，仅影响预留金额，不影响最终结算',
+                  )}
                 />
               </Col>
             </Row>

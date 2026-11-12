@@ -4636,7 +4636,11 @@
     "全部渠道：每轮测试所有已启用渠道；仅自动禁用：只测被自动禁用的渠道；被动恢复：等待上游请求成功后再恢复": "Tous les canaux teste chaque canal activé ; auto-désactivés ne teste que ceux désactivés automatiquement ; la récupération passive attend une requête amont réussie",
     "定时测试并发数": "Concurrence des tests planifiés",
     "一轮定时测试同时测试的渠道数量，过大会加重上游压力": "Nombre de canaux testés simultanément par tour ; une valeur élevée charge les amonts",
-    "最多可查询最近 {{days}} 天的日志": "Vous pouvez consulter au plus les {{days}} derniers jours de journaux"
+    "最多可查询最近 {{days}} 天的日志": "Vous pouvez consulter au plus les {{days}} derniers jours de journaux",
+    "免预扣余额门槛（美元）": "Seuil de solde sans réservation (USD)",
+    "钱包余额高于该值时不预扣额度，改为请求结束后直接结算；填 0 表示始终预扣": "Au-delà de ce solde, aucune réservation et le règlement se fait en fin de requête ; 0 réserve toujours",
+    "预扣倍率": "Multiplicateur de réservation",
+    "按预计输入费用乘以该倍率预扣额度，仅影响预留金额，不影响最终结算": "Réserve le coût d’entrée estimé multiplié par ce facteur ; cela n’affecte que le montant réservé, pas la facturation finale"
   },
   "启用TTS": "Activer TTS",
   "启用ASR": "Activer ASR",
