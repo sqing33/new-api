@@ -980,6 +980,7 @@ func TestTaskAdaptorMapsJSContract(t *testing.T) {
 }
 
 func TestTaskAdaptorHeaderOverrides(t *testing.T) {
+	allowLoopbackTestServers(t)
 	service.InitHttpClient()
 	source := strings.ReplaceAll(mockPlugin, `"X-Plugin":`, `"Authorization": "plugin-default", "X-Plugin":`)
 	source += `
@@ -2733,6 +2734,7 @@ func newAPIGateway(t *testing.T, routes map[string]string, seen *[]string) *http
 }
 
 func TestTaskAdaptorChainsDoubaoThroughNewAPIUpstream(t *testing.T) {
+	allowLoopbackTestServers(t)
 	gin.SetMode(gin.TestMode)
 	service.InitHttpClient()
 	var seen []string
@@ -2792,6 +2794,7 @@ func TestTaskAdaptorChainsDoubaoThroughNewAPIUpstream(t *testing.T) {
 }
 
 func TestTaskAdaptorChainsSunoBatchFetchThroughNewAPIUpstream(t *testing.T) {
+	allowLoopbackTestServers(t)
 	gin.SetMode(gin.TestMode)
 	service.InitHttpClient()
 	var seen []string

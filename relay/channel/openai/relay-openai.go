@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relay/channel/openrouter"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -314,8 +315,11 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 	}
 
 	// 上游返回 200 但没有任何输出内容（如高负载下静默失败）：客户端还没收到字节，
-	// 把空成功转换成可重试错误，避免空回复被计费。
-	if simpleResponse.Usage.CompletionTokens == 0 && !hasNonEmptyChoiceOutput(simpleResponse.Choices) {
+	// 把空成功转换成可重试错误，避免空回复被计费。Embeddings 响应没有 choices，
+	// 数据在 data 里，不能套用这条判定。
+	// Embeddings/rerank 的响应没有 choices，payload 在 data 里，不能套用这条判定。
+	if info.RelayMode != relayconstant.RelayModeEmbeddings && info.RelayMode != relayconstant.RelayModeRerank &&
+		simpleResponse.Usage.CompletionTokens == 0 && !hasNonEmptyChoiceOutput(simpleResponse.Choices) {
 		logger.LogError(c, fmt.Sprintf("upstream returned 200 but the response had no output content, choices=%d", len(simpleResponse.Choices)))
 		return nil, types.NewErrorWithStatusCode(
 			fmt.Errorf("upstream returned 200 but the response had no output content"),

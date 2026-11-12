@@ -19,10 +19,13 @@ import (
 	"gorm.io/gorm"
 )
 
-var commonGroupCol string
-var commonKeyCol string
-var commonTrueVal string
-var commonFalseVal string
+// 默认按 MySQL/SQLite 的标识符引号初始化，initCol 在 InitDB 里按实际方言覆盖。
+// 给默认值是为了让「初始化之前的读取」（含单元测试）不会拼出 SELECT  FROM 这种
+// 空列名 SQL——空串默认值只会把错误推迟成难以定位的语法错误。
+var commonGroupCol = "`group`"
+var commonKeyCol = "`key`"
+var commonTrueVal = "1"
+var commonFalseVal = "0"
 
 var logKeyCol string
 var logGroupCol string

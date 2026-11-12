@@ -23,6 +23,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -54,6 +55,7 @@ func setupRelayChannelDB(t *testing.T) *gorm.DB {
 }
 
 func TestRealtimeFetchAppliesChannelHeaderOverrides(t *testing.T) {
+	allowLoopbackTaskServers(t)
 	database := setupRelayChannelDB(t)
 	service.InitHttpClient()
 	requests := make(chan *http.Request, 1)
@@ -86,6 +88,7 @@ func TestRealtimeFetchAppliesChannelHeaderOverrides(t *testing.T) {
 }
 
 func TestRealtimeFetchRefundsTaskItFindsFailed(t *testing.T) {
+	allowLoopbackTaskServers(t)
 	database := setupRelayChannelDB(t)
 	require.NoError(t, database.AutoMigrate(&model.Task{}, &model.User{}, &model.Log{}))
 	previousLogDB := model.LOG_DB
@@ -768,4 +771,14 @@ export function extractUsage() { return {seconds:2}; }
 			assert.Equal(t, tc.expressions["retry-b::declared-model"], info.TieredBillingSnapshot.ExprString)
 		})
 	}
+}
+
+// allowLoopbackTaskServers 在测试期间关闭全局 SSRF 防护，让 httptest 的
+// 127.0.0.1 回环地址可以被任务适配器访问。只影响本测试，Cleanup 会还原。
+func allowLoopbackTaskServers(t *testing.T) {
+	t.Helper()
+	fetchSetting := system_setting.GetFetchSetting()
+	original := *fetchSetting
+	t.Cleanup(func() { *fetchSetting = original })
+	fetchSetting.EnableSSRFProtection = false
 }

@@ -221,9 +221,11 @@ func TestGetUserModelsExpandsAutoGroupsInConfiguredOrder(t *testing.T) {
 	originalAutoGroups := setting.AutoGroups2JsonString()
 	originalUsableGroups := setting.UserUsableGroups2JSONString()
 	originalSpecialGroups := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.ReadAll()
+	originalRatios := ratio_setting.GroupRatio2JSONString()
 	t.Cleanup(func() {
 		require.NoError(t, setting.UpdateAutoGroupsByJsonString(originalAutoGroups))
 		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalUsableGroups))
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalRatios))
 		specialGroups := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup
 		specialGroups.Clear()
 		specialGroups.AddAll(originalSpecialGroups)
@@ -231,6 +233,8 @@ func TestGetUserModelsExpandsAutoGroupsInConfiguredOrder(t *testing.T) {
 
 	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["vip","User","unavailable"]`))
 	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"auto":"自动分组","User":"默认分组","unavailable":"不可用分组"}`))
+	// 二开的分组选择校验还要求分组存在于分组倍率表，这里显式配置。
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"User":1,"vip":1,"unavailable":1}`))
 	specialGroups := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup
 	specialGroups.Clear()
 	specialGroups.Set("User", map[string]string{

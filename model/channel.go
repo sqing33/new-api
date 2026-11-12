@@ -1114,13 +1114,32 @@ func UpdateChannelStatus(channelId int, usingKey string, status int, reason stri
 	if err != nil {
 		return false
 	}
+	// Check the stored row too, since this node's cache may be stale: a request
+	// failure must never replace an administrator's manual disable.
+	if status == common.ChannelStatusAutoDisabled && channel.Status == common.ChannelStatusManuallyDisabled {
+		return false
+	}
 	if channel.ChannelInfo.IsMultiKey {
 		// A multi-key channel derives its status from the per-key list, so a
 		// request that only flips one key must still be persisted even when the
 		// channel-level status stays Enabled. Diffing on the channel status
 		// alone would silently drop the key change.
 		beforeStatus := channel.Status
-		if !handlerMultiKeyUpdate(channel, usingKey, status, reason) {
+		keyChanged := handlerMultiKeyUpdate(channel, usingKey, status, reason)
+		// A manual channel operation must replace the exhaustion reason even
+		// when the status value is already manually disabled: otherwise a later
+		// key enable would still see the all-keys reason and restore the channel.
+		overridesKeyExhaustion := usingKey == "" &&
+			status == common.ChannelStatusManuallyDisabled &&
+			reason != ChannelStatusReasonAllKeysDisabled &&
+			channel.GetOtherInfo()["status_reason"] == ChannelStatusReasonAllKeysDisabled
+		if overridesKeyExhaustion {
+			info := channel.GetOtherInfo()
+			info["status_reason"] = reason
+			info["status_time"] = common.GetTimestamp()
+			channel.SetOtherInfo(info)
+			channel.Status = status
+		} else if !keyChanged {
 			return false
 		}
 		if beforeStatus != channel.Status {
@@ -1128,15 +1147,7 @@ func UpdateChannelStatus(channelId int, usingKey string, status int, reason stri
 		}
 	} else {
 		// Check the stored row too, since this node's cache may be stale.
-		if status == common.ChannelStatusAutoDisabled && channel.Status == common.ChannelStatusManuallyDisabled {
-			return false
-		}
-		// A manual channel operation must replace the exhaustion reason even
-		// when the status value is already manually disabled.
-		overridesKeyExhaustion := channel.ChannelInfo.IsMultiKey && usingKey == "" &&
-			status == common.ChannelStatusManuallyDisabled && reason != ChannelStatusReasonAllKeysDisabled &&
-			channel.GetOtherInfo()["status_reason"] == ChannelStatusReasonAllKeysDisabled
-		if channel.Status == status && !overridesKeyExhaustion {
+		if channel.Status == status {
 			return false
 		}
 		info := channel.GetOtherInfo()

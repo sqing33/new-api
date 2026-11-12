@@ -776,7 +776,8 @@ func UpdateUser(c *gin.Context) {
 	if updatedUser.Group == "" {
 		updatedUser.Group = originUser.Group
 	}
-	if updatedUser.Group != "" {
+	// 分组只在真正变更时才校验：保持原分组不该因为分组表尚未初始化而失败。
+	if updatedUser.Group != originUser.Group {
 		// 分组必须存在于分组倍率表
 		if !ratio_setting.ContainsGroupRatio(updatedUser.Group) {
 			common.ApiErrorI18n(c, i18n.MsgInvalidParams)

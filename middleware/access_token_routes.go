@@ -234,9 +234,14 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"DELETE /api/redemption/:id":     accessTokenScopeRule("redemption:write"),
 
 	// router/api-router.go: /api/audit, /api/log, /api/data
-	"GET /api/audit/self":                       accessTokenScopeRule("usage:read"),
-	"GET /api/log/":                             accessTokenScopeRule("log:read"),
-	"GET /api/log/stat":                         accessTokenScopeRule("log:read"),
+	"GET /api/audit/self": accessTokenScopeRule("usage:read"),
+	"GET /api/log/":       accessTokenScopeRule("log:read"),
+	"GET /api/log/stat":   accessTokenScopeRule("log:read"),
+	// 二开：请求上下文载荷查看与清理。
+	"GET /api/log/payload/session":              accessTokenScopeRule("log:read"),
+	"GET /api/log/payload/session/:session_key": accessTokenScopeRule("log:read"),
+	"GET /api/log/payload/:request_id":          accessTokenScopeRule("log:read"),
+	"DELETE /api/log/payload":                   accessTokenScopeRule("log:write"),
 	"GET /api/log/self/stat":                    accessTokenScopeRule("usage:read"),
 	"GET /api/log/channel_affinity_usage_cache": accessTokenScopeRule("log:read"),
 	"GET /api/log/search":                       accessTokenScopeRule("log:read"),
@@ -306,7 +311,11 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"DELETE /api/deployments/:id":                       accessTokenScopeRule("deployment:write"),
 
 	// router/relay-router.go
-	"POST /pg/chat/completions": accessTokenSessionRule,
+	"POST /pg/chat/completions":   accessTokenSessionRule,
+	"POST /pg/images/generations": accessTokenSessionRule,
+	"POST /pg/images/edits":       accessTokenSessionRule,
+	"POST /pg/videos":             accessTokenSessionRule,
+	"GET /pg/videos/:task_id":     accessTokenSessionRule,
 }
 
 var (
