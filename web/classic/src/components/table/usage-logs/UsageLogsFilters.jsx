@@ -17,12 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React from 'react';
+import React, { useContext } from 'react';
 import { Button, Form } from '@douyinfe/semi-ui';
 import { IconSearch } from '@douyinfe/semi-icons';
 
 import { DATE_RANGE_PRESETS } from '../../../constants/console.constants';
 import { selectFilter } from '../../../helpers';
+import { StatusContext } from '../../../context/Status';
 
 const LogsFilters = ({
   formInitValues,
@@ -38,6 +39,19 @@ const LogsFilters = ({
   imageModelOptions,
   t,
 }) => {
+  const [statusState] = useContext(StatusContext);
+  // 后端 log_setting.max_range_days 限制了普通用户可查询的时间跨度；
+  // 管理员不受限，因此这里只对普通用户生效。
+  const maxRangeDays = Number(statusState?.status?.log_max_range_days) || 0;
+  const limitRange = !isAdminUser && maxRangeDays > 0;
+  const disabledDate = (date) => {
+    if (!limitRange || !date) {
+      return false;
+    }
+    const earliest = Date.now() - maxRangeDays * 24 * 60 * 60 * 1000;
+    return date.getTime() < earliest;
+  };
+
   const operationControls = (
     <div
       className={`flex w-full min-w-0 items-center gap-1 ${imageOnly ? 'justify-end' : ''}`}
@@ -128,6 +142,12 @@ const LogsFilters = ({
               showClear
               pure
               size='small'
+              disabledDate={disabledDate}
+              extraText={
+                limitRange
+                  ? t('最多可查询最近 {{days}} 天的日志', { days: maxRangeDays })
+                  : undefined
+              }
               presets={DATE_RANGE_PRESETS.map((preset) => ({
                 text: t(preset.text),
                 start: preset.start(),

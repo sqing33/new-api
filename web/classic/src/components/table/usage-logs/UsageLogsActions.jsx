@@ -17,9 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React from 'react';
+import React, { useContext } from 'react';
 import { Tag, Space, Skeleton, Button } from '@douyinfe/semi-ui';
 import { IconDownload } from '@douyinfe/semi-icons';
+import { StatusContext } from '../../../context/Status';
 import { renderNumber, renderQuota } from '../../../helpers';
 import CompactModeToggle from '../../common/ui/CompactModeToggle';
 import { useMinimumLoadingTime } from '../../../hooks/common/useMinimumLoadingTime';
@@ -32,8 +33,14 @@ const LogsActions = ({
   setCompactMode,
   exportLogs,
   exportingLogs = false,
+  isAdminUser,
   t,
 }) => {
+  const [statusState] = useContext(StatusContext);
+  // 普通用户的导出能力由后端 log_setting.user_export_enabled 控制；管理员始终可导出。
+  const canExport =
+    isAdminUser !== false ||
+    statusState?.status?.log_export_enabled !== false;
   const showSkeleton = useMinimumLoadingTime(loadingStat);
   const needSkeleton = !showStat || showSkeleton;
 
@@ -99,16 +106,18 @@ const LogsActions = ({
       </Skeleton>
 
       <Space>
-        <Button
-          size='small'
-          type='tertiary'
-          icon={<IconDownload />}
-          loading={exportingLogs}
-          disabled={exportingLogs}
-          onClick={() => exportLogs?.()}
-        >
-          {t('导出日志')}
-        </Button>
+        {canExport && (
+          <Button
+            size='small'
+            type='tertiary'
+            icon={<IconDownload />}
+            loading={exportingLogs}
+            disabled={exportingLogs}
+            onClick={() => exportLogs?.()}
+          >
+            {t('导出日志')}
+          </Button>
+        )}
         <CompactModeToggle
           compactMode={compactMode}
           setCompactMode={setCompactMode}

@@ -4635,7 +4635,8 @@
     "被动恢复": "Récupération passive",
     "全部渠道：每轮测试所有已启用渠道；仅自动禁用：只测被自动禁用的渠道；被动恢复：等待上游请求成功后再恢复": "Tous les canaux teste chaque canal activé ; auto-désactivés ne teste que ceux désactivés automatiquement ; la récupération passive attend une requête amont réussie",
     "定时测试并发数": "Concurrence des tests planifiés",
-    "一轮定时测试同时测试的渠道数量，过大会加重上游压力": "Nombre de canaux testés simultanément par tour ; une valeur élevée charge les amonts"
+    "一轮定时测试同时测试的渠道数量，过大会加重上游压力": "Nombre de canaux testés simultanément par tour ; une valeur élevée charge les amonts",
+    "最多可查询最近 {{days}} 天的日志": "Vous pouvez consulter au plus les {{days}} derniers jours de journaux"
   },
   "启用TTS": "Activer TTS",
   "启用ASR": "Activer ASR",
