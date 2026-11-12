@@ -45,6 +45,8 @@ export default function SettingsMonitoring(props) {
     'monitor_setting.auto_test_channel_enabled': false,
     'monitor_setting.auto_test_channel_minutes': 10,
     'monitor_setting.upstream_pricing_monitor_interval_minutes': 60,
+    'monitor_setting.channel_test_mode': 'scheduled_all',
+    'monitor_setting.channel_test_concurrency': 1,
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -163,6 +165,44 @@ export default function SettingsMonitoring(props) {
                         parseInt(value),
                     })
                   }
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Select
+                  field={'monitor_setting.channel_test_mode'}
+                  label={t('定时测试范围')}
+                  style={{ width: '100%' }}
+                  optionList={[
+                    { label: t('全部渠道'), value: 'scheduled_all' },
+                    { label: t('仅自动禁用渠道'), value: 'auto_ban_only' },
+                    { label: t('被动恢复'), value: 'passive_recovery' },
+                  ]}
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      'monitor_setting.channel_test_mode': value,
+                    })
+                  }
+                  extraText={t(
+                    '全部渠道：每轮测试所有已启用渠道；仅自动禁用：只测被自动禁用的渠道；被动恢复：等待上游请求成功后再恢复',
+                  )}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'monitor_setting.channel_test_concurrency'}
+                  label={t('定时测试并发数')}
+                  min={1}
+                  max={32}
+                  precision={0}
+                  style={{ width: '100%' }}
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      'monitor_setting.channel_test_concurrency': parseInt(value),
+                    })
+                  }
+                  extraText={t('一轮定时测试同时测试的渠道数量，过大会加重上游压力')}
                 />
               </Col>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>

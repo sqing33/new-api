@@ -4757,7 +4757,14 @@
     "上游返回模型": "Model returned upstream",
     "上游返回模型不一致": "Upstream returned a different model",
     "请求": "requested",
-    "映射": "mapped"
+    "映射": "mapped",
+    "定时测试范围": "Scheduled test scope",
+    "全部渠道": "All channels",
+    "仅自动禁用渠道": "Auto-disabled channels only",
+    "被动恢复": "Passive recovery",
+    "全部渠道：每轮测试所有已启用渠道；仅自动禁用：只测被自动禁用的渠道；被动恢复：等待上游请求成功后再恢复": "All channels tests every enabled channel each round; auto-disabled only tests channels disabled automatically; passive recovery waits for a successful upstream request before restoring",
+    "定时测试并发数": "Scheduled test concurrency",
+    "一轮定时测试同时测试的渠道数量，过大会加重上游压力": "How many channels one scheduled round tests at once; a large value loads upstreams heavily"
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",
