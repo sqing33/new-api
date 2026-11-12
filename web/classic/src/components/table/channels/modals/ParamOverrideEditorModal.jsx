@@ -78,6 +78,7 @@ const CONDITION_MODE_OPTIONS = [
   { label: '前缀匹配', value: 'prefix' },
   { label: '后缀匹配', value: 'suffix' },
   { label: '包含', value: 'contains' },
+  { label: '正则匹配', value: 'regex' },
   { label: '大于', value: 'gt' },
   { label: '大于等于', value: 'gte' },
   { label: '小于', value: 'lt' },

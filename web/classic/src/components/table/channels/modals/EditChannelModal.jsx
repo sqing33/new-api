@@ -256,6 +256,17 @@ const EditChannelModal = (props) => {
     vertex_key_type: 'json',
     // 仅 AWS: 密钥格式和区域（存入 settings.aws_key_type 和 settings.aws_region）
     aws_key_type: 'ak_sk',
+    // 仅 AWS: 请求协议（存入 settings.aws_api_type），mantle 走 Messages API
+    aws_api_type: 'invoke_model',
+    // 仅 Vertex: API Key 模式下的项目 ID、Google 端点版本
+    vertex_project_id: '',
+    vertex_api_version: 'v1',
+    // 仅 Ollama: 聊天补全走 OpenAI 兼容端点
+    ollama_openai_chat: false,
+    // 全渠道: 跳过上游 TLS 校验
+    tls_insecure_skip_verify: false,
+    // 全渠道: 允许该渠道承载 Responses WebSocket
+    responses_websocket_enabled: false,
     // 企业账户设置
     is_enterprise_account: false,
     // 字段透传控制默认值
@@ -998,6 +1009,15 @@ const EditChannelModal = (props) => {
           data.vertex_key_type = parsedSettings.vertex_key_type || 'json';
           // 读取 AWS 密钥格式和区域
           data.aws_key_type = parsedSettings.aws_key_type || 'ak_sk';
+          data.aws_api_type = parsedSettings.aws_api_type || 'invoke_model';
+          // 读取 Vertex 项目 ID 与端点版本
+          data.vertex_project_id = parsedSettings.vertex_project_id || '';
+          data.vertex_api_version = parsedSettings.vertex_api_version || 'v1';
+          data.ollama_openai_chat = parsedSettings.ollama_openai_chat === true;
+          data.tls_insecure_skip_verify =
+            parsedSettings.tls_insecure_skip_verify === true;
+          data.responses_websocket_enabled =
+            parsedSettings.responses_websocket_enabled === true;
           // 读取企业账户设置
           data.is_enterprise_account =
             parsedSettings.openrouter_enterprise === true;
@@ -1904,16 +1924,43 @@ const EditChannelModal = (props) => {
         localInputs.is_enterprise_account === true;
     }
 
-    // type === 33 (AWS): 保存 aws_key_type 到 settings
+    // type === 33 (AWS): 保存 aws_key_type / aws_api_type 到 settings
     if (localInputs.type === 33) {
       settings.aws_key_type = localInputs.aws_key_type || 'ak_sk';
+      settings.aws_api_type = localInputs.aws_api_type || 'invoke_model';
     }
+
+    // type === 4 (Ollama): 是否走 OpenAI 兼容聊天端点
+    if (localInputs.type === 4) {
+      settings.ollama_openai_chat = localInputs.ollama_openai_chat === true;
+    }
+
+    // 全渠道：跳过上游 TLS 校验、允许 Responses WebSocket
+    settings.tls_insecure_skip_verify =
+      localInputs.tls_insecure_skip_verify === true;
+    settings.responses_websocket_enabled =
+      localInputs.responses_websocket_enabled === true;
 
     // type === 41 (Vertex): 始终保存 vertex_key_type 到 settings，避免编辑时被重置
     if (localInputs.type === 41) {
       settings.vertex_key_type = localInputs.vertex_key_type || 'json';
-    } else if ('vertex_key_type' in settings) {
-      delete settings.vertex_key_type;
+      const vertexProjectId = String(localInputs.vertex_project_id || '').trim();
+      if (vertexProjectId) {
+        settings.vertex_project_id = vertexProjectId;
+      } else {
+        delete settings.vertex_project_id;
+      }
+      settings.vertex_api_version = localInputs.vertex_api_version || 'v1';
+    } else {
+      if ('vertex_key_type' in settings) {
+        delete settings.vertex_key_type;
+      }
+      if ('vertex_project_id' in settings) {
+        delete settings.vertex_project_id;
+      }
+      if ('vertex_api_version' in settings) {
+        delete settings.vertex_api_version;
+      }
     }
 
     // type === 1 (OpenAI) 或 type === 14 (Claude): 设置字段透传控制（显式保存布尔值）
@@ -2037,8 +2084,15 @@ const EditChannelModal = (props) => {
     delete localInputs.is_enterprise_account;
     // 顶层的 vertex_key_type 不应发送给后端
     delete localInputs.vertex_key_type;
-    // 顶层的 aws_key_type 不应发送给后端
+    // 顶层的 aws_key_type / aws_api_type 不应发送给后端
     delete localInputs.aws_key_type;
+    delete localInputs.aws_api_type;
+    // 顶层的 Vertex / Ollama / 传输设置同样是 settings 专属字段
+    delete localInputs.vertex_project_id;
+    delete localInputs.vertex_api_version;
+    delete localInputs.ollama_openai_chat;
+    delete localInputs.tls_insecure_skip_verify;
+    delete localInputs.responses_websocket_enabled;
     // 清理字段透传控制的临时字段
     delete localInputs.allow_service_tier;
     delete localInputs.disable_store;
@@ -2982,6 +3036,57 @@ const EditChannelModal = (props) => {
                     </Col>
                   </Row>
 
+                  <div className='mt-4 mb-2 text-sm font-medium text-gray-700'>
+                    {t('传输与连接')}
+                  </div>
+                  <Form.Switch
+                    field='responses_websocket_enabled'
+                    label={t('允许 Responses WebSocket')}
+                    checkedText={t('开')}
+                    uncheckedText={t('关')}
+                    onChange={(value) =>
+                      handleChannelOtherSettingsChange(
+                        'responses_websocket_enabled',
+                        value,
+                      )
+                    }
+                    extraText={t(
+                      '开启后该渠道可以承载 /v1/responses 的 WebSocket 连接；关闭时仍按普通 HTTP 转发',
+                    )}
+                  />
+                  <Form.Switch
+                    field='tls_insecure_skip_verify'
+                    label={t('跳过上游 TLS 校验')}
+                    checkedText={t('开')}
+                    uncheckedText={t('关')}
+                    onChange={(value) =>
+                      handleChannelOtherSettingsChange(
+                        'tls_insecure_skip_verify',
+                        value,
+                      )
+                    }
+                    extraText={t(
+                      '仅用于自建上游使用自签证书的场景；开启后该渠道到上游的连接不再校验证书链',
+                    )}
+                  />
+                  {inputs.type === 4 && (
+                    <Form.Switch
+                      field='ollama_openai_chat'
+                      label={t('聊天使用 OpenAI 兼容端点')}
+                      checkedText={t('开')}
+                      uncheckedText={t('关')}
+                      onChange={(value) =>
+                        handleChannelOtherSettingsChange(
+                          'ollama_openai_chat',
+                          value,
+                        )
+                      }
+                      extraText={t(
+                        '开启后 Ollama 的对话请求走 /v1/chat/completions，关闭时走原生 /api/chat',
+                      )}
+                    />
+                  )}
+
                   {inputs.type === 1 && (
                     <>
                       <div className='mt-4 mb-2 text-sm font-medium text-gray-700'>
@@ -3374,6 +3479,29 @@ const EditChannelModal = (props) => {
                               'AK/SK 模式：使用 AccessKey 和 SecretAccessKey；API Key 模式：使用 API Key',
                             )}
                           />
+                          <Form.Select
+                            field='aws_api_type'
+                            label={t('请求协议')}
+                            placeholder={t('请选择请求协议')}
+                            optionList={[
+                              {
+                                label: 'InvokeModel',
+                                value: 'invoke_model',
+                              },
+                              { label: 'Mantle Messages', value: 'mantle' },
+                            ]}
+                            style={{ width: '100%' }}
+                            value={inputs.aws_api_type || 'invoke_model'}
+                            onChange={(value) =>
+                              handleChannelOtherSettingsChange(
+                                'aws_api_type',
+                                value,
+                              )
+                            }
+                            extraText={t(
+                              'Mantle Messages 使用 Bedrock 的 Messages API，InvokeModel 使用原生模型调用',
+                            )}
+                          />
                         </>
                       )}
 
@@ -3410,6 +3538,43 @@ const EditChannelModal = (props) => {
                               ? t('API Key 模式下不支持批量创建')
                               : t('JSON 模式支持手动输入或上传服务账号 JSON')
                           }
+                        />
+                      )}
+                      {inputs.type === 41 && inputs.vertex_key_type === 'api_key' && (
+                        <Form.Input
+                          field='vertex_project_id'
+                          label={t('项目 ID')}
+                          placeholder={t('API Key 模式需要填写 Google Cloud 项目 ID')}
+                          style={{ width: '100%' }}
+                          value={inputs.vertex_project_id || ''}
+                          onChange={(value) =>
+                            handleInputChange('vertex_project_id', value)
+                          }
+                          extraText={t(
+                            '官方端点需要项目 ID 才能路由，留空会回退到默认项目',
+                          )}
+                        />
+                      )}
+                      {inputs.type === 41 && (
+                        <Form.Select
+                          field='vertex_api_version'
+                          label={t('端点版本')}
+                          placeholder={t('请选择端点版本')}
+                          optionList={[
+                            { label: 'v1', value: 'v1' },
+                            { label: 'v1beta1', value: 'v1beta1' },
+                          ]}
+                          style={{ width: '100%' }}
+                          value={inputs.vertex_api_version || 'v1'}
+                          onChange={(value) =>
+                            handleChannelOtherSettingsChange(
+                              'vertex_api_version',
+                              value,
+                            )
+                          }
+                          extraText={t(
+                            'v1beta1 支持 Google 的预览模型，默认 v1',
+                          )}
                         />
                       )}
                       {batch ? (
