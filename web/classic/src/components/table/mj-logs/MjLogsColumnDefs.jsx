@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React from 'react';
 import { Button, Progress, Tag, Typography } from '@douyinfe/semi-ui';
+import { TAG_COLORS } from '../../../helpers/render';
 import {
   Palette,
   ZoomIn,
@@ -46,24 +47,6 @@ import {
   Hash,
   Video,
 } from 'lucide-react';
-
-const colors = [
-  'amber',
-  'blue',
-  'cyan',
-  'green',
-  'grey',
-  'indigo',
-  'light-blue',
-  'lime',
-  'orange',
-  'pink',
-  'purple',
-  'red',
-  'teal',
-  'violet',
-  'yellow',
-];
 
 // Render functions
 function renderType(type, t) {
@@ -348,7 +331,7 @@ export const getMjLogsColumns = ({
         return isAdminUser ? (
           <div>
             <Tag
-              color={colors[parseInt(text) % colors.length]}
+              color={TAG_COLORS[parseInt(text) % TAG_COLORS.length]}
               shape='circle'
               prefixIcon={<Hash size={14} />}
               onClick={() => {

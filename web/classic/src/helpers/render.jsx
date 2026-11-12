@@ -636,15 +636,29 @@ export function getOAuthProviderIcon(iconName, size = 20) {
   );
 }
 
-// 颜色列表
-const colors = [
-  'amber',
+// 标签/头像的散列色板（15 槽，与 stringToColor 的下标范围一一对应）。
+//
+// 三条约束，改之前务必先读：
+// 1. 每项都必须是**合法的 CSS 颜色关键字**。操练场的用户名头像会把颜色名直接写进 SVG 的
+//    fill，Semi 自有的 amber / light-blue / light-green 不是 CSS 颜色，写进去会渲染成黑圈。
+// 2. **不放 grey**。grey 是 Semi Tag 的默认色，发出去等于「这个标签没有颜色」，一旦撞上
+//    就是一片灰。
+// 3. 相邻下标要拉开。渠道号是 `TAG_COLORS[id % 15]`，id 连续 → 下标连续，所以数组顺序
+//    不是按字母排的。这里按真实渲染色（light 类型的文字色 --semi-{color}-8）度量，
+//    相邻任意两色 ΔE ≥ 42.5。
+//
+// 15 槽只有 12 个合法颜色，因此有 3 组复用：0/9 pink、2/6 cyan、4/8 orange，
+// 同色索引间隔 ≥ 4，不会在相邻位置出现。
+//
+// 注意：改这个数组会让所有既有标签换色，纯计算映射、没有存量数据需要迁移。
+export const TAG_COLORS = [
+  'pink',
   'blue',
   'cyan',
   'green',
-  'grey',
+  'orange',
   'indigo',
-  'light-blue',
+  'cyan',
   'lime',
   'orange',
   'pink',
@@ -764,8 +778,8 @@ export function stringToColor(str) {
   for (let i = 0; i < str.length; i++) {
     sum += str.charCodeAt(i);
   }
-  let i = sum % colors.length;
-  return colors[i];
+  let i = sum % TAG_COLORS.length;
+  return TAG_COLORS[i];
 }
 
 // 渲染带有模型图标的标签
@@ -809,8 +823,11 @@ export function renderText(text, limit) {
   return text;
 }
 
-// 常见分组的固定配色，其余分组按名称稳定散列，保证同一个分组在任何页面颜色一致。
+// 固定配色的分组，其余分组按名称稳定散列，保证同一个分组在任何页面颜色一致。
+// 这里的 key 是**精确匹配**（区分大小写），含大写字母的分组要原样写进来，例如数据库里
+// 实际的 `Admin` 分组，写成 `admin` 是匹配不上的。
 const groupTagColors = {
+  Admin: 'red',
   vip: 'yellow',
   pro: 'yellow',
   svip: 'red',
