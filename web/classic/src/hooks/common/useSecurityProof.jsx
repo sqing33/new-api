@@ -122,11 +122,19 @@ export const useSecurityProof = () => {
           scope,
           password,
           !!requirements?.password_encryption_enabled,
+          context,
         );
       } else if (method === '2fa') {
-        proofToken = await SecurityProofService.verifyWith2FA(scope, code);
+        proofToken = await SecurityProofService.verifyWith2FA(
+          scope,
+          code,
+          context,
+        );
       } else if (method === 'passkey') {
-        proofToken = await SecurityProofService.verifyWithPasskey(scope);
+        proofToken = await SecurityProofService.verifyWithPasskey(
+          scope,
+          context,
+        );
       } else {
         throw new Error('当前验证方式暂不支持，请选择其他方式');
       }

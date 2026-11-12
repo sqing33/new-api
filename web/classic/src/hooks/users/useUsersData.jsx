@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSecurityProof } from '../common/useSecurityProof';
+import { secureProofHeaders } from '../../services/securityProof';
 import { API, showError, showSuccess } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
@@ -58,6 +60,26 @@ const getDefaultUserColumnVisibility = () => ({
 });
 
 export const useUsersData = () => {
+  // 管理员用户管理属于高风险操作：后端要求带上下文的二次验证证明。
+  const {
+    proofState: adminProofState,
+    requireProof: requireAdminProof,
+    submitProof: submitAdminProof,
+    cancelProof: cancelAdminProof,
+    selectProofMethod: selectAdminProofMethod,
+    setProofCode: setAdminProofCode,
+    setProofPassword: setAdminProofPassword,
+  } = useSecurityProof();
+
+  const withAdminProof = (scope, context, title, run) =>
+    requireAdminProof({
+      scope,
+      context,
+      title,
+      onSuccess: async (proof) => {
+        await run(proof);
+      },
+    });
   const { t } = useTranslation();
   const [compactMode, setCompactMode] = useTableCompactMode('users');
 
@@ -202,13 +224,19 @@ export const useUsersData = () => {
 
   // Manage user operations (promote, demote, enable, disable, delete)
   const manageUser = async (userId, action, record) => {
-    // Trigger loading state to force table re-render
-    setLoading(true);
+    await withAdminProof(
+      'admin.user.manage',
+      { user_id: userId, action },
+      t('管理用户'),
+      async (proof) => {
+        // Trigger loading state to force table re-render
+        setLoading(true);
 
-    const res = await API.post('/api/user/manage', {
-      id: userId,
-      action,
-    });
+    const res = await API.post(
+      '/api/user/manage',
+      { id: userId, action },
+      { headers: secureProofHeaders(proof) },
+    );
 
     const { success, message } = res.data;
     if (success) {
@@ -226,20 +254,29 @@ export const useUsersData = () => {
         return u;
       });
 
-      setUsers(newUsers);
-    } else {
-      showError(message);
-    }
+        setUsers(newUsers);
+      } else {
+        showError(message);
+      }
 
-    setLoading(false);
+        setLoading(false);
+      },
+    );
   };
 
   const resetUserPasskey = async (user) => {
     if (!user) {
       return;
     }
-    try {
-      const res = await API.delete(`/api/user/${user.id}/reset_passkey`);
+    await withAdminProof(
+      'admin.user.passkey.reset',
+      { user_id: user.id },
+      t('重置 Passkey'),
+      async (proof) => {
+        try {
+      const res = await API.delete(`/api/user/${user.id}/reset_passkey`, {
+        headers: secureProofHeaders(proof),
+      });
       const { success, message } = res.data;
       if (success) {
         showSuccess(t('Passkey 已重置'));
@@ -249,14 +286,23 @@ export const useUsersData = () => {
     } catch (error) {
       showError(t('操作失败，请重试'));
     }
+      },
+    );
   };
 
   const resetUserTwoFA = async (user) => {
     if (!user) {
       return;
     }
-    try {
-      const res = await API.delete(`/api/user/${user.id}/2fa`);
+    await withAdminProof(
+      'admin.user.2fa.disable',
+      { user_id: user.id },
+      t('重置二步验证'),
+      async (proof) => {
+        try {
+      const res = await API.delete(`/api/user/${user.id}/2fa`, {
+        headers: secureProofHeaders(proof),
+      });
       const { success, message } = res.data;
       if (success) {
         showSuccess(t('二步验证已重置'));
@@ -266,6 +312,8 @@ export const useUsersData = () => {
     } catch (error) {
       showError(t('操作失败，请重试'));
     }
+      },
+    );
   };
 
   // Handle page change
@@ -409,5 +457,13 @@ export const useUsersData = () => {
 
     // Translation
     t,
+
+    // Admin step-up verification
+    adminProofState,
+    submitAdminProof,
+    cancelAdminProof,
+    selectAdminProofMethod,
+    setAdminProofCode,
+    setAdminProofPassword,
   };
 };

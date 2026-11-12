@@ -27,6 +27,7 @@ import AddUserModal from './modals/AddUserModal';
 import ColumnSelectorModal from './modals/ColumnSelectorModal';
 import EditUserModal from './modals/EditUserModal';
 import { useUsersData } from '../../../hooks/users/useUsersData';
+import SecurityProofModal from '../../common/modals/SecurityProofModal';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
 
@@ -64,6 +65,14 @@ const UsersPage = () => {
 
     // Translation
     t,
+
+    // Admin step-up verification
+    adminProofState,
+    submitAdminProof,
+    cancelAdminProof,
+    selectAdminProofMethod,
+    setAdminProofCode,
+    setAdminProofPassword,
   } = usersData;
 
   return (
@@ -75,6 +84,16 @@ const UsersPage = () => {
       />
 
       <ColumnSelectorModal {...usersData} t={t} />
+
+      <SecurityProofModal
+        proofState={adminProofState}
+        submitProof={submitAdminProof}
+        cancelProof={cancelAdminProof}
+        selectProofMethod={selectAdminProofMethod}
+        setProofCode={setAdminProofCode}
+        setProofPassword={setAdminProofPassword}
+        t={t}
+      />
 
       <EditUserModal
         refresh={refresh}

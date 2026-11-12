@@ -5095,7 +5095,8 @@
     "当前账号没有可授予的权限": "Tài khoản này không có quyền nào có thể cấp",
     "访问令牌已生成并复制到剪贴板": "Đã tạo token truy cập và sao chép vào clipboard",
     "访问令牌已生成": "Đã tạo token truy cập",
-    "吊销": "Thu hồi"
+    "吊销": "Thu hồi",
+    "重置二步验证": "Đặt lại xác thực hai lớp"
   },
   "启用TTS": "Bật TTS",
   "启用ASR": "Bật ASR",

@@ -4713,7 +4713,9 @@
     "当前账号没有可授予的权限": "This account has no grantable permissions",
     "访问令牌已生成并复制到剪贴板": "Access token created and copied to clipboard",
     "访问令牌已生成": "Access token created",
-    "吊销": "Revoke"
+    "吊销": "Revoke",
+    "管理用户": "Manage user",
+    "重置二步验证": "Reset two-factor authentication"
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",
