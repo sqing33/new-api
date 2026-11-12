@@ -644,28 +644,42 @@ export const getLogsColumns = ({
       key: COLUMN_KEYS.TOKEN,
       title: t('令牌'),
       dataIndex: 'token_name',
+      // 名字与标签各占一半，中线是两者的分界。列宽跟着放大到能放下半个名字，
+      // 名字过长时省略号截断，不会挤到右侧标签下面。
+      width: 220,
       render: (text, record, index) => {
         return record.type === 0 ||
           record.type === 2 ||
           record.type === 5 ||
           record.type === 6 ? (
-          <div className='flex items-center justify-center gap-1'>
-            <Tag
-              color='grey'
-              shape='circle'
-              onClick={(event) => {
-                copyText(event, text);
-              }}
-            >
-              {' '}
-              {t(text)}{' '}
-            </Tag>
-            {/* 令牌标签是用户自建的标记，跟在令牌名右边，不另开一列 */}
-            {record.token_group && (
-              <Tag color={groupTagColor(record.token_group)} shape='circle' type='light'>
-                {record.token_group}
+          <div className='flex w-full items-center'>
+            {/* 左半：令牌名右对齐，贴住中线 */}
+            <div className='flex min-w-0 flex-1 items-center justify-end pr-1'>
+              <Tag
+                color='grey'
+                shape='circle'
+                className='min-w-0'
+                onClick={(event) => {
+                  copyText(event, text);
+                }}
+              >
+                {' '}
+                {t(text)}{' '}
               </Tag>
-            )}
+            </div>
+            {/* 右半：令牌标签左对齐，同样贴住中线；它是用户自建的标记，不另开一列 */}
+            <div className='flex min-w-0 flex-1 items-center justify-start pl-1'>
+              {record.token_group && (
+                <Tag
+                  color={groupTagColor(record.token_group)}
+                  shape='circle'
+                  type='light'
+                  className='min-w-0'
+                >
+                  {record.token_group}
+                </Tag>
+              )}
+            </div>
           </div>
         ) : (
           <></>
