@@ -63,48 +63,17 @@ func UsingLogDatabase(databaseType DatabaseType) bool {
 //     front, so writers serialize through the busy timeout instead of dying on
 //     a stale snapshot. Autocommit SELECTs stay concurrent because WAL keeps
 //     readers unlocked.
-var SQLitePath = "one-api.db?_pragma=busy_timeout(30000)&_pragma=journal_mode(WAL)&_txlock=immediate"
+var SQLitePath = "one-api.db?" + sqliteConcurrencyParams
 
-// requiredSQLitePragmas 是 SQLite DSN 必须包含的 pragma/txlock 段。
-// 任何缺这些的 DSN 在 #6805 描述的并发写场景会复现 "database is locked"。
-// 见 SQLitePath 上方注释。
-var requiredSQLitePragmas = []string{
-	"_pragma=busy_timeout(30000)",
-	"_pragma=journal_mode(WAL)",
-	"_txlock=immediate",
-}
+// sqliteConcurrencyParams are the DSN parameters SQLitePath explains above.
+const sqliteConcurrencyParams = "_pragma=busy_timeout(30000)&_pragma=journal_mode(WAL)&_txlock=immediate"
 
-// NormalizeSQLiteDSN 把缺失的 requiredSQLitePragmas 强制注入 DSN。已经手动设
-// 过的同名段不被覆盖(让运维能调 busy_timeout 之类)。
-// 接收 "path" 或 "path?k=v&k=v" 两种形式。
-func NormalizeSQLiteDSN(dsn string) string {
-	split := strings.SplitN(dsn, "?", 2)
-	path := split[0]
-	query := ""
-	if len(split) == 2 {
-		query = split[1]
+// sqliteDSN turns a SQLITE_PATH value into a DSN. A bare path gets the
+// default concurrency parameters; a value with its own query string is used
+// as given.
+func sqliteDSN(path string) string {
+	if strings.Contains(path, "?") {
+		return path
 	}
-	pairs := []string{}
-	if query != "" {
-		for _, kv := range strings.Split(query, "&") {
-			if kv == "" {
-				continue
-			}
-			pairs = append(pairs, kv)
-		}
-	}
-	for _, required := range requiredSQLitePragmas {
-		prefix := strings.SplitN(required, "=", 2)[0] + "="
-		found := false
-		for _, existing := range pairs {
-			if strings.HasPrefix(existing, prefix) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			pairs = append(pairs, required)
-		}
-	}
-	return path + "?" + strings.Join(pairs, "&")
+	return path + "?" + sqliteConcurrencyParams
 }
