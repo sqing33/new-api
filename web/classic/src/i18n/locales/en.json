@@ -4747,7 +4747,13 @@
     "暂无渠道": "No channels",
     "清空历史": "Clear history",
     "任务历史已清空": "Task history cleared",
-    "清空任务历史失败": "Failed to clear task history"
+    "清空任务历史失败": "Failed to clear task history",
+    "请选择该渠道绑定的任务插件": "Select the task plugin bound to this channel",
+    "任务插件渠道只能绑定一个已安装的插件，模型与鉴权由插件自身声明": "A task plugin channel binds exactly one installed plugin; the plugin declares its models and authentication",
+    "额外绑定的任务插件": "Additional bound task plugins",
+    "可选，可多选": "Optional, multiple allowed",
+    "New API 渠道可额外透传多个任务插件；单个插件请填写在上方的任务插件 key": "A New API channel can forward additional task plugins; put a single plugin in the task plugin key above",
+    "高级自定义": "Advanced custom"
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",

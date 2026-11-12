@@ -267,6 +267,10 @@ const EditChannelModal = (props) => {
     tls_insecure_skip_verify: false,
     // 全渠道: 允许该渠道承载 Responses WebSocket
     responses_websocket_enabled: false,
+    // 任务插件渠道（type 61）绑定的插件 key，存入 settings.task_plugin_key
+    task_plugin_key: '',
+    // New API 渠道（type 60）额外绑定的插件集合，存入 settings.task_extend_plugin_keys
+    task_extend_plugin_keys: [],
     // 企业账户设置
     is_enterprise_account: false,
     // 字段透传控制默认值
@@ -456,6 +460,9 @@ const EditChannelModal = (props) => {
     useState(false);
   const [paramOverrideEditorVisible, setParamOverrideEditorVisible] =
     useState(false);
+  // 任务插件渠道（61）与 New API 渠道（60）绑定的插件候选
+  const [taskPluginOptions, setTaskPluginOptions] = useState([]);
+  const [taskPluginsLoading, setTaskPluginsLoading] = useState(false);
   const [quotaQueryPresetOptions, setQuotaQueryPresetOptions] = useState([]);
   const [quotaQueryPresetCatalog, setQuotaQueryPresetCatalog] = useState({});
   // SenseNova per-key account credentials: { [keyIndex]: {username, password} }.
@@ -517,6 +524,39 @@ const EditChannelModal = (props) => {
       setIonetMetadata(null);
     }
   }, [isEdit]);
+
+  // 仅在需要插件绑定的渠道类型下加载候选插件，避免每次打开编辑器都拉一次。
+  useEffect(() => {
+    if (inputs.type !== 60 && inputs.type !== 61) {
+      return;
+    }
+    let cancelled = false;
+    setTaskPluginsLoading(true);
+    API.get('/api/plugin/task', { skipErrorHandler: true })
+      .then((res) => {
+        if (cancelled || !res?.data?.success) {
+          return;
+        }
+        const plugins = Array.isArray(res.data.data) ? res.data.data : [];
+        setTaskPluginOptions(
+          plugins.map((plugin) => ({
+            value: plugin.key,
+            label: plugin.name ? `${plugin.name} (${plugin.key})` : plugin.key,
+          })),
+        );
+      })
+      .catch(() => {
+        // 插件列表拉取失败时保持空列表，仍可手工填写 key
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setTaskPluginsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [inputs.type]);
 
   const handleOpenIonetDeployment = () => {
     if (!ionetMetadata?.deployment_id) {
@@ -1018,6 +1058,13 @@ const EditChannelModal = (props) => {
             parsedSettings.tls_insecure_skip_verify === true;
           data.responses_websocket_enabled =
             parsedSettings.responses_websocket_enabled === true;
+          // 读取任务插件绑定
+          data.task_plugin_key = parsedSettings.task_plugin_key || '';
+          data.task_extend_plugin_keys = Array.isArray(
+            parsedSettings.task_extend_plugin_keys,
+          )
+            ? parsedSettings.task_extend_plugin_keys
+            : [];
           // 读取企业账户设置
           data.is_enterprise_account =
             parsedSettings.openrouter_enterprise === true;
@@ -1933,6 +1980,26 @@ const EditChannelModal = (props) => {
     // type === 4 (Ollama): 是否走 OpenAI 兼容聊天端点
     if (localInputs.type === 4) {
       settings.ollama_openai_chat = localInputs.ollama_openai_chat === true;
+    }
+
+    // type 61（任务插件）：单个插件 key 是该渠道的必填绑定；
+    // type 60（New API）：可额外绑定多个插件，二者共用同一份去重校验。
+    if (localInputs.type === 61) {
+      settings.task_plugin_key = String(localInputs.task_plugin_key || '').trim();
+    } else if ('task_plugin_key' in settings) {
+      delete settings.task_plugin_key;
+    }
+    if (localInputs.type === 60) {
+      const extendKeys = Array.isArray(localInputs.task_extend_plugin_keys)
+        ? localInputs.task_extend_plugin_keys.filter((key) => !!key)
+        : [];
+      if (extendKeys.length > 0) {
+        settings.task_extend_plugin_keys = extendKeys;
+      } else {
+        delete settings.task_extend_plugin_keys;
+      }
+    } else if ('task_extend_plugin_keys' in settings) {
+      delete settings.task_extend_plugin_keys;
     }
 
     // 全渠道：跳过上游 TLS 校验、允许 Responses WebSocket
@@ -3069,6 +3136,49 @@ const EditChannelModal = (props) => {
                       '仅用于自建上游使用自签证书的场景；开启后该渠道到上游的连接不再校验证书链',
                     )}
                   />
+                  {inputs.type === 61 && (
+                    <Form.Select
+                      field='task_plugin_key'
+                      label={t('任务插件')}
+                      placeholder={t('请选择该渠道绑定的任务插件')}
+                      style={{ width: '100%' }}
+                      optionList={taskPluginOptions}
+                      filter
+                      showClear
+                      loading={taskPluginsLoading}
+                      onChange={(value) =>
+                        handleChannelOtherSettingsChange(
+                          'task_plugin_key',
+                          String(value || '').trim(),
+                        )
+                      }
+                      extraText={t(
+                        '任务插件渠道只能绑定一个已安装的插件，模型与鉴权由插件自身声明',
+                      )}
+                    />
+                  )}
+                  {inputs.type === 60 && (
+                    <Form.Select
+                      field='task_extend_plugin_keys'
+                      label={t('额外绑定的任务插件')}
+                      placeholder={t('可选，可多选')}
+                      style={{ width: '100%' }}
+                      optionList={taskPluginOptions}
+                      multiple
+                      filter
+                      showClear
+                      loading={taskPluginsLoading}
+                      onChange={(value) =>
+                        handleChannelOtherSettingsChange(
+                          'task_extend_plugin_keys',
+                          Array.isArray(value) ? value : [],
+                        )
+                      }
+                      extraText={t(
+                        'New API 渠道可额外透传多个任务插件；单个插件请填写在上方的任务插件 key',
+                      )}
+                    />
+                  )}
                   {inputs.type === 4 && (
                     <Form.Switch
                       field='ollama_openai_chat'

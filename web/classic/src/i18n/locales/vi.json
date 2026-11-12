@@ -5128,7 +5128,13 @@
     "暂无渠道": "Chưa có kênh",
     "清空历史": "Xóa lịch sử",
     "任务历史已清空": "Đã xóa lịch sử tác vụ",
-    "清空任务历史失败": "Xóa lịch sử tác vụ thất bại"
+    "清空任务历史失败": "Xóa lịch sử tác vụ thất bại",
+    "请选择该渠道绑定的任务插件": "Chọn plugin tác vụ gắn với kênh này",
+    "任务插件渠道只能绑定一个已安装的插件，模型与鉴权由插件自身声明": "Kênh plugin tác vụ chỉ gắn một plugin đã cài; plugin tự khai báo model và xác thực",
+    "额外绑定的任务插件": "Plugin tác vụ gắn thêm",
+    "可选，可多选": "Tùy chọn, có thể chọn nhiều",
+    "New API 渠道可额外透传多个任务插件；单个插件请填写在上方的任务插件 key": "Kênh New API có thể truyền thêm nhiều plugin tác vụ; nếu chỉ một, hãy điền ở ô phía trên",
+    "高级自定义": "Tùy chỉnh nâng cao"
   },
   "启用TTS": "Bật TTS",
   "启用ASR": "Bật ASR",

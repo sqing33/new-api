@@ -4618,7 +4618,13 @@
     "暂无渠道": "Aucun canal",
     "清空历史": "Effacer l’historique",
     "任务历史已清空": "Historique des tâches effacé",
-    "清空任务历史失败": "Échec de l’effacement de l’historique"
+    "清空任务历史失败": "Échec de l’effacement de l’historique",
+    "请选择该渠道绑定的任务插件": "Sélectionnez le plugin de tâche lié à ce canal",
+    "任务插件渠道只能绑定一个已安装的插件，模型与鉴权由插件自身声明": "Un canal de plugin de tâche ne lie qu’un seul plugin installé ; le plugin déclare ses modèles et son authentification",
+    "额外绑定的任务插件": "Plugins de tâche liés en plus",
+    "可选，可多选": "Facultatif, plusieurs choix possibles",
+    "New API 渠道可额外透传多个任务插件；单个插件请填写在上方的任务插件 key": "Un canal New API peut transmettre plusieurs plugins de tâche supplémentaires ; pour un seul plugin, utilisez le champ ci-dessus",
+    "高级自定义": "Personnalisé avancé"
   },
   "启用TTS": "Activer TTS",
   "启用ASR": "Activer ASR",

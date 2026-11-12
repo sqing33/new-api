@@ -190,6 +190,26 @@ export const CHANNEL_OPTIONS = [
     label: 'Codex (OpenAI OAuth)',
   },
   {
+    value: 58,
+    color: 'purple',
+    label: '高级自定义',
+  },
+  {
+    value: 59,
+    color: 'blue',
+    label: 'Sub2API',
+  },
+  {
+    value: 60,
+    color: 'blue',
+    label: 'New API',
+  },
+  {
+    value: 61,
+    color: 'green',
+    label: '任务插件',
+  },
+  {
     value: 62,
     color: 'blue',
     label: 'vLLM',
