@@ -4608,5 +4608,10 @@
   "慢失败阈值（秒）": "Seuil d'échec lent (s)",
   "单次尝试耗时超过该值且失败时记为慢失败，0 表示不启用": "Une tentative qui dure au moins ce temps et échoue compte comme un échec lent ; 0 le désactive",
   "慢失败连续次数": "Échecs lents consécutifs",
-  "连续出现该次数的慢失败后，立即放弃同渠道重试并换渠道，0 表示不启用": "Après ce nombre d'échecs lents consécutifs, abandonne les tentatives sur le même canal et change de canal ; 0 le désactive"
+  "连续出现该次数的慢失败后，立即放弃同渠道重试并换渠道，0 表示不启用": "Après ce nombre d'échecs lents consécutifs, abandonne les tentatives sur le même canal et change de canal ; 0 le désactive",
+  "设置头像": "Définir l'avatar",
+  "移除头像": "Supprimer l'avatar",
+  "头像已更新": "Avatar mis à jour",
+  "头像已移除": "Avatar supprimé",
+  "请选择图片文件": "Veuillez choisir un fichier image"
 }

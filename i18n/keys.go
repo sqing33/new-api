@@ -128,6 +128,8 @@ const (
 	MsgUserTelegramNotBound          = "user.telegram_not_bound"
 	MsgUserLinuxDOIdEmpty            = "user.linux_do_id_empty"
 	MsgUserQuotaChangeZero           = "user.quota_change_zero"
+	MsgUserAvatarInvalidFile         = "user.avatar_invalid_file"
+	MsgUserAvatarTooLarge            = "user.avatar_too_large"
 )
 
 // Quota related messages

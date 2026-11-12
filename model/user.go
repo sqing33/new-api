@@ -94,8 +94,9 @@ type User struct {
 	HasPassword          bool                       `json:"-" gorm:"-:all"`
 	OriginalPassword     string                     `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
 	DisplayName          string                     `json:"display_name" gorm:"index" validate:"max=20"`
-	Role                 int                        `json:"role" gorm:"type:int;default:1"`   // admin, common
-	Status               int                        `json:"status" gorm:"type:int;default:1"` // enabled, disabled
+	Avatar               string                     `json:"avatar,omitempty" gorm:"type:text"` // data URL of the custom avatar; empty means the generated placeholder
+	Role                 int                        `json:"role" gorm:"type:int;default:1"`    // admin, common
+	Status               int                        `json:"status" gorm:"type:int;default:1"`  // enabled, disabled
 	Email                string                     `json:"email" gorm:"index" validate:"max=50"`
 	GitHubId             string                     `json:"github_id" gorm:"column:github_id;index"`
 	DiscordId            string                     `json:"discord_id" gorm:"column:discord_id;index"`
@@ -223,6 +224,15 @@ func UpdateUserSetting(userId int, setting dto.UserSetting) error {
 		return err
 	}
 	return updateUserSettingCache(userId, settingValue)
+}
+
+// UpdateUserAvatar writes only the avatar column. An empty value removes the
+// custom avatar and lets the frontend fall back to the generated placeholder.
+func UpdateUserAvatar(userId int, avatar string) error {
+	if userId == 0 {
+		return errors.New("id 为空！")
+	}
+	return DB.Model(&User{}).Where("id = ?", userId).Update("avatar", avatar).Error
 }
 
 // userBindColumns 允许通过 UpdateUserBindColumn 更新的第三方账号绑定列白名单。
@@ -446,7 +456,7 @@ func GetAllUsers(pageInfo *common.PageInfo, sortOptions ...UserSortOptions) (use
 	if order.SortBy == UserSortByConcurrency {
 		// 并发数在 Redis 里，先取全量再内存排序分页
 		var all []*User
-		if err = order.Apply(DB.Unscoped()).Omit("password", "access_token").Find(&all).Error; err != nil {
+		if err = order.Apply(DB.Unscoped()).Omit("password", "access_token", "avatar").Find(&all).Error; err != nil {
 			return nil, 0, err
 		}
 		users = SortByConcurrencyDesc(all, concurrency.DimensionUser,
@@ -455,7 +465,7 @@ func GetAllUsers(pageInfo *common.PageInfo, sortOptions ...UserSortOptions) (use
 			pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 		return users, total, nil
 	}
-	err = order.Apply(DB.Unscoped()).Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password", "access_token").Find(&users).Error
+	err = order.Apply(DB.Unscoped()).Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password", "access_token", "avatar").Find(&users).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -551,7 +561,7 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	order := resolveUserSortOptions(sortOptions)
 	if order.SortBy == UserSortByConcurrency {
 		var all []*User
-		if err = order.Apply(query.Omit("password", "access_token")).Find(&all).Error; err != nil {
+		if err = order.Apply(query.Omit("password", "access_token", "avatar")).Find(&all).Error; err != nil {
 			return nil, 0, err
 		}
 		users = SortByConcurrencyDesc(all, concurrency.DimensionUser,
@@ -560,7 +570,7 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 			startIdx, num)
 		return users, total, nil
 	}
-	err = order.Apply(query.Omit("password", "access_token")).Limit(num).Offset(startIdx).Find(&users).Error
+	err = order.Apply(query.Omit("password", "access_token", "avatar")).Limit(num).Offset(startIdx).Find(&users).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -593,7 +603,7 @@ func GetSelfUserById(id int) (*User, error) {
 		HasPassword bool `gorm:"column:has_password"`
 	}
 	err := DB.Model(&User{}).Select([]string{
-		"id", "username", "display_name", "role", "status", "email",
+		"id", "username", "display_name", "avatar", "role", "status", "email",
 		"github_id", "discord_id", "oidc_id", "wechat_id", "telegram_id",
 		"group", "quota", "used_quota", "request_count", "aff_code", "aff_count",
 		"aff_quota", "aff_history", "inviter_id", "linux_do_id", "setting",
@@ -897,8 +907,12 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 			return err
 		}
 	}
+	// avatar is omitted on purpose: it is only written by UpdateUserAvatar after
+	// the server has decoded and re-encoded the uploaded image, so a profile or
+	// admin update must never carry an unprocessed value into the column.
 	if err = tx.Model(&current).Omit(
 		"access_token",
+		"avatar",
 		"quota",
 		"used_quota",
 		"request_count",

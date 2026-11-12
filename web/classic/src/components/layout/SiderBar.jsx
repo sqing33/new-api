@@ -540,7 +540,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           type='tertiary'
           className='sidebar-user-button'
           icon={
-            <Avatar size='extra-small' color={stringToColor(username)}>
+            <Avatar
+              size='extra-small'
+              color={stringToColor(username)}
+              src={user.avatar || undefined}
+            >
               {username?.[0]?.toUpperCase()}
             </Avatar>
           }

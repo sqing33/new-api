@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -560,6 +561,7 @@ func buildSelfUserData(user *model.User) map[string]any {
 		"id":                user.Id,
 		"username":          user.Username,
 		"display_name":      user.DisplayName,
+		"avatar":            user.Avatar,
 		"has_password":      user.HasPassword,
 		"role":              user.Role,
 		"status":            user.Status,
@@ -1020,6 +1022,67 @@ func UpdateSelf(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
 	return
+}
+
+// UpdateUserAvatar accepts a multipart "file" upload, normalizes it into a
+// small square JPEG data URL, and stores it on the user row.
+func UpdateUserAvatar(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, service.UserAvatarMaxUploadBytes+(1<<20))
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			common.ApiErrorI18n(c, i18n.MsgUserAvatarTooLarge)
+			return
+		}
+		common.ApiErrorI18n(c, i18n.MsgUserAvatarInvalidFile)
+		return
+	}
+	if fileHeader.Size <= 0 || fileHeader.Size > service.UserAvatarMaxUploadBytes {
+		common.ApiErrorI18n(c, i18n.MsgUserAvatarTooLarge)
+		return
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgUserAvatarInvalidFile)
+		return
+	}
+	defer file.Close()
+
+	raw, err := io.ReadAll(io.LimitReader(file, service.UserAvatarMaxUploadBytes+1))
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgUserAvatarInvalidFile)
+		return
+	}
+	if int64(len(raw)) > service.UserAvatarMaxUploadBytes {
+		common.ApiErrorI18n(c, i18n.MsgUserAvatarTooLarge)
+		return
+	}
+
+	avatar, err := service.ProcessUserAvatarImage(raw)
+	if err != nil {
+		if errors.Is(err, service.ErrUserAvatarTooLarge) {
+			common.ApiErrorI18n(c, i18n.MsgUserAvatarTooLarge)
+			return
+		}
+		common.ApiErrorI18n(c, i18n.MsgUserAvatarInvalidFile)
+		return
+	}
+	if err := model.UpdateUserAvatar(c.GetInt("id"), avatar); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"avatar": avatar})
+}
+
+// DeleteUserAvatar clears the custom avatar so the generated placeholder is
+// used again.
+func DeleteUserAvatar(c *gin.Context) {
+	if err := model.UpdateUserAvatar(c.GetInt("id"), ""); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccessI18n(c, i18n.MsgUpdateSuccess, nil)
 }
 
 func DeleteUser(c *gin.Context) {

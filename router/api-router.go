@@ -126,6 +126,9 @@ func SetApiRouter(router *gin.Engine) {
 				//selfRoute.POST("/waffo-pancake/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPancakePay)
 				selfRoute.POST("/aff_transfer", controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
+				// 头像上传/清除：只允许写自己的 avatar 列
+				selfRoute.POST("/self/avatar", middleware.UserCriticalRateLimit("avatar-upload"), controller.UpdateUserAvatar)
+				selfRoute.DELETE("/self/avatar", controller.DeleteUserAvatar)
 
 				// 2FA routes
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)

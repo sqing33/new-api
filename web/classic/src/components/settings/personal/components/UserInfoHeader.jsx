@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React from 'react';
+import React, { useContext, useState } from 'react';
 import {
   Avatar,
   Card,
@@ -26,16 +26,25 @@ import {
   Typography,
   Badge,
   Button,
+  Upload,
 } from '@douyinfe/semi-ui';
 import {
+  API,
   isRoot,
   isAdmin,
   renderQuota,
+  setUserData,
+  showError,
+  showSuccess,
   stringToColor,
 } from '../../../../helpers';
+import { UserContext } from '../../../../context/User';
 import { Coins, BarChart2, Users, LogOut } from 'lucide-react';
 
 const UserInfoHeader = ({ t, userState, onLogout }) => {
+  const [, userDispatch] = useContext(UserContext);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
   const getUsername = () => {
     if (userState.user) {
       return userState.user.username;
@@ -50,6 +59,58 @@ const UserInfoHeader = ({ t, userState, onLogout }) => {
       return username.slice(0, 2).toUpperCase();
     }
     return 'NA';
+  };
+
+  const avatar = userState?.user?.avatar;
+
+  const applyAvatar = (nextAvatar) => {
+    const nextUser = { ...userState.user, avatar: nextAvatar };
+    userDispatch({ type: 'login', payload: nextUser });
+    setUserData(nextUser);
+  };
+
+  const handleAvatarChange = async ({ fileList = [] }) => {
+    const file = fileList
+      .filter((item) => item.fileInstance)
+      .slice(-1)[0]?.fileInstance;
+    if (!file) return;
+    if (!file.type || !file.type.startsWith('image/')) {
+      showError(t('请选择图片文件'));
+      return;
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    setAvatarUploading(true);
+    try {
+      const res = await API.post('/api/user/self/avatar', formData);
+      const { success, message, data } = res.data;
+      if (!success) {
+        throw new Error(message || t('操作失败，请重试'));
+      }
+      applyAvatar(data?.avatar || '');
+      showSuccess(t('头像已更新'));
+    } catch (error) {
+      showError(error?.message || t('操作失败，请重试'));
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatarUploading(true);
+    try {
+      const res = await API.delete('/api/user/self/avatar');
+      const { success, message } = res.data;
+      if (!success) {
+        throw new Error(message || t('操作失败，请重试'));
+      }
+      applyAvatar('');
+      showSuccess(t('头像已移除'));
+    } catch (error) {
+      showError(error?.message || t('操作失败，请重试'));
+    } finally {
+      setAvatarUploading(false);
+    }
   };
 
   return (
@@ -70,9 +131,44 @@ const UserInfoHeader = ({ t, userState, onLogout }) => {
           <div className='relative z-10 h-full flex flex-col justify-end p-6'>
             <div className='flex items-center'>
               <div className='flex items-stretch gap-3 sm:gap-4 flex-1 min-w-0'>
-                <Avatar size='large' color={stringToColor(getUsername())}>
-                  {getAvatarText()}
-                </Avatar>
+                <div className='flex flex-col items-center gap-1 flex-shrink-0'>
+                  <Avatar
+                    size='large'
+                    color={stringToColor(getUsername())}
+                    src={avatar || undefined}
+                  >
+                    {getAvatarText()}
+                  </Avatar>
+                  <div className='flex items-center'>
+                    <Upload
+                      accept='image/png,image/jpeg,image/webp,image/gif'
+                      beforeUpload={() => false}
+                      showUploadList={false}
+                      onChange={handleAvatarChange}
+                      uploadTrigger='custom'
+                    >
+                      <Button
+                        size='small'
+                        theme='borderless'
+                        loading={avatarUploading}
+                        style={{ color: 'white' }}
+                      >
+                        {t('设置头像')}
+                      </Button>
+                    </Upload>
+                    {avatar && (
+                      <Button
+                        size='small'
+                        theme='borderless'
+                        disabled={avatarUploading}
+                        onClick={handleRemoveAvatar}
+                        style={{ color: 'white' }}
+                      >
+                        {t('移除头像')}
+                      </Button>
+                    )}
+                  </div>
+                </div>
                 <div className='flex-1 min-w-0 flex flex-col justify-between'>
                   <div
                     className='text-3xl font-bold truncate'

@@ -2,13 +2,18 @@ package model
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -397,4 +402,105 @@ func TestResetUserPasswordByEmailRequiresSingleActiveMatch(t *testing.T) {
 
 	err = ResetUserPasswordByEmail("missing@example.com", "NewPassword123")
 	require.True(t, errors.Is(err, ErrEmailNotFound))
+}
+
+// legacyUserBeforeAvatar mirrors the users table as created by the release
+// that predates the avatar column, so the migration path can be exercised on a
+// database that still has the old schema.
+type legacyUserBeforeAvatar struct {
+	Id       int    `gorm:"primaryKey"`
+	Username string `gorm:"unique;index"`
+	Password string `gorm:"not null;"`
+	Status   int    `gorm:"type:int;default:1"`
+}
+
+func (legacyUserBeforeAvatar) TableName() string { return "users" }
+
+func TestUserAvatarColumnMigrationAndRoundTrip(t *testing.T) {
+	previousRedis := common.RedisEnabled
+	common.RedisEnabled = false
+	t.Cleanup(func() { common.RedisEnabled = previousRedis })
+
+	tests := []struct {
+		name      string
+		env       string
+		dialector func(string) gorm.Dialector
+	}{
+		{name: "sqlite", dialector: func(string) gorm.Dialector { return sqlite.Open(":memory:") }},
+		{name: "mysql", env: "TEST_MYSQL_DSN", dialector: func(dsn string) gorm.Dialector { return mysql.Open(dsn) }},
+		{name: "postgres", env: "TEST_POSTGRES_DSN", dialector: func(dsn string) gorm.Dialector {
+			return postgres.New(postgres.Config{DSN: dsn, PreferSimpleProtocol: true})
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dsn := strings.TrimSpace(os.Getenv(test.env))
+			if test.env != "" && dsn == "" {
+				t.Skip(test.env + " is not configured")
+			}
+			db, err := gorm.Open(test.dialector(dsn), &gorm.Config{})
+			require.NoError(t, err)
+			connection, err := db.DB()
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = connection.Close() })
+			t.Cleanup(func() {
+				// Leave the shared test database on the current schema for the
+				// other user tests that reuse the same DSN.
+				_ = db.Migrator().DropTable(&User{})
+				_ = db.AutoMigrate(&User{})
+			})
+
+			// Start from the pre-avatar schema with one legacy row.
+			require.NoError(t, db.Migrator().DropTable(&legacyUserBeforeAvatar{}))
+			require.NoError(t, db.AutoMigrate(&legacyUserBeforeAvatar{}))
+			require.False(t, db.Migrator().HasColumn(&legacyUserBeforeAvatar{}, "avatar"))
+			require.NoError(t, db.Create(&legacyUserBeforeAvatar{
+				Id:       9100,
+				Username: "legacy-avatar-user",
+				Password: "unused-password-hash",
+				Status:   common.UserStatusEnabled,
+			}).Error)
+
+			// Startup migration must add the column and stay idempotent.
+			for range 2 {
+				require.NoError(t, db.AutoMigrate(&User{}))
+			}
+			require.True(t, db.Migrator().HasColumn(&User{}, "avatar"))
+
+			var preserved User
+			require.NoError(t, db.First(&preserved, 9100).Error)
+			assert.Equal(t, "legacy-avatar-user", preserved.Username)
+			assert.Empty(t, preserved.Avatar, "existing rows start without a custom avatar")
+
+			previousDB := DB
+			DB = db
+			t.Cleanup(func() { DB = previousDB })
+
+			// A processed avatar is a data URL of up to 60 KiB; the column must
+			// store it without truncation on every dialect (MySQL TEXT is the
+			// tightest at 64 KiB).
+			avatar := "data:image/jpeg;base64," + strings.Repeat("A", 60*1024-len("data:image/jpeg;base64,"))
+			require.NoError(t, UpdateUserAvatar(9100, avatar))
+			self, err := GetSelfUserById(9100)
+			require.NoError(t, err)
+			assert.Equal(t, avatar, self.Avatar)
+
+			// Profile updates must not write an unprocessed avatar value; only
+			// UpdateUserAvatar may change the column.
+			stale := *self
+			stale.DisplayName = "renamed"
+			stale.Avatar = "data:image/jpeg;base64,UNPROCESSED"
+			require.NoError(t, stale.Update(false))
+			var updated User
+			require.NoError(t, db.First(&updated, 9100).Error)
+			assert.Equal(t, "renamed", updated.DisplayName)
+			assert.Equal(t, avatar, updated.Avatar)
+
+			require.NoError(t, UpdateUserAvatar(9100, ""))
+			cleared, err := GetSelfUserById(9100)
+			require.NoError(t, err)
+			assert.Empty(t, cleared.Avatar)
+			assert.Error(t, UpdateUserAvatar(0, avatar))
+		})
+	}
 }

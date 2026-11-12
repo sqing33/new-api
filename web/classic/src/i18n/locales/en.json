@@ -4737,5 +4737,10 @@
   "慢失败阈值（秒）": "Slow failure threshold (s)",
   "单次尝试耗时超过该值且失败时记为慢失败，0 表示不启用": "An attempt taking at least this long and still failing counts as a slow failure; 0 disables it",
   "慢失败连续次数": "Consecutive slow failures",
-  "连续出现该次数的慢失败后，立即放弃同渠道重试并换渠道，0 表示不启用": "After this many slow failures in a row, skip the remaining same-channel retries and switch channels; 0 disables it"
+  "连续出现该次数的慢失败后，立即放弃同渠道重试并换渠道，0 表示不启用": "After this many slow failures in a row, skip the remaining same-channel retries and switch channels; 0 disables it",
+  "设置头像": "Set avatar",
+  "移除头像": "Remove avatar",
+  "头像已更新": "Avatar updated",
+  "头像已移除": "Avatar removed",
+  "请选择图片文件": "Please choose an image file"
 }
