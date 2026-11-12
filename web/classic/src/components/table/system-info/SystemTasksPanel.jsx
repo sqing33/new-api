@@ -143,8 +143,15 @@ const buildColumns = (t) => [
 ];
 
 const SystemTasksPanel = ({ data, t }) => {
-  const { tasks, tasksLoading, tasksRefreshing, hasActiveTasks, loadTasks } =
-    data;
+  const {
+    tasks,
+    tasksLoading,
+    tasksRefreshing,
+    hasActiveTasks,
+    loadTasks,
+    clearSystemTaskHistory,
+    clearingTaskHistory = false,
+  } = data;
 
   const activeTasks = tasks.filter(
     (task) => task.status === 'pending' || task.status === 'running',
@@ -178,6 +185,16 @@ const SystemTasksPanel = ({ data, t }) => {
             onClick={() => loadTasks()}
           >
             {t('刷新')}
+          </Button>
+          <Button
+            theme='borderless'
+            type='danger'
+            size='small'
+            loading={clearingTaskHistory}
+            disabled={historyTasks.length === 0}
+            onClick={() => clearSystemTaskHistory?.()}
+          >
+            {t('清空历史')}
           </Button>
         </Space>
       </div>

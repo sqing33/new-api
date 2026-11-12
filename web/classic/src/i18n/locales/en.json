@@ -4744,7 +4744,10 @@
     "调整渠道优先级": "Adjust channel priority",
     "优先级已更新": "Priority updated",
     "列表按优先级从高到低排列，向上移动会排到上一条之前；改动立即生效，仅影响优先级本身。": "The list is ordered from highest to lowest priority; moving up places the channel before the previous entry. Changes apply immediately and only affect priority.",
-    "暂无渠道": "No channels"
+    "暂无渠道": "No channels",
+    "清空历史": "Clear history",
+    "任务历史已清空": "Task history cleared",
+    "清空任务历史失败": "Failed to clear task history"
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",

@@ -4615,7 +4615,10 @@
     "调整渠道优先级": "Ajuster la priorité des canaux",
     "优先级已更新": "Priorité mise à jour",
     "列表按优先级从高到低排列，向上移动会排到上一条之前；改动立即生效，仅影响优先级本身。": "La liste va de la priorité la plus élevée à la plus faible ; monter place le canal avant l’entrée précédente. Les changements sont immédiats et ne touchent que la priorité.",
-    "暂无渠道": "Aucun canal"
+    "暂无渠道": "Aucun canal",
+    "清空历史": "Effacer l’historique",
+    "任务历史已清空": "Historique des tâches effacé",
+    "清空任务历史失败": "Échec de l’effacement de l’historique"
   },
   "启用TTS": "Activer TTS",
   "启用ASR": "Activer ASR",

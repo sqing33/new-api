@@ -5125,7 +5125,10 @@
     "调整渠道优先级": "Điều chỉnh ưu tiên kênh",
     "优先级已更新": "Đã cập nhật ưu tiên",
     "列表按优先级从高到低排列，向上移动会排到上一条之前；改动立即生效，仅影响优先级本身。": "Danh sách sắp xếp từ ưu tiên cao xuống thấp; di chuyển lên sẽ đặt kênh trước mục phía trên. Thay đổi có hiệu lực ngay và chỉ ảnh hưởng đến ưu tiên.",
-    "暂无渠道": "Chưa có kênh"
+    "暂无渠道": "Chưa có kênh",
+    "清空历史": "Xóa lịch sử",
+    "任务历史已清空": "Đã xóa lịch sử tác vụ",
+    "清空任务历史失败": "Xóa lịch sử tác vụ thất bại"
   },
   "启用TTS": "Bật TTS",
   "启用ASR": "Bật ASR",

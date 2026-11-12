@@ -158,6 +158,27 @@ export const useSystemInfoData = () => {
     [t],
   );
 
+  const [clearingTaskHistory, setClearingTaskHistory] = useState(false);
+
+  // 清空系统任务历史：仅删除已结束的记录，运行中的任务不受影响。
+  const clearSystemTaskHistory = useCallback(async () => {
+    setClearingTaskHistory(true);
+    try {
+      const res = await API.delete('/api/system-task/history');
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess(t('任务历史已清空'));
+        await loadTasks();
+      } else {
+        showError(message || t('清空任务历史失败'));
+      }
+    } catch (_) {
+      showError(t('清空任务历史失败'));
+    } finally {
+      setClearingTaskHistory(false);
+    }
+  }, [loadTasks, t]);
+
   const hasActiveTasks = tasks.some((task) => isActiveTaskStatus(task.status));
 
   useEffect(() => {
@@ -190,6 +211,8 @@ export const useSystemInfoData = () => {
     tasksRefreshing,
     hasActiveTasks,
     loadTasks,
+    clearSystemTaskHistory,
+    clearingTaskHistory,
     t,
   };
 };
