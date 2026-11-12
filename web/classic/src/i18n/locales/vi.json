@@ -5114,7 +5114,13 @@
     "商户私钥": "Khóa riêng của người bán",
     "平台公钥": "Khóa công khai nền tảng",
     "粘贴 PEM 格式私钥，留空表示不修改": "Dán khóa riêng PEM; để trống để giữ nguyên",
-    "粘贴 PEM 格式公钥，留空表示不修改": "Dán khóa công khai PEM; để trống để giữ nguyên"
+    "粘贴 PEM 格式公钥，留空表示不修改": "Dán khóa công khai PEM; để trống để giữ nguyên",
+    "续期": "Gia hạn",
+    "会话亲和模式": "Chế độ gắn kết phiên",
+    "跟随全局": "Theo cấu hình toàn cục",
+    "优先亲和": "Ưu tiên gắn kết",
+    "严格亲和": "Gắn kết nghiêm ngặt",
+    "inherit 使用全局默认；prefer 尽量复用同一渠道；strict 命中后失败也不再切换渠道": "inherit dùng mặc định toàn cục; prefer ưu tiên cùng kênh; strict không đổi kênh sau khi khớp"
   },
   "启用TTS": "Bật TTS",
   "启用ASR": "Bật ASR",

@@ -4604,7 +4604,13 @@
     "商户私钥": "Clé privée du marchand",
     "平台公钥": "Clé publique de la plateforme",
     "粘贴 PEM 格式私钥，留空表示不修改": "Collez une clé privée PEM ; laissez vide pour conserver l’actuelle",
-    "粘贴 PEM 格式公钥，留空表示不修改": "Collez une clé publique PEM ; laissez vide pour conserver l’actuelle"
+    "粘贴 PEM 格式公钥，留空表示不修改": "Collez une clé publique PEM ; laissez vide pour conserver l’actuelle",
+    "续期": "Renouveler",
+    "会话亲和模式": "Mode d’affinité de session",
+    "跟随全局": "Suivre le réglage global",
+    "优先亲和": "Préférer l’affinité",
+    "严格亲和": "Affinité stricte",
+    "inherit 使用全局默认；prefer 尽量复用同一渠道；strict 命中后失败也不再切换渠道": "inherit suit le réglage global ; prefer réutilise le même canal quand possible ; strict ne change jamais de canal après une correspondance"
   },
   "启用TTS": "Activer TTS",
   "启用ASR": "Activer ASR",

@@ -214,6 +214,9 @@ const buildChannelAffinityRulePayload = ({
   include_model_name: !!values?.include_model_name,
   include_rule_name: !!values?.include_rule_name,
   skip_retry_on_failure: !!values?.skip_retry_on_failure,
+  // 会话亲和模式：inherit 跟随全局，off/prefer/strict 覆盖全局。
+  // 必须原样回写，否则管理端用原始 JSON 设置的值会被这里清掉。
+  session_mode: (values?.session_mode || '').trim(),
   ...(userAgentInclude.length > 0
     ? { user_agent_include: userAgentInclude }
     : {}),
@@ -276,6 +279,7 @@ export default function SettingsChannelAffinity(props) {
       value_regex: r.value_regex || '',
       ttl_seconds: Number(r.ttl_seconds || 0),
       skip_retry_on_failure: !!r.skip_retry_on_failure,
+      session_mode: r.session_mode || 'inherit',
       include_using_group: r.include_using_group ?? true,
       include_model_name: !!r.include_model_name,
       include_rule_name: r.include_rule_name ?? true,
@@ -680,6 +684,7 @@ export default function SettingsChannelAffinity(props) {
       value_regex: '',
       ttl_seconds: 0,
       skip_retry_on_failure: false,
+      session_mode: 'inherit',
       include_using_group: true,
       include_model_name: false,
       include_rule_name: true,
@@ -1137,6 +1142,22 @@ export default function SettingsChannelAffinity(props) {
               <Text type='tertiary' size='small'>
                 {t('开启后，若该规则命中且请求失败，将不会切换渠道重试。')}
               </Text>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Select
+                field='session_mode'
+                label={t('会话亲和模式')}
+                style={{ width: '100%' }}
+                optionList={[
+                  { label: t('跟随全局'), value: 'inherit' },
+                  { label: t('关闭'), value: 'off' },
+                  { label: t('优先亲和'), value: 'prefer' },
+                  { label: t('严格亲和'), value: 'strict' },
+                ]}
+                extraText={t(
+                  'inherit 使用全局默认；prefer 尽量复用同一渠道；strict 命中后失败也不再切换渠道',
+                )}
+              />
             </Col>
           </Row>
 

@@ -4733,7 +4733,13 @@
     "商户私钥": "Merchant private key",
     "平台公钥": "Platform public key",
     "粘贴 PEM 格式私钥，留空表示不修改": "Paste a PEM private key; leave blank to keep the current one",
-    "粘贴 PEM 格式公钥，留空表示不修改": "Paste a PEM public key; leave blank to keep the current one"
+    "粘贴 PEM 格式公钥，留空表示不修改": "Paste a PEM public key; leave blank to keep the current one",
+    "续期": "Renew",
+    "会话亲和模式": "Session affinity mode",
+    "跟随全局": "Follow global",
+    "优先亲和": "Prefer affinity",
+    "严格亲和": "Strict affinity",
+    "inherit 使用全局默认；prefer 尽量复用同一渠道；strict 命中后失败也不再切换渠道": "inherit uses the global default; prefer reuses the same channel when possible; strict never switches channel after a match"
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",
