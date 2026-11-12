@@ -56,6 +56,9 @@ const INITIAL_INPUTS = {
   'payload_capture_setting.max_payload_bytes': 49152,
   'payload_capture_setting.retention_days': 7,
   'payload_capture_setting.session_gap_minutes': 30,
+  // 普通用户日志可查询/导出的最长天数，以及是否允许普通用户导出。
+  'log_setting.max_range_days': 365,
+  'log_setting.user_export_enabled': true,
 };
 
 export default function SettingsLog(props) {
@@ -260,6 +263,39 @@ export default function SettingsLog(props) {
                     setInputs({
                       ...inputs,
                       LogConsumeEnabled: value,
+                    });
+                  }}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'log_setting.max_range_days'}
+                  label={t('日志最长查询天数')}
+                  min={1}
+                  precision={0}
+                  style={{ width: '100%' }}
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      'log_setting.max_range_days': value,
+                    })
+                  }
+                  extraText={t(
+                    '普通用户查询自身日志、看板与导出的时间跨度上限；管理员不受此限制',
+                  )}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'log_setting.user_export_enabled'}
+                  label={t('允许普通用户导出日志')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      'log_setting.user_export_enabled': value,
                     });
                   }}
                 />

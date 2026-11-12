@@ -69,6 +69,10 @@ const SystemSetting = () => {
     SMTPAccount: '',
     SMTPFrom: '',
     SMTPToken: '',
+    // 邮件服务商：smtp（默认）或 resend
+    EmailProvider: 'smtp',
+    ResendApiKey: '',
+    ResendFrom: '',
     WorkerUrl: '',
     WorkerValidKey: '',
     WorkerAllowHttpImageRequestEnabled: '',
@@ -342,6 +346,25 @@ const SystemSetting = () => {
       inputs.SMTPToken !== ''
     ) {
       options.push({ key: 'SMTPToken', value: inputs.SMTPToken });
+    }
+
+    // 邮件服务商始终下发；Resend 的密钥只在填写时提交，留空表示不修改。
+    if (originInputs['EmailProvider'] !== inputs.EmailProvider) {
+      options.push({ key: 'EmailProvider', value: inputs.EmailProvider });
+    }
+    if (inputs.EmailProvider === 'resend') {
+      if (
+        originInputs['ResendFrom'] !== inputs.ResendFrom &&
+        inputs.ResendFrom !== ''
+      ) {
+        options.push({ key: 'ResendFrom', value: inputs.ResendFrom });
+      }
+      if (
+        originInputs['ResendApiKey'] !== inputs.ResendApiKey &&
+        inputs.ResendApiKey !== ''
+      ) {
+        options.push({ key: 'ResendApiKey', value: inputs.ResendApiKey });
+      }
     }
 
     if (options.length > 0) {
@@ -1291,8 +1314,45 @@ const SystemSetting = () => {
                 </Form.Section>
               </Card>
               <Card>
-                <Form.Section text={t('配置 SMTP')}>
+                <Form.Section text={t('邮件服务配置')}>
                   <Text>{t('用以支持系统的邮件发送')}</Text>
+                  <Row
+                    gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}
+                    style={{ marginTop: 16 }}
+                  >
+                    <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+                      <Form.Select
+                        field='EmailProvider'
+                        label={t('邮件服务商')}
+                        optionList={[
+                          { label: 'SMTP', value: 'smtp' },
+                          { label: 'Resend', value: 'resend' },
+                        ]}
+                        style={{ width: '100%' }}
+                      />
+                    </Col>
+                    {inputs.EmailProvider === 'resend' && (
+                      <>
+                        <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+                          <Form.Input
+                            field='ResendFrom'
+                            label={t('发件人邮箱')}
+                            placeholder={t('例如：noreply@example.com')}
+                          />
+                        </Col>
+                        <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+                          <Form.Input
+                            field='ResendApiKey'
+                            label={t('Resend API 密钥')}
+                            type='password'
+                            placeholder={t('敏感信息不会发送到前端显示')}
+                          />
+                        </Col>
+                      </>
+                    )}
+                  </Row>
+                  {inputs.EmailProvider !== 'resend' && (
+                  <>
                   <Row
                     gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}
                   >
@@ -1348,7 +1408,9 @@ const SystemSetting = () => {
                       </Form.Checkbox>
                     </Col>
                   </Row>
-                  <Button onClick={submitSMTP}>{t('保存 SMTP 设置')}</Button>
+                  </>
+                  )}
+                  <Button onClick={submitSMTP}>{t('保存邮件服务设置')}</Button>
                 </Form.Section>
               </Card>
               <Card>

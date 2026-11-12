@@ -524,6 +524,34 @@ const NotificationSettings = ({
                   ]}
                 />
 
+                <Form.Switch
+                  field='quotaWarningEnabled'
+                  label={t('接收余额不足提醒')}
+                  checkedText={t('开')}
+                  uncheckedText={t('关')}
+                  onChange={(value) =>
+                    handleFormChange('quotaWarningEnabled', value)
+                  }
+                  extraText={t(
+                    '关闭后不再发送余额预警，无论阈值如何设置；重新开启即可恢复。',
+                  )}
+                />
+
+                {isAdminOrRoot && (
+                  <Form.Switch
+                    field='channelNotifyEnabled'
+                    label={t('接收渠道通知')}
+                    checkedText={t('开')}
+                    uncheckedText={t('关')}
+                    onChange={(value) =>
+                      handleFormChange('channelNotifyEnabled', value)
+                    }
+                    extraText={t(
+                      '仅管理员可用。未设置时超级管理员接收、其他管理员不接收渠道启用/禁用与测试汇总通知。',
+                    )}
+                  />
+                )}
+
                 {isAdminOrRoot && (
                   <Form.Switch
                     field='upstreamModelUpdateNotifyEnabled'

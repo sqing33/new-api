@@ -4,11 +4,11 @@
 
 # New API
 
-🍥 **新一代大模型網關與AI資產管理系統**
+**連接模型、應用程式與 Agent 的 AI 閘道**
 
 <p align="center">
-  繁體中文 |
   <a href="./README.zh_CN.md">简体中文</a> |
+  <strong>繁體中文</strong> |
   <a href="./README.md">English</a> |
   <a href="./README.fr.md">Français</a> |
   <a href="./README.ja.md">日本語</a>
@@ -43,22 +43,33 @@
 </p>
 
 <p align="center">
-  <a href="#-快速開始">快速開始</a> •
-  <a href="#-主要特性">主要特性</a> •
-  <a href="#-部署">部署</a> •
-  <a href="#-文件">文件</a> •
-  <a href="#-幫助支援">幫助</a>
+  <a href="#capabilities">核心能力</a> •
+  <a href="#quick-start">快速開始</a> •
+  <a href="#deployment">部署維運</a> •
+  <a href="#development">開發擴充</a> •
+  <a href="#documentation">文件社群</a>
 </p>
 
 </div>
 
+---
+
 ## 📝 項目說明
+
+New API 是面向應用程式、Agent 和團隊的自託管 AI 閘道。將不同供應商的模型服務接入統一入口，在同一套控制台中管理渠道、存取權限、用量與成本。
+
+你可以用它為團隊分配已授權的模型資源，在切換上游時減少用戶端改動，或建置自己的多模型服務。支援接入 OpenAI、Anthropic、Google Gemini、Azure OpenAI、AWS Bedrock、Vertex AI、DeepSeek、通義千問及其他相容服務。
 
 > [!IMPORTANT]
 > - 本專案僅面向合法授權的 AI API 閘道、組織內部鑑權、多模型管理、用量統計、成本核算和私有化部署場景。
 > - 使用者必須合法取得上游 API Key、帳號、模型服務或介面權限，並遵守上游服務條款及適用法律法規。
 > - 使用者應確保其使用方式符合上游服務條款及適用法律法規。
 > - 面向公眾提供生成式人工智慧服務時，使用者應遵守[《生成式人工智慧服務管理暫行辦法》](http://www.cac.gov.cn/2023-07/13/c_1690898327029107.htm)等監管要求，自行完成所在司法轄區要求的備案、許可、內容安全、實名、日誌留存、稅務和上游授權等合規義務。
+
+<!-- -->
+
+> [!WARNING]
+> 將本專案作為面向公眾的生成式 AI 服務或 API 轉售服務運營時，使用者應先完成備案、內容安全、實名、日誌留存、稅務、支付和上游授權等合規義務。
 
 ---
 
@@ -77,9 +88,6 @@
   </a><!--
   --><a href="https://bda.pku.edu.cn/" target="_blank">
     <img src="./docs/images/pku.png" alt="北京大學" height="80" />
-  </a><!--
-  --><a href="https://www.compshare.cn/?ytag=GPU_yy_gh_newapi" target="_blank">
-    <img src="./docs/images/ucloud.png" alt="UCloud 優刻得" height="80" />
   </a><!--
   --><a href="https://www.aliyun.com/" target="_blank">
     <img src="./docs/images/aliyun.png" alt="阿里雲" height="80" />
@@ -105,63 +113,128 @@
 
 ---
 
-## 🚀 快速開始
+<a id="capabilities"></a>
 
-### 使用 Docker Compose（推薦）
+## 核心能力
+
+| 方向 | 可以做什麼 |
+| --- | --- |
+| 模型接入 | 支援 OpenAI Chat Completions、Responses、Anthropic Messages 和 Gemini 協定，以及上游支援的串流輸出、工具呼叫、推理與多模態輸入 |
+| 渠道調度 | 設定模型映射、渠道優先順序與權重、失敗重試、渠道親和性和多金鑰管理 |
+| 用量與成本 | 管理額度、訂閱方案、用量日誌、快取計費，以及基於運算式的階梯定價 |
+| 存取控制 | 管理使用者、群組、細粒度權限和 API Key 限制；支援 OAuth/OIDC、通行密鑰、兩步驟驗證與登入工作階段管理 |
+| 非同步任務 | 透過 JavaScript 外掛擴充圖片、影片等任務 API，統一查詢任務狀態和取得產物 |
+| Web 控制台 | 設定渠道與模型、查看用量和稽核日誌、在 Playground 中測試模型；支援簡體中文、繁體中文、英語、法語、日語、俄語和越南語 |
+
+### 協定與介面
+
+| 介面類型 | 常用入口 |
+| --- | --- |
+| OpenAI Chat / Responses | `POST /v1/chat/completions`、`POST /v1/responses` |
+| Anthropic Messages | `POST /v1/messages` |
+| Gemini | `POST /v1beta/models/{model}:generateContent`、`POST /v1beta/models/{model}:streamGenerateContent` |
+| Realtime / Responses WebSocket | `GET /v1/realtime`、`GET /v1/responses`（WebSocket 升級） |
+| 圖片 / 音訊 | `/v1/images/generations`、`/v1/images/edits`、`/v1/audio/speech`、`/v1/audio/transcriptions`、`/v1/audio/translations` |
+| 向量 / 重排 | `POST /v1/embeddings`、`POST /v1/rerank` |
+| 任務外掛 | `POST /v1/tasks/{pluginKey}`、`GET /v1/tasks/{taskId}`，以及各外掛宣告的協定路由 |
+
+[RelayKit](./relaykit/README.md) 提供上述四種文字協定之間的請求、回應和串流轉換。實際可用能力取決於渠道、上游模型和轉換路徑；協定特有的工具與欄位可能無法完整映射。WebSocket 同樣需要上游與渠道設定支援。
+
+本 README 描述目前原始碼的能力，部署時請同時查看所選版本的發行說明。
+
+<a id="quick-start"></a>
+
+## 快速開始
+
+### 使用 Docker 本機體驗
+
+以下指令使用 SQLite 啟動單一執行個體，僅監聽本機連接埠：
 
 ```bash
-# 複製項目
+mkdir -p data
+docker run --name new-api -d --restart unless-stopped \
+  -p 127.0.0.1:3000:3000 \
+  -e TZ=Asia/Shanghai \
+  -v "$(pwd)/data:/data" \
+  calciumion/new-api:latest
+```
+
+開啟 [http://localhost:3000](http://localhost:3000)，依初始化精靈建立管理員帳號。SQLite 資料庫存放在掛載的 `data` 目錄中，更換容器後仍會保留。
+
+### 發起第一次請求
+
+1. 新增渠道，填寫上游 API Key、可用模型和所屬群組，執行渠道測試。
+2. 設定模型價格，確保呼叫使用者有可用額度或有效訂閱。
+3. 在控制台建立 API Key，確保它能存取對應群組和模型。
+4. 對於 OpenAI 相容用戶端，將 Base URL 設為 `http://localhost:3000/v1`，金鑰使用 **New API 簽發的 Key**。
+
+在終端機中將 `NEW_API_KEY` 環境變數設為該金鑰，查詢它可以存取的模型：
+
+```bash
+curl --fail-with-body http://localhost:3000/v1/models \
+  -H "Authorization: Bearer ${NEW_API_KEY}"
+```
+
+然後呼叫 Responses，將 `your-enabled-model` 替換為已啟用且支援該介面的模型名稱：
+
+```bash
+curl --fail-with-body http://localhost:3000/v1/responses \
+  -H "Authorization: Bearer ${NEW_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"your-enabled-model","input":"Hello!"}'
+```
+
+<a id="deployment"></a>
+
+## 部署與維運
+
+### Docker Compose
+
+儲存庫的 [Compose 設定](./docker-compose.yml) 預設啟動 **New API + PostgreSQL + Redis**，並提供 MySQL 和獨立 ClickHouse 日誌資料庫的設定範例。
+
+```bash
 git clone https://github.com/QuantumNous/new-api.git
 cd new-api
-
-# 編輯 docker-compose.yml 配置
-nano docker-compose.yml
-
-# 啟動服務
-docker-compose up -d
 ```
 
-<details>
-<summary><strong>使用 Docker 命令</strong></summary>
+啟動前編輯 `docker-compose.yml`：同時替換資料庫、Redis 服務及對應連線字串中的範例密碼，並設定固定的隨機 `SESSION_SECRET`（可用 `openssl rand -hex 32` 產生）。透過 HTTPS 存取控制台時，設定 `SESSION_COOKIE_SECURE=true`，並在 `SESSION_COOKIE_TRUSTED_URL` 中填寫控制台對外的精確 HTTPS Origin。
 
 ```bash
-# 拉取最新鏡像
-docker pull calciumion/new-api:latest
-
-# 使用 SQLite（預設）
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
-
-# 使用 MySQL
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+docker compose up -d
+docker compose logs -f new-api
 ```
 
-> **💡 提示：** `-v ./data:/data` 會將數據保存在當前目錄的 `data` 資料夾中，你也可以改為絕對路徑如 `-v /your/custom/path:/data`
+### 儲存與設定
 
-</details>
+| 元件 | 可選方案 |
+| --- | --- |
+| 主資料庫 | SQLite、MySQL ≥ 5.7.8、PostgreSQL ≥ 9.6 |
+| 獨立日誌資料庫 | 透過 `LOG_SQL_DSN` 設定，額外支援 ClickHouse |
+| 快取 | 可選 Redis 與記憶體快取；多節點需要共享限流額度時使用共享 Redis |
+| 容器平台 | Linux amd64 / arm64 |
 
----
+| 環境變數 | 用途 |
+| --- | --- |
+| `SQL_DSN` | 主資料庫連線字串；未設定時使用 SQLite |
+| `LOG_SQL_DSN` | 可選的獨立日誌資料庫連線字串 |
+| `REDIS_CONN_STRING` | Redis 連線字串 |
+| `SESSION_SECRET` | 持久保存的驗證金鑰，所有節點必須一致 |
+| `CRYPTO_SECRET` | 預設使用 `SESSION_SECRET`；共享 Redis 的節點必須使用相同的有效值 |
+| `SESSION_COOKIE_SECURE` | HTTPS 控制台設為 `true`，啟用 Secure 更新 Cookie 和嚴格的更新／登出來源驗證 |
+| `SESSION_COOKIE_TRUSTED_URL` | Secure 模式必填：以逗號分隔的精確 HTTPS Origin，不含路徑或萬用字元；本機 HTTP 模式不設定 |
+| `TRUSTED_PROXIES` | 可信反向代理 IP/CIDR，或 `none`；依實際網路明確設定 |
 
-🎉 部署完成後，訪問 `http://localhost:3000` 即可使用！
+完整設定見[環境變數範例](./.env.example)、[環境變數文件](https://docs.newapi.ai/zh/docs/installation/config-maintenance/environment-variables)和[驗證與登入工作階段說明](./docs/authentication.md)。容器變數應透過 Compose 的 `environment` 或 `env_file` 注入；只複製 `.env.example` 不會自動將變數傳入容器。
 
-> [!WARNING]
-> 將本專案作為面向公眾的生成式 AI 服務或 API 轉售服務運營時，使用者應先完成備案、內容安全、實名、日誌留存、稅務、支付和上游授權等合規義務。
+正式部署時使用 HTTPS，並設定反向代理支援串流回應與 WebSocket 升級。持久化並備份資料庫和掛載資料。多節點必須共用主資料庫和驗證金鑰；獨立 Redis 或記憶體限流器會按節點分別計數。不同拓撲下的工作階段傳播行為見驗證文件。
 
-📖 更多部署方式請參考 [部署指南](https://docs.newapi.pro/zh/docs/installation)
+從[發行頁](https://github.com/QuantumNous/new-api/releases)選擇明確的映像版本，閱讀升級說明並先備份再升級。`latest` 會隨發行建置變動；既有執行個體應依實際版本評估遷移與相容性。
 
----
+<a id="development"></a>
 
-## 📚 文件
+## 開發與擴充
 
-<div align="center">
+後端使用 Go 和 Gin；控制台使用 React 19、TypeScript、Rsbuild、TanStack 與 Tailwind CSS 4。前端相依套件和指令碼使用 Bun；Go 語言基線見 [go.mod](./go.mod)，容器建置工具鏈見 [Dockerfile](./Dockerfile)。
 
 ### 📖 [官方文件](https://docs.newapi.pro/zh/docs) | [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/QuantumNous/new-api)
 
@@ -349,83 +422,48 @@ docker run --name new-api -d --restart always \
 <summary><strong>方式 1：Docker Compose（推薦）</strong></summary>
 
 ```bash
-# 複製項目
-git clone https://github.com/QuantumNous/new-api.git
-cd new-api
-
-# 編輯配置
-nano docker-compose.yml
-
-# 啟動服務
-docker-compose up -d
+# 儲存庫根目錄
+cd web
+bun install --frozen-lockfile
+bun run build
+cd ..
+go run .
 ```
 
-</details>
+在另一個終端機啟動前端開發伺服器：
 
-<details>
-<summary><strong>方式 2：Docker 命令</strong></summary>
-
-**使用 SQLite：**
 ```bash
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+cd web
+bun run dev -- --port 5173
 ```
 
-**使用 MySQL：**
-```bash
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
-```
+存取 [http://localhost:5173](http://localhost:5173)，開發伺服器會將 API 請求代理到 3000 連接埠的後端。需要容器化開發後端時，參閱 [docker-compose.dev.yml](./docker-compose.dev.yml) 和 [makefile](./makefile) 中的 `make dev`。
 
-> **💡 路徑說明：**
-> - `./data:/data` - 相對路徑，數據保存在當前目錄的 data 資料夾
-> - 也可使用絕對路徑，如：`/your/custom/path:/data`
+| 目錄 | 職責 |
+| --- | --- |
+| `router/`、`middleware/`、`controller/` | HTTP 路由、存取驗證與 API 處理 |
+| `relay/` | 上游介接與請求調度 |
+| `service/`、`model/` | 業務邏輯與持久化 |
+| [relaykit/](./relaykit/README.md) | 可獨立建置的協定 DTO 與轉換 Go 模組 |
+| [plugins/tasks/](./plugins/tasks/) | JavaScript 任務外掛；編寫方式與宿主邊界見 [Task Plugin API v1](./docs/plugin-api/v1.md) |
+| `web/` | Web 控制台，參閱[前端開發約定](./web/AGENTS.md) |
+| [electron/](./electron/README.md) | 桌面封裝與打包 |
 
-</details>
+貢獻前請閱讀 [AGENTS.md](./AGENTS.md)。依改動範圍執行檢查：Go 模組使用 `make test`；前端在 `web/` 下執行 `bun check -b`、`bun run lint`、`bun run test` 和 `bun run build`。修改 RelayKit 後還必須在 `relaykit/` 下執行 `GOWORK=off go build ./...`。
 
-<details>
-<summary><strong>方式 3：寶塔面板</strong></summary>
+<a id="documentation"></a>
 
-1. 安裝寶塔面板（≥ 9.2.0 版本）
-2. 在應用商店搜尋 **New-API**
-3. 一鍵安裝
+## 文件與社群
 
-📖 [圖文教學](./docs/BT.md)
+| 資源 | 入口 |
+| --- | --- |
+| 官方文件 | [使用指南](https://docs.newapi.ai/zh/docs) · [安裝部署](https://docs.newapi.ai/zh/docs/installation) · [API 參考](https://docs.newapi.ai/zh/docs/api) |
+| 專案導讀 | [DeepWiki](https://deepwiki.com/QuantumNous/new-api) |
+| 使用問題與交流 | [常見問題](https://docs.newapi.ai/zh/docs/support/faq) · [社群管道](https://docs.newapi.ai/zh/docs/support/community-interaction) |
+| 缺陷與功能建議 | [GitHub Issues](https://github.com/QuantumNous/new-api/issues) |
+| 安全漏洞 | 依[安全政策](./.github/SECURITY.md)私下回報 |
 
-</details>
-
-### ⚠️ 多機部署注意事項
-
-> [!WARNING]
-> - 所有節點必須使用同一個主資料庫，並設定相同的 `SESSION_SECRET`；否則 Access Token、Refresh 工作階段和臨時鑑權流程無法一致驗證。
-> - 連線至同一個 Redis 的節點還必須設定相同的 `CRYPTO_SECRET`，否則節點產生的快取鍵摘要不一致，無法正確共用快取。
-
-登入 Session 和單一使用者的活躍數／簽發數限制均以資料庫為權威。Redis 中的 Session 僅為短期快取，TTL 跟隨 `SYNC_FREQUENCY`（預設 60 秒），且不會超過 Session 的剩餘有效期。
-
-| Redis 拓撲 | Session 狀態傳播 | 限流語義 |
-| --- | --- | --- |
-| 所有節點共用 Redis | 撤銷和版本發布通常即時傳播 | Redis 限流額度在節點間共用 |
-| 每個節點使用獨立 Redis | 最遲在有效 `SYNC_FREQUENCY` 內回源資料庫並收斂；版本輪換後，新 Token 在持有舊快取的節點上可能短暫傳回 401 | 每個節點獨立計數，叢集總額度最壞約為單一節點門檻乘以節點數 |
-| 不使用 Redis | 每次 Session 驗證都直接讀取資料庫 | 各節點使用獨立的記憶體限流額度 |
-
-縮短 `SYNC_FREQUENCY` 可減少獨立 Redis 的陳舊視窗，但每個活躍 SID 在每個節點上會依該 TTL 增加一次資料庫主鍵查詢。上述保證只讓 Session 鑑權在不同拓撲下維持有界陳舊；限流和其他 Redis 控制面快取仍受拓撲影響。
-
-Token、Origin 驗證和 PAT 契約請參閱[使用者鑑權與登入工作階段](./docs/authentication.md)。
-
-### 🔄 管道重試與快取
-
-**重試配置：** `設置 → 運營設置 → 通用設置 → 失敗重試次數`
-
-**快取配置：**
-- `REDIS_CONN_STRING`：Redis 快取（推薦）
-- `MEMORY_CACHE_ENABLED`：記憶體快取
+回報問題時請附上版本、部署方式、重現步驟及去識別化日誌。歡迎貢獻文件、翻譯、渠道介接和有針對性的回歸測試。
 
 ---
 
@@ -447,35 +485,17 @@ Token、Origin 驗證和 PAT 契約請參閱[使用者鑑權與登入工作階�
 
 ---
 
-## 💬 幫助支援
-
-### 📖 文件資源
-
-| 資源 | 連結 |
-|------|------|
-| 📘 常見問題 | [FAQ](https://docs.newapi.pro/zh/docs/support/faq) |
-| 💬 社群交流 | [交流管道](https://docs.newapi.pro/zh/docs/support/community-interaction) |
-| 🐛 回饋問題 | [問題回饋](https://docs.newapi.pro/zh/docs/support/feedback-issues) |
-| 📚 完整文件 | [官方文件](https://docs.newapi.pro/zh/docs) |
-
-### 🤝 貢獻指南
-
-歡迎各種形式的貢獻！
-
-- 🐛 報告 Bug
-- 💡 提出新功能
-- 📝 改進文件
-- 🔧 提交程式碼
-
----
-
 ## 📜 許可證
 
 本項目採用 [GNU Affero 通用公共許可證 v3.0 (AGPLv3)](./LICENSE) 授權。
 
+依據 AGPLv3 第 7 條，本專案另適用[附加條款](./NOTICE)。修改版本必須在適當法律聲明及介面中顯著的關於、法律、頁尾或署名位置保留作者署名 `Frontend design and development by New API contributors.`，並保留指向原專案 <https://github.com/QuantumNous/new-api> 的可見連結。
+
 本項目為開源項目，在 [One API](https://github.com/songquanpeng/one-api)（MIT 許可證）的基礎上進行二次開發。
 
 如果您所在的組織政策不允許使用 AGPLv3 許可的軟體，或您希望規避 AGPLv3 的開源義務，請發送郵件至：[support@quantumnous.com](mailto:support@quantumnous.com)
+
+署名及相依套件聲明見 [NOTICE](./NOTICE) 和[第三方授權條款](./THIRD-PARTY-LICENSES.md)。
 
 ---
 
@@ -495,7 +515,7 @@ Token、Origin 驗證和 PAT 契約請參閱[使用者鑑權與登入工作階�
 
 如果這個項目對你有幫助，歡迎給我們一個 ⭐️ Star！
 
-**[官方文件](https://docs.newapi.pro/zh/docs)** • **[問題回饋](https://github.com/Calcium-Ion/new-api/issues)** • **[最新發布](https://github.com/Calcium-Ion/new-api/releases)**
+**[官方文件](https://docs.newapi.ai/zh/docs)** • **[問題回饋](https://github.com/Calcium-Ion/new-api/issues)** • **[最新發布](https://github.com/Calcium-Ion/new-api/releases)**
 
 <sub>Built with ❤️ by QuantumNous</sub>
 

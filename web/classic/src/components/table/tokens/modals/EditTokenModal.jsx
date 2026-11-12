@@ -85,6 +85,8 @@ const EditTokenModal = (props) => {
     // 标签：留空表示无标签
     token_group: undefined,
     cross_group_retry: false,
+    // 二开保留的令牌行为：允许用此令牌查询所属用户的额度，新建默认开启
+    allow_user_quota_query: true,
     tokenCount: 1,
   });
 
@@ -445,6 +447,16 @@ const EditTokenModal = (props) => {
                       filter
                       showClear
                       style={{ width: '100%' }}
+                    />
+                  </Col>
+                  <Col span={24}>
+                    <Form.Switch
+                      field='allow_user_quota_query'
+                      label={t('允许查询账户额度')}
+                      size='default'
+                      extraText={t(
+                        '开启后该令牌可通过 /api/token/usage 查询所属用户的总可用额度与已用额度',
+                      )}
                     />
                   </Col>
                   <Col

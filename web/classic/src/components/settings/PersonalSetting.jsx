@@ -81,6 +81,7 @@ const PersonalSetting = () => {
   const [passkeyDeleteLoading, setPasskeyDeleteLoading] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [accessTokenStatus, setAccessTokenStatus] = useState(null);
+  const [accessTokens, setAccessTokens] = useState([]);
   const [revokingAccessToken, setRevokingAccessToken] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState({
     warningType: 'email',
@@ -93,6 +94,8 @@ const PersonalSetting = () => {
     gotifyToken: '',
     gotifyPriority: 5,
     upstreamModelUpdateNotifyEnabled: false,
+    quotaWarningEnabled: true,
+    channelNotifyEnabled: undefined,
     upstreamPricingChangeNotifyEnabled: false,
     acceptUnsetModelRatioModel: false,
     recordIpLog: false,
@@ -192,6 +195,9 @@ const PersonalSetting = () => {
           settings.upstream_model_update_notify_enabled === true,
         upstreamPricingChangeNotifyEnabled:
           settings.upstream_pricing_change_notify_enabled === true,
+        quotaWarningEnabled: settings.quota_warning_enabled !== false,
+        // 未设置时保持 undefined：root 默认接收渠道通知，其他管理员默认不接收。
+        channelNotifyEnabled: settings.channel_notify_enabled,
         acceptUnsetModelRatioModel:
           settings.accept_unset_model_ratio_model || false,
         recordIpLog: settings.record_ip_log || false,
@@ -203,21 +209,55 @@ const PersonalSetting = () => {
     setInputs((inputs) => ({ ...inputs, [name]: value }));
   };
 
+  // 收集当前用户可授予的全部权限：旧版「系统访问令牌」等价于一揽子授权，
+  // 新版访问令牌按资源+动作授权，这里把它们全部勾上以保持行为一致。
+  const collectGrantableScopes = async () => {
+    const res = await API.get('/api/user/access_tokens/catalog');
+    const groups = res.data?.data?.groups || [];
+    const scopes = [];
+    groups.forEach((group) => {
+      (group.resources || []).forEach((resource) => {
+        (resource.actions || []).forEach((action) => {
+          if (resource.resource && action.action) {
+            scopes.push(resource.resource + ':' + action.action);
+          }
+        });
+      });
+    });
+    return scopes;
+  };
+
   const generateAccessToken = async () => {
     try {
+      const scopes = await collectGrantableScopes();
+      if (scopes.length === 0) {
+        showError(t('当前账号没有可授予的权限'));
+        return;
+      }
       await requireSelfServiceProof({
         scope: 'access_token.generate',
         title: t('生成访问令牌'),
         onSuccess: async (proof) => {
-          const res = await API.post('/api/user/token', {}, {
-            headers: secureProofHeaders(proof),
-          });
+          const res = await API.post(
+            '/api/user/access_tokens',
+            {
+              name: 'classic-' + new Date().toISOString().slice(0, 19),
+              scopes,
+              expires_at: 0,
+            },
+            { headers: secureProofHeaders(proof) },
+          );
           const { success, message, data } = res.data;
           if (success) {
-            setSystemToken(data);
-            await copy(data);
-            showSuccess(t('令牌已重置并已复制到剪贴板'));
-            await loadAccessTokenStatus();
+            const raw = data?.token || '';
+            setSystemToken(raw);
+            if (raw) {
+              await copy(raw);
+              showSuccess(t('访问令牌已生成并复制到剪贴板'));
+            } else {
+              showSuccess(t('访问令牌已生成'));
+            }
+            await loadAccessTokens();
           } else {
             showError(message);
           }
@@ -228,21 +268,25 @@ const PersonalSetting = () => {
     }
   };
 
-  const revokeAccessToken = async () => {
+  // 吊销单条访问令牌；tokenId 为空时吊销旧版遗留令牌。
+  const revokeAccessToken = async (tokenId) => {
     setRevokingAccessToken(true);
     try {
       await requireSelfServiceProof({
         scope: 'access_token.revoke',
         title: t('吊销访问令牌'),
         onSuccess: async (proof) => {
-          const res = await API.delete('/api/user/token', {
+          const url = tokenId
+            ? '/api/user/access_tokens/' + tokenId
+            : '/api/user/access_tokens/legacy';
+          const res = await API.delete(url, {
             headers: secureProofHeaders(proof),
           });
           const { success, message } = res.data;
           if (success) {
             setSystemToken('');
             showSuccess(t('访问令牌已吊销'));
-            await loadAccessTokenStatus();
+            await loadAccessTokens();
           } else {
             showError(message);
           }
@@ -255,17 +299,20 @@ const PersonalSetting = () => {
     }
   };
 
-  const loadAccessTokenStatus = async () => {
+  const loadAccessTokens = async () => {
     try {
-      const res = await API.get('/api/user/token/status');
+      const res = await API.get('/api/user/access_tokens');
       const { success, data } = res.data;
-      if (success && data) {
-        setAccessTokenStatus(data);
+      if (success) {
+        setAccessTokens(Array.isArray(data?.items) ? data.items : []);
+        setAccessTokenStatus(data?.legacy || null);
       }
     } catch (error) {
-      // 状态加载失败时保持默认
+      // 列表加载失败时保持默认
     }
   };
+
+  const loadAccessTokenStatus = loadAccessTokens;
 
   const loadPasskeyStatus = async () => {
     try {
@@ -574,6 +621,12 @@ const PersonalSetting = () => {
           notificationSettings.upstreamModelUpdateNotifyEnabled === true,
         upstream_pricing_change_notify_enabled:
           notificationSettings.upstreamPricingChangeNotifyEnabled === true,
+        quota_warning_enabled:
+          notificationSettings.quotaWarningEnabled !== false,
+        channel_notify_enabled:
+          notificationSettings.channelNotifyEnabled === undefined
+            ? undefined
+            : notificationSettings.channelNotifyEnabled === true,
         accept_unset_model_ratio_model:
           notificationSettings.acceptUnsetModelRatioModel,
         record_ip_log: notificationSettings.recordIpLog,
@@ -637,6 +690,8 @@ const PersonalSetting = () => {
                 revokeAccessToken={revokeAccessToken}
                 revokingAccessToken={revokingAccessToken}
                 accessTokenStatus={accessTokenStatus}
+                accessTokens={accessTokens}
+                onRevokeAccessToken={revokeAccessToken}
                 setShowChangePasswordModal={setShowChangePasswordModal}
                 setShowAccountDeleteModal={setShowAccountDeleteModal}
                 passkeyStatus={passkeyStatus}

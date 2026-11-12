@@ -26,7 +26,7 @@ import (
 // meta forbids declaring, nor a type a factory plugin already claims.
 const configDrivenChannelType = 47
 
-const configDrivenOtherChannelType = 48
+const configDrivenOtherChannelType = 58 // 未被任何内置任务插件占用的渠道类型
 
 const configDrivenDisabledChannelType = 46
 

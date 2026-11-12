@@ -50,8 +50,12 @@ export const SecurityProofService = {
   /**
    * 通过密码换取证明令牌
    */
-  async verifyWithPassword(scope, password, passwordEncryptionEnabled) {
+  async verifyWithPassword(scope, password, passwordEncryptionEnabled, context) {
     const body = { method: 'password', scope, password };
+    // 证明会绑定到操作上下文（例如被管理的用户 ID），必须随验证一起提交。
+    if (context) {
+      body.context = context;
+    }
     if (passwordEncryptionEnabled) {
       const keyRes = await API.get('/api/user/login/encryption-key');
       const keyData = keyRes.data?.data;
@@ -76,15 +80,19 @@ export const SecurityProofService = {
   /**
    * 通过两步验证码换取证明令牌
    */
-  async verifyWith2FA(scope, code) {
+  async verifyWith2FA(scope, code, context) {
     if (!code?.trim()) {
       throw new Error('请输入验证码或备用码');
     }
-    const res = await API.post('/api/verify', {
+    const body = {
       method: '2fa',
       scope,
       code: code.trim(),
-    });
+    };
+    if (context) {
+      body.context = context;
+    }
+    const res = await API.post('/api/verify', body);
     if (!res.data?.success) {
       throw new Error(res.data?.message || '验证失败');
     }
@@ -94,7 +102,7 @@ export const SecurityProofService = {
   /**
    * 通过 Passkey 仪式换取证明令牌
    */
-  async verifyWithPasskey(scope) {
+  async verifyWithPasskey(scope, context) {
     const beginResponse = await API.post('/api/user/passkey/verify/begin');
     if (!beginResponse.data?.success) {
       throw new Error(beginResponse.data?.message || '开始验证失败');
@@ -114,10 +122,11 @@ export const SecurityProofService = {
     if (!finishResponse.data?.success) {
       throw new Error(finishResponse.data?.message || '验证失败');
     }
-    const verifyResponse = await API.post('/api/verify', {
-      method: 'passkey',
-      scope,
-    });
+    const verifyBody = { method: 'passkey', scope };
+    if (context) {
+      verifyBody.context = context;
+    }
+    const verifyResponse = await API.post('/api/verify', verifyBody);
     if (!verifyResponse.data?.success) {
       throw new Error(verifyResponse.data?.message || '验证失败');
     }

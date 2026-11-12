@@ -27,6 +27,7 @@ import {
 } from '../constants/playground.constants';
 import { TABLE_COMPACT_MODES_KEY } from '../constants';
 import { MOBILE_BREAKPOINT } from '../hooks/common/useIsMobile';
+import { resolveServerErrorMessage, translateServerText } from './serverMessage';
 
 const HTMLToastContent = ({ htmlContent }) => {
   return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />;
@@ -121,6 +122,16 @@ if (isMobileScreen) {
 
 export function showError(error) {
   console.error(error);
+  // 直接传入字符串（后端 message 原文）时也走同一张翻译表。
+  if (typeof error === 'string') {
+    const translated = translateServerText(error);
+    if (translated && translated !== 'success') {
+      Toast.error(translated);
+      return;
+    }
+    Toast.error(error);
+    return;
+  }
   if (error.message) {
     if (error.name === 'AxiosError') {
       switch (error.response.status) {
@@ -140,11 +151,11 @@ export function showError(error) {
           Toast.info('本站仅作演示之用，无服务端！');
           break;
         default:
-          Toast.error('错误：' + error.message);
+          Toast.error('错误：' + resolveServerErrorMessage(error));
       }
       return;
     }
-    Toast.error('错误：' + error.message);
+    Toast.error('错误：' + resolveServerErrorMessage(error));
   } else {
     Toast.error('错误：' + error);
   }

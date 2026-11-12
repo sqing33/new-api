@@ -17,6 +17,29 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
+/**
+ * 后端把日志正文按「英文源串 + 参数」存进 other.content_parts，content 列保留
+ * 英文原文给导出与非浏览器调用方。这里把 content_parts 翻译成当前语言，
+ * 没有结构化正文的历史行返回空串，由调用方回落到 content。
+ */
+export function renderLogContentParts(other, translate) {
+  const parts = other && other.content_parts;
+  if (!Array.isArray(parts) || parts.length === 0) {
+    return '';
+  }
+  const text = parts
+    .map((part) => {
+      if (!part) return '';
+      if (typeof part === 'string') return translate ? translate(part) : part;
+      const key = part.key || '';
+      if (!translate) return key;
+      return translate(key, part.params);
+    })
+    .filter(Boolean)
+    .join(', ');
+  return text;
+}
+
 export function getLogOther(otherStr) {
   if (otherStr === undefined || otherStr === null || otherStr === '') {
     return {};
