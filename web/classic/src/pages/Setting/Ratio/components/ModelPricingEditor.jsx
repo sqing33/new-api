@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Banner,
   Button,
@@ -48,6 +48,7 @@ import {
   hasValue,
   useModelPricingEditorState,
 } from '../hooks/useModelPricingEditorState';
+import { API } from '../../../../helpers';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import TieredPricingEditor from './TieredPricingEditor';
 
@@ -102,6 +103,24 @@ export default function ModelPricingEditor({
   const [addVisible, setAddVisible] = useState(false);
   const [batchVisible, setBatchVisible] = useState(false);
   const [newModelName, setNewModelName] = useState('');
+  // 任务插件声明的模型若缺少价格或价格过期，后端会在这里给出提示项。
+  const [pricingIssues, setPricingIssues] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    API.get('/api/option/model_pricing/issues', { skipErrorHandler: true })
+      .then((res) => {
+        if (!cancelled && res?.data?.success && Array.isArray(res.data.data)) {
+          setPricingIssues(res.data.data);
+        }
+      })
+      .catch(() => {
+        // 没有定价问题时该接口同样可能返回空，失败时静默保留原列表
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [options]);
 
   const {
     selectedModel,
@@ -257,6 +276,47 @@ export default function ModelPricingEditor({
   return (
     <>
       <Space vertical align='start' style={{ width: '100%' }}>
+        {pricingIssues.length > 0 && (
+          <Banner
+            type='warning'
+            bordered
+            fullMode={false}
+            closeIcon={null}
+            style={{ width: '100%' }}
+            title={t('有 {{count}} 个模型的插件价格需要更新', {
+              count: pricingIssues.length,
+            })}
+            description={
+              <div className='text-sm'>
+                <div className='mb-2'>
+                  {t(
+                    '这些模型的插件价格缺失或已过期，选择对应模型即可查看需要调整的内容。',
+                  )}
+                </div>
+                <Space wrap>
+                  {pricingIssues.slice(0, 8).map((issue) => (
+                    <Tag
+                      key={`${issue.model_name}-${issue.plugin_key}`}
+                      color='orange'
+                      size='small'
+                      className='cursor-pointer'
+                      onClick={() => setSelectedModelName(issue.model_name)}
+                    >
+                      {issue.model_name} · {issue.plugin_name || issue.plugin_key}
+                    </Tag>
+                  ))}
+                  {pricingIssues.length > 8 && (
+                    <Text type='tertiary' size='small'>
+                      {t('还有 {{count}} 个未展示', {
+                        count: pricingIssues.length - 8,
+                      })}
+                    </Text>
+                  )}
+                </Space>
+              </div>
+            }
+          />
+        )}
         <Space wrap className='mt-2'>
           {allowAddModel ? (
             <Button

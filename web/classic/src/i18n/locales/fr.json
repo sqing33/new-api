@@ -4642,7 +4642,14 @@
     "预扣倍率": "Multiplicateur de réservation",
     "按预计输入费用乘以该倍率预扣额度，仅影响预留金额，不影响最终结算": "Réserve le coût d’entrée estimé multiplié par ce facteur ; cela n’affecte que le montant réservé, pas la facturation finale",
     "解绑 {{name}}": "Délier {{name}}",
-    "重置用户密码": "Réinitialiser le mot de passe de l’utilisateur"
+    "重置用户密码": "Réinitialiser le mot de passe de l’utilisateur",
+    "有 {{count}} 个模型的插件价格需要更新": "{{count}} modèles nécessitent une mise à jour du prix du plugin",
+    "这些模型的插件价格缺失或已过期，选择对应模型即可查看需要调整的内容。": "Ces modèles ont un prix de plugin manquant ou obsolète. Sélectionnez un modèle pour voir ce qu’il faut ajuster.",
+    "还有 {{count}} 个未展示": "et {{count}} de plus",
+    "{{count}} 个模型的插件价格需要更新": "{{count}} modèles nécessitent une mise à jour du prix du plugin",
+    "这些模型的插件价格缺失或已过期，请到模型定价页补齐后再启用该插件。": "Ces modèles ont un prix de plugin manquant ou obsolète. Complétez la page de tarification avant d’activer ce plugin.",
+    "{{count}} 条路由未注册": "{{count}} routes n’ont pas été enregistrées",
+    "这些路由已被其它插件或宿主占用，本插件不会处理对应请求。": "Ces routes appartiennent déjà à un autre plugin ou à l’hôte ; ce plugin ne traitera pas ces requêtes."
   },
   "启用TTS": "Activer TTS",
   "启用ASR": "Activer ASR",

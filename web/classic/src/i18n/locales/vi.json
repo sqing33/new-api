@@ -5150,7 +5150,14 @@
     "钱包余额高于该值时不预扣额度，改为请求结束后直接结算；填 0 表示始终预扣": "Trên mức số dư này sẽ không giữ trước hạn mức mà quyết toán khi yêu cầu kết thúc; 0 là luôn giữ trước",
     "预扣倍率": "Hệ số giữ trước",
     "按预计输入费用乘以该倍率预扣额度，仅影响预留金额，不影响最终结算": "Giữ trước chi phí đầu vào ước tính nhân với hệ số này; chỉ ảnh hưởng số tiền giữ trước, không ảnh hưởng quyết toán cuối",
-    "解绑 {{name}}": "Hủy liên kết {{name}}"
+    "解绑 {{name}}": "Hủy liên kết {{name}}",
+    "有 {{count}} 个模型的插件价格需要更新": "Có {{count}} model cần cập nhật giá plugin",
+    "这些模型的插件价格缺失或已过期，选择对应模型即可查看需要调整的内容。": "Các model này thiếu giá plugin hoặc giá đã lỗi thời. Chọn model để xem nội dung cần điều chỉnh.",
+    "还有 {{count}} 个未展示": "và {{count}} mục khác",
+    "{{count}} 个模型的插件价格需要更新": "Có {{count}} model cần cập nhật giá plugin",
+    "这些模型的插件价格缺失或已过期，请到模型定价页补齐后再启用该插件。": "Các model này thiếu giá plugin hoặc đã lỗi thời. Hãy bổ sung ở trang định giá model trước khi bật plugin.",
+    "{{count}} 条路由未注册": "{{count}} tuyến đường chưa được đăng ký",
+    "这些路由已被其它插件或宿主占用，本插件不会处理对应请求。": "Các tuyến đường này đã thuộc plugin khác hoặc máy chủ, nên plugin này sẽ không xử lý các yêu cầu đó."
   },
   "启用TTS": "Bật TTS",
   "启用ASR": "Bật ASR",

@@ -4771,7 +4771,14 @@
     "预扣倍率": "Reservation multiplier",
     "按预计输入费用乘以该倍率预扣额度，仅影响预留金额，不影响最终结算": "Reserves the estimated input cost times this multiplier; it only affects the reserved amount, not the final charge",
     "解绑 {{name}}": "Unbind {{name}}",
-    "重置用户密码": "Reset user password"
+    "重置用户密码": "Reset user password",
+    "有 {{count}} 个模型的插件价格需要更新": "{{count}} models need a plugin price update",
+    "这些模型的插件价格缺失或已过期，选择对应模型即可查看需要调整的内容。": "These models have a missing or outdated plugin price. Select a model to see what needs to change.",
+    "还有 {{count}} 个未展示": "and {{count}} more",
+    "{{count}} 个模型的插件价格需要更新": "{{count}} models need a plugin price update",
+    "这些模型的插件价格缺失或已过期，请到模型定价页补齐后再启用该插件。": "These models have a missing or outdated plugin price. Complete the model pricing page before enabling this plugin.",
+    "{{count}} 条路由未注册": "{{count}} routes were not registered",
+    "这些路由已被其它插件或宿主占用，本插件不会处理对应请求。": "These routes are already owned by another plugin or the host, so this plugin will not handle those requests."
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",

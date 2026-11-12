@@ -18,11 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import {
+  Banner,
   Button,
   Card,
   Select,
   Skeleton,
   SideSheet,
+  Space,
   Spin,
   Table,
   Tabs,
@@ -136,6 +138,73 @@ const PluginDetailSheet = ({
         <Skeleton active />
       ) : detail ? (
         <div className='space-y-4'>
+          {Array.isArray(detail.pricing_issues) &&
+            detail.pricing_issues.length > 0 && (
+              <Banner
+                type='warning'
+                bordered
+                fullMode={false}
+                closeIcon={null}
+                title={t('{{count}} 个模型的插件价格需要更新', {
+                  count: detail.pricing_issues.length,
+                })}
+                description={
+                  <div className='text-sm'>
+                    <div className='mb-2'>
+                      {t(
+                        '这些模型的插件价格缺失或已过期，请到模型定价页补齐后再启用该插件。',
+                      )}
+                    </div>
+                    <Space wrap>
+                      {detail.pricing_issues.slice(0, 10).map((issue) => (
+                        <Tag
+                          key={`${issue.model_name}-${issue.plugin_key}`}
+                          color='orange'
+                          size='small'
+                        >
+                          {issue.model_name}
+                        </Tag>
+                      ))}
+                      {detail.pricing_issues.length > 10 && (
+                        <Typography.Text type='tertiary' size='small'>
+                          {t('还有 {{count}} 个未展示', {
+                            count: detail.pricing_issues.length - 10,
+                          })}
+                        </Typography.Text>
+                      )}
+                    </Space>
+                  </div>
+                }
+              />
+            )}
+          {Array.isArray(detail.skipped_routes) &&
+            detail.skipped_routes.length > 0 && (
+              <Banner
+                type='info'
+                bordered
+                fullMode={false}
+                closeIcon={null}
+                title={t('{{count}} 条路由未注册', {
+                  count: detail.skipped_routes.length,
+                })}
+                description={
+                  <div className='text-sm'>
+                    <div className='mb-2'>
+                      {t(
+                        '这些路由已被其它插件或宿主占用，本插件不会处理对应请求。',
+                      )}
+                    </div>
+                    <Space wrap>
+                      {detail.skipped_routes.map((route) => (
+                        <Tag key={route} size='small' className='font-mono'>
+                          {route}
+                        </Tag>
+                      ))}
+                    </Space>
+                  </div>
+                }
+              />
+            )}
           <PluginMetadataCard meta={detail.meta} />
           <Card title={t('计费参数')} bodyStyle={{ padding: 16 }}>
             {detail.meta.usageSchema &&
