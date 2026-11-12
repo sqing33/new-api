@@ -41,6 +41,9 @@ import {
   IconGithubLogo,
 } from '@douyinfe/semi-icons';
 import { SiDiscord, SiTelegram, SiWechat, SiLinux } from 'react-icons/si';
+import SecurityProofModal from '../../../common/modals/SecurityProofModal';
+import { useSecurityProof } from '../../../../hooks/common/useSecurityProof';
+import { secureProofHeaders } from '../../../../services/securityProof';
 
 const { Text } = Typography;
 
@@ -52,6 +55,16 @@ const UserBindingManagementModal = ({
   formApiRef,
 }) => {
   const { t } = useTranslation();
+  // 管理员清除他人绑定属于高风险操作：证明必须带上 user_id 与绑定对象。
+  const {
+    proofState,
+    requireProof,
+    submitProof,
+    cancelProof,
+    selectProofMethod,
+    setProofCode,
+    setProofPassword,
+  } = useSecurityProof();
   const [bindingLoading, setBindingLoading] = React.useState(false);
   const [showBoundOnly, setShowBoundOnly] = React.useState(true);
   const [statusInfo, setStatusInfo] = React.useState({});
@@ -126,10 +139,16 @@ const UserBindingManagementModal = ({
       cancelText: t('取消'),
       onOk: async () => {
         const loadingKey = `builtin-${bindingItem.key}`;
+        await requireProof({
+          scope: 'admin.user.binding.clear',
+          context: { user_id: parseInt(userId), binding_type: bindingItem.key },
+          title: t('解绑 {{name}}', { name: bindingItem.name }),
+          onSuccess: async (proof) => {
         setBindingLoadingState(loadingKey, true);
         try {
           const res = await API.delete(
             `/api/user/${userId}/bindings/${bindingItem.key}`,
+            { headers: secureProofHeaders(proof) },
           );
           if (!res.data?.success) {
             showError(res.data?.message || t('操作失败'));
@@ -148,6 +167,8 @@ const UserBindingManagementModal = ({
         } finally {
           setBindingLoadingState(loadingKey, false);
         }
+          },
+        });
       },
     });
   };
@@ -162,10 +183,19 @@ const UserBindingManagementModal = ({
       cancelText: t('取消'),
       onOk: async () => {
         const loadingKey = `custom-${provider.id}`;
+        await requireProof({
+          scope: 'admin.user.binding.clear',
+          context: {
+            user_id: parseInt(userId),
+            provider_id: Number(provider.id),
+          },
+          title: t('解绑 {{name}}', { name: provider.name }),
+          onSuccess: async (proof) => {
         setBindingLoadingState(loadingKey, true);
         try {
           const res = await API.delete(
             `/api/user/${userId}/oauth/bindings/${provider.id}`,
+            { headers: secureProofHeaders(proof) },
           );
           if (!res.data?.success) {
             showError(res.data?.message || t('操作失败'));
@@ -184,6 +214,8 @@ const UserBindingManagementModal = ({
         } finally {
           setBindingLoadingState(loadingKey, false);
         }
+          },
+        });
       },
     });
   };
@@ -426,6 +458,16 @@ const UserBindingManagementModal = ({
           )}
         </div>
       </Spin>
+
+      <SecurityProofModal
+        proofState={proofState}
+        submitProof={submitProof}
+        cancelProof={cancelProof}
+        selectProofMethod={selectProofMethod}
+        setProofCode={setProofCode}
+        setProofPassword={setProofPassword}
+        t={t}
+      />
     </Modal>
   );
 };

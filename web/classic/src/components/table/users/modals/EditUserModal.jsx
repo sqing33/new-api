@@ -58,11 +58,24 @@ import {
   IconEdit,
 } from '@douyinfe/semi-icons';
 import UserBindingManagementModal from './UserBindingManagementModal';
+import SecurityProofModal from '../../../common/modals/SecurityProofModal';
+import { useSecurityProof } from '../../../../hooks/common/useSecurityProof';
+import { secureProofHeaders } from '../../../../services/securityProof';
 
 const { Text, Title } = Typography;
 
 const EditUserModal = (props) => {
   const { t } = useTranslation();
+  // 管理员改密码属于高风险操作：后端要求带 user_id 上下文的二次验证证明。
+  const {
+    proofState,
+    requireProof,
+    submitProof,
+    cancelProof,
+    selectProofMethod,
+    setProofCode,
+    setProofPassword,
+  } = useSecurityProof();
   const userId = props.editingUser.id;
   const [loading, setLoading] = useState(true);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
@@ -161,7 +174,6 @@ const EditUserModal = (props) => {
 
   /* ----------------------- submit ----------------------- */
   const submit = async (values) => {
-    setLoading(true);
     let payload = { ...values };
     delete payload.quota;
     delete payload.quota_amount;
@@ -169,16 +181,37 @@ const EditUserModal = (props) => {
       payload.id = parseInt(userId);
     }
     const url = userId ? `/api/user/` : `/api/user/self`;
-    const res = await API.put(url, payload);
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('用户信息更新成功！'));
-      props.refresh();
-      props.handleClose();
-    } else {
-      showError(message);
+
+    const send = async (proof) => {
+      setLoading(true);
+      try {
+        const res = await API.put(url, payload, {
+          headers: secureProofHeaders(proof),
+        });
+        const { success, message } = res.data;
+        if (success) {
+          showSuccess(t('用户信息更新成功！'));
+          props.refresh();
+          props.handleClose();
+        } else {
+          showError(message);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // 只有重置他人密码才需要证明；普通资料修改直接提交。
+    if (userId && payload.password) {
+      await requireProof({
+        scope: 'admin.user.update',
+        context: { user_id: parseInt(userId) },
+        title: t('重置用户密码'),
+        onSuccess: send,
+      });
+      return;
     }
-    setLoading(false);
+    await send();
   };
 
   /* --------------------- atomic quota adjust -------------------- */
@@ -473,6 +506,16 @@ const EditUserModal = (props) => {
         userId={userId}
         isMobile={isMobile}
         formApiRef={formApiRef}
+      />
+
+      <SecurityProofModal
+        proofState={proofState}
+        submitProof={submitProof}
+        cancelProof={cancelProof}
+        selectProofMethod={selectProofMethod}
+        setProofCode={setProofCode}
+        setProofPassword={setProofPassword}
+        t={t}
       />
 
       {/* 调整额度模态框 */}
