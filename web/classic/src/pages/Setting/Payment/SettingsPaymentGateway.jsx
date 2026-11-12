@@ -38,6 +38,10 @@ export default function SettingsPaymentGateway(props) {
     EpayKey: '',
     Price: 7.3,
     MinTopUp: 1,
+    // 易支付签名方式：MD5（默认，兼容旧商户）或 RSA（需商户私钥与平台公钥）
+    'payment_setting.epay_sign_type': 'MD5',
+    'payment_setting.epay_merchant_private_key': '',
+    'payment_setting.epay_platform_public_key': '',
   });
   const formApiRef = useRef(null);
 
@@ -55,6 +59,10 @@ export default function SettingsPaymentGateway(props) {
           props.options.MinTopUp !== undefined
             ? parseFloat(props.options.MinTopUp)
             : 1,
+        'payment_setting.epay_sign_type':
+          props.options['payment_setting.epay_sign_type'] || 'MD5',
+        'payment_setting.epay_merchant_private_key': '',
+        'payment_setting.epay_platform_public_key': '',
       };
 
       setInputs(currentInputs);
@@ -89,6 +97,24 @@ export default function SettingsPaymentGateway(props) {
       }
       if (inputs.MinTopUp !== '') {
         options.push({ key: 'MinTopUp', value: inputs.MinTopUp.toString() });
+      }
+      // 签名方式始终下发；RSA 模式下两个密钥只在填写时才提交，
+      // 这样未改动的密钥不会被空值覆盖。
+      options.push({
+        key: 'payment_setting.epay_sign_type',
+        value: inputs['payment_setting.epay_sign_type'] || 'MD5',
+      });
+      if (inputs['payment_setting.epay_merchant_private_key']) {
+        options.push({
+          key: 'payment_setting.epay_merchant_private_key',
+          value: inputs['payment_setting.epay_merchant_private_key'],
+        });
+      }
+      if (inputs['payment_setting.epay_platform_public_key']) {
+        options.push({
+          key: 'payment_setting.epay_platform_public_key',
+          value: inputs['payment_setting.epay_platform_public_key'],
+        });
       }
 
       const requestQueue = options.map((opt) =>
@@ -154,6 +180,41 @@ export default function SettingsPaymentGateway(props) {
                 type='password'
               />
             </Col>
+            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+              <Form.Select
+                field={'payment_setting.epay_sign_type'}
+                label={t('签名方式')}
+                optionList={[
+                  { label: 'MD5', value: 'MD5' },
+                  { label: 'RSA', value: 'RSA' },
+                ]}
+                placeholder={t('请选择签名方式')}
+                style={{ width: '100%' }}
+                extraText={t(
+                  'RSA 模式下平台回调使用商户私钥签名、平台公钥验签，需填写下方两个密钥',
+                )}
+              />
+            </Col>
+            {inputs['payment_setting.epay_sign_type'] === 'RSA' && (
+              <>
+                <Col xs={24} sm={24} md={12} lg={12} xl={12}>
+                  <Form.TextArea
+                    field={'payment_setting.epay_merchant_private_key'}
+                    label={t('商户私钥')}
+                    placeholder={t('粘贴 PEM 格式私钥，留空表示不修改')}
+                    autosize={{ minRows: 3, maxRows: 8 }}
+                  />
+                </Col>
+                <Col xs={24} sm={24} md={12} lg={12} xl={12}>
+                  <Form.TextArea
+                    field={'payment_setting.epay_platform_public_key'}
+                    label={t('平台公钥')}
+                    placeholder={t('粘贴 PEM 格式公钥，留空表示不修改')}
+                    autosize={{ minRows: 3, maxRows: 8 }}
+                  />
+                </Col>
+              </>
+            )}
           </Row>
           <Row
             gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}

@@ -94,6 +94,8 @@ const PersonalSetting = () => {
     gotifyToken: '',
     gotifyPriority: 5,
     upstreamModelUpdateNotifyEnabled: false,
+    quotaWarningEnabled: true,
+    channelNotifyEnabled: undefined,
     upstreamPricingChangeNotifyEnabled: false,
     acceptUnsetModelRatioModel: false,
     recordIpLog: false,
@@ -193,6 +195,9 @@ const PersonalSetting = () => {
           settings.upstream_model_update_notify_enabled === true,
         upstreamPricingChangeNotifyEnabled:
           settings.upstream_pricing_change_notify_enabled === true,
+        quotaWarningEnabled: settings.quota_warning_enabled !== false,
+        // 未设置时保持 undefined：root 默认接收渠道通知，其他管理员默认不接收。
+        channelNotifyEnabled: settings.channel_notify_enabled,
         acceptUnsetModelRatioModel:
           settings.accept_unset_model_ratio_model || false,
         recordIpLog: settings.record_ip_log || false,
@@ -616,6 +621,12 @@ const PersonalSetting = () => {
           notificationSettings.upstreamModelUpdateNotifyEnabled === true,
         upstream_pricing_change_notify_enabled:
           notificationSettings.upstreamPricingChangeNotifyEnabled === true,
+        quota_warning_enabled:
+          notificationSettings.quotaWarningEnabled !== false,
+        channel_notify_enabled:
+          notificationSettings.channelNotifyEnabled === undefined
+            ? undefined
+            : notificationSettings.channelNotifyEnabled === true,
         accept_unset_model_ratio_model:
           notificationSettings.acceptUnsetModelRatioModel,
         record_ip_log: notificationSettings.recordIpLog,
