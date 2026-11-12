@@ -115,6 +115,45 @@ func TestSecurityLoginCodeCompletesOnce(t *testing.T) {
 	}
 }
 
+func TestSecurityLoginEvictsLeastRecentlyActiveSessionAtActiveLimit(t *testing.T) {
+	user, _ := setupSecurityEnrollmentTest(t)
+	factor := &model.TwoFA{UserId: user.Id, Secret: "JBSWY3DPEHPK3PXP", IsEnabled: true}
+	require.NoError(t, model.DB.Create(factor).Error)
+	previousLimit := common.UserSessionActiveLimit
+	common.UserSessionActiveLimit = 2
+	t.Cleanup(func() { common.UserSessionActiveLimit = previousLimit })
+	now := time.Now().Unix()
+	for i, sid := range []string{"device-oldest", "device-newer"} {
+		require.NoError(t, model.DB.Create(&model.UserSession{
+			SID: sid, UserID: user.Id, Version: 1, UserAuthVersion: user.AuthVersion,
+			Status: model.UserSessionStatusActive, RefreshHash: "hash-" + sid, LoginMethod: "password",
+			CreatedAt: now - int64(10-i), LastActiveAt: now - int64(10-i), ExpiresAt: now + 3600,
+		}).Error)
+	}
+
+	challenge, err := service.StartLoginVerification(user, "password")
+	require.NoError(t, err)
+	code, err := totp.GenerateCode(factor.Secret, time.Now())
+	require.NoError(t, err)
+	body, err := common.Marshal(map[string]string{"flow_token": challenge.FlowToken, "code": code})
+	require.NoError(t, err)
+	router := gin.New()
+	router.POST("/api/user/login/verify", VerifyLogin)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest("POST", "/api/user/login/verify", strings.NewReader(string(body))))
+	var result securityEnrollmentResponse
+	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+	require.True(t, result.Success, response.Body.String())
+
+	var evicted model.UserSession
+	require.NoError(t, model.DB.First(&evicted, "sid = ?", "device-oldest").Error)
+	assert.Equal(t, model.UserSessionStatusRevoked, evicted.Status)
+	assert.Equal(t, "session_limit_evicted", evicted.RevokedReason)
+	activeCount, err := model.CountActiveUserSessions(user.Id, time.Now().Unix())
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, activeCount, "the verified login must replace the evicted device instead of failing")
+}
+
 func TestSecurityLoginRejectsChangedOrExpiredAuthorization(t *testing.T) {
 	for _, change := range []string{"expired", "disabled user", "auth version", "factor removed", "factor locked", "legacy flow", "wrong method", "other purpose"} {
 		t.Run(change, func(t *testing.T) {

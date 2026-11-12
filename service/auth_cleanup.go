@@ -39,6 +39,18 @@ func cleanupAuthArtifacts() {
 			int64(time.Hour/time.Second),
 		))
 	}
+	if common.UserSessionIdleTimeoutSeconds > 0 {
+		count, err := model.RevokeIdleUserSessions(now.Unix())
+		if err != nil {
+			common.SysError("failed to revoke idle user sessions: " + err.Error())
+		} else if count > 0 {
+			common.SysLog(fmt.Sprintf(
+				"revoked idle user sessions: count=%d idle_timeout_seconds=%d",
+				count,
+				common.UserSessionIdleTimeoutSeconds,
+			))
+		}
+	}
 	if err := model.DeleteExpiredUserSessions(now.Unix()); err != nil {
 		common.SysError("failed to delete expired user sessions: " + err.Error())
 	}

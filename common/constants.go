@@ -39,6 +39,7 @@ var SessionCookieTrustedURLs []string
 
 const (
 	DefaultUserSessionActiveLimit           = 50
+	DefaultUserSessionIdleTimeoutSeconds    = 0
 	DefaultUserSessionIssuanceLimit         = 100
 	DefaultUserSessionIssuanceWindowSeconds = 24 * 60 * 60
 	DefaultUserSessionRevokedRetentionDays  = 7
@@ -47,6 +48,7 @@ const (
 
 var (
 	UserSessionActiveLimit           = DefaultUserSessionActiveLimit
+	UserSessionIdleTimeoutSeconds    = int64(DefaultUserSessionIdleTimeoutSeconds)
 	UserSessionIssuanceLimit         = DefaultUserSessionIssuanceLimit
 	UserSessionIssuanceWindowSeconds = int64(DefaultUserSessionIssuanceWindowSeconds)
 	UserSessionRevokedRetentionDays  = DefaultUserSessionRevokedRetentionDays

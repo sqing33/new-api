@@ -47,10 +47,17 @@ func getUserVerificationState(tx *gorm.DB, userID int, forUpdate bool) (*UserVer
 
 // CreateUserSessionFromLoginFlow commits the one-time login authorization and
 // the resulting session together. The user lock serializes credential changes
-// and session issuance, including the per-user session limits.
+// and session issuance. Capacity is made available before the transaction
+// because eviction publishes Redis deny fences, which must not be written
+// inside a database transaction; the in-transaction count stays as the
+// authoritative fail-closed guard.
 func CreateUserSessionFromLoginFlow(token string, session *UserSession, validate func(*AuthFlow, *UserVerificationState) error) error {
 	if session == nil || validate == nil {
 		return ErrUserSessionInvalid
+	}
+	now := time.Now().Unix()
+	if err := EnsureUserSessionCapacity(session.UserID, now); err != nil {
+		return err
 	}
 	cacheDeadline := userSessionCacheDeadline()
 	_, err := ConsumeAuthFlowWithAction(token, AuthFlowMatch{
@@ -66,9 +73,12 @@ func CreateUserSessionFromLoginFlow(token string, session *UserSession, validate
 		if err := validate(flow, state); err != nil {
 			return err
 		}
-		now := time.Now().Unix()
+		activeQuery := tx.Model(&UserSession{}).Where("user_id = ? AND status = ? AND expires_at > ?", session.UserID, UserSessionStatusActive, now)
+		if cutoff := idleCutoff(now); cutoff > 0 {
+			activeQuery = activeQuery.Where("last_active_at > ?", cutoff)
+		}
 		var activeCount, issuanceCount int64
-		if err := tx.Model(&UserSession{}).Where("user_id = ? AND status = ? AND expires_at > ?", session.UserID, UserSessionStatusActive, now).Count(&activeCount).Error; err != nil {
+		if err := activeQuery.Count(&activeCount).Error; err != nil {
 			return err
 		}
 		if activeCount >= int64(common.UserSessionActiveLimit) {

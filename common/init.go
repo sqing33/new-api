@@ -145,6 +145,7 @@ func InitEnv() {
 
 func initUserSessionSettings() {
 	UserSessionActiveLimit = positiveUserSessionEnv("USER_SESSION_ACTIVE_LIMIT", DefaultUserSessionActiveLimit)
+	UserSessionIdleTimeoutSeconds = int64(nonNegativeUserSessionEnv("USER_SESSION_IDLE_TIMEOUT_SECONDS", DefaultUserSessionIdleTimeoutSeconds))
 	UserSessionIssuanceLimit = positiveUserSessionEnv("USER_SESSION_ISSUANCE_LIMIT", DefaultUserSessionIssuanceLimit)
 	UserSessionIssuanceWindowSeconds = int64(positiveUserSessionEnv("USER_SESSION_ISSUANCE_WINDOW_SECONDS", DefaultUserSessionIssuanceWindowSeconds))
 	UserSessionRevokedRetentionDays = positiveUserSessionEnv("USER_SESSION_REVOKED_RETENTION_DAYS", DefaultUserSessionRevokedRetentionDays)
@@ -175,6 +176,18 @@ func positiveUserSessionEnv(name string, fallback int) int {
 	value := GetEnvOrDefault(name, fallback)
 	if value <= 0 {
 		SysError(fmt.Sprintf("%s must be positive, using default value: %d", name, fallback))
+		return fallback
+	}
+	return value
+}
+
+// nonNegativeUserSessionEnv accepts zero, which disables the corresponding
+// session control, and falls back to the default for negative or malformed
+// input.
+func nonNegativeUserSessionEnv(name string, fallback int) int {
+	value := GetEnvOrDefault(name, fallback)
+	if value < 0 {
+		SysError(fmt.Sprintf("%s must not be negative, using default value: %d", name, fallback))
 		return fallback
 	}
 	return value

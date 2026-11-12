@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -46,17 +49,20 @@ func setupUserSessionTest(t *testing.T) {
 	require.NoError(t, DB.Exec("DELETE FROM user_sessions").Error)
 	oldRedisEnabled := common.RedisEnabled
 	oldActiveLimit := common.UserSessionActiveLimit
+	oldIdleTimeout := common.UserSessionIdleTimeoutSeconds
 	oldIssuanceLimit := common.UserSessionIssuanceLimit
 	oldIssuanceWindow := common.UserSessionIssuanceWindowSeconds
 	oldRevokedRetention := common.UserSessionRevokedRetentionDays
 	common.RedisEnabled = false
 	common.UserSessionActiveLimit = common.DefaultUserSessionActiveLimit
+	common.UserSessionIdleTimeoutSeconds = int64(common.DefaultUserSessionIdleTimeoutSeconds)
 	common.UserSessionIssuanceLimit = common.DefaultUserSessionIssuanceLimit
 	common.UserSessionIssuanceWindowSeconds = int64(common.DefaultUserSessionIssuanceWindowSeconds)
 	common.UserSessionRevokedRetentionDays = common.DefaultUserSessionRevokedRetentionDays
 	t.Cleanup(func() {
 		common.RedisEnabled = oldRedisEnabled
 		common.UserSessionActiveLimit = oldActiveLimit
+		common.UserSessionIdleTimeoutSeconds = oldIdleTimeout
 		common.UserSessionIssuanceLimit = oldIssuanceLimit
 		common.UserSessionIssuanceWindowSeconds = oldIssuanceWindow
 		common.UserSessionRevokedRetentionDays = oldRevokedRetention
@@ -93,6 +99,90 @@ func newTestUserSession(sid string, userID int, now int64) *UserSession {
 		CreatedAt:       now,
 		LastActiveAt:    now,
 		ExpiresAt:       now + int64((30*24*time.Hour)/time.Second),
+	}
+}
+
+// testUserSessionEvictionContract exercises the eviction queries on a real
+// configured database: ORDER BY over two columns, the IN-list compare-and-swap
+// revoke, and the transaction wrapper are the dialect-sensitive parts.
+func testUserSessionEvictionContract(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	require.NoError(t, db.AutoMigrate(&User{}, &UserSession{}))
+	now := time.Now().Unix()
+	suffix := now
+	user := &User{
+		Username:    fmt.Sprintf("session-eviction-%d", suffix),
+		Password:    "unused",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		Group:       "default",
+		AffCode:     fmt.Sprintf("evict-aff-%d", suffix),
+		AuthVersion: 1,
+	}
+	require.NoError(t, db.Create(user).Error)
+	t.Cleanup(func() {
+		_ = db.Unscoped().Delete(&UserSession{}, "user_id = ?", user.Id).Error
+		_ = db.Unscoped().Delete(&User{}, user.Id).Error
+	})
+	rows := make([]UserSession, 0, 3)
+	for i, name := range []string{"oldest", "middle", "newest"} {
+		session := newTestUserSession(fmt.Sprintf("eviction-%s-%d", name, suffix), user.Id, now-int64(300-i*100))
+		rows = append(rows, *session)
+	}
+	require.NoError(t, db.Create(&rows).Error)
+
+	previousDB := DB
+	DB = db
+	t.Cleanup(func() { DB = previousDB })
+	affected, err := RevokeOldestUserSessions(user.Id, 2, now, "session_limit_evicted")
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, affected)
+
+	var active []UserSession
+	require.NoError(t, db.Where("user_id = ? AND status = ?", user.Id, UserSessionStatusActive).
+		Order("last_active_at").Find(&active).Error)
+	require.Len(t, active, 2)
+	assert.Equal(t, fmt.Sprintf("eviction-middle-%d", suffix), active[0].SID)
+	assert.Equal(t, fmt.Sprintf("eviction-newest-%d", suffix), active[1].SID)
+
+	require.NoError(t, EnsureUserSessionCapacity(user.Id, now))
+	count, err := CountActiveUserSessions(user.Id, now)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, count, "capacity must keep exactly one slot free for the new Session")
+}
+
+func TestUserSessionEvictionContractConfiguredDatabases(t *testing.T) {
+	previousRedis := common.RedisEnabled
+	previousLimit := common.UserSessionActiveLimit
+	common.RedisEnabled = false
+	common.UserSessionActiveLimit = 2
+	t.Cleanup(func() {
+		common.RedisEnabled = previousRedis
+		common.UserSessionActiveLimit = previousLimit
+	})
+	tests := []struct {
+		name      string
+		env       string
+		dialector func(string) gorm.Dialector
+	}{
+		{name: "mysql", env: "TEST_MYSQL_DSN", dialector: func(dsn string) gorm.Dialector { return mysql.Open(dsn) }},
+		{name: "postgres", env: "TEST_POSTGRES_DSN", dialector: func(dsn string) gorm.Dialector {
+			return postgres.New(postgres.Config{DSN: dsn, PreferSimpleProtocol: true})
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dsn := strings.TrimSpace(os.Getenv(test.env))
+			if dsn == "" {
+				t.Skip(test.env + " is not configured")
+			}
+			db, err := gorm.Open(test.dialector(dsn), &gorm.Config{})
+			require.NoError(t, err)
+			connection, err := db.DB()
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = connection.Close() })
+			testUserSessionEvictionContract(t, db)
+		})
 	}
 }
 
@@ -335,6 +425,58 @@ func TestUserSessionCacheExcludesRefreshDigests(t *testing.T) {
 	assert.Empty(t, cachedSession.RefreshHash)
 	assert.Empty(t, cachedSession.PreviousRefreshHash)
 	assert.Zero(t, cachedSession.PreviousValidUntil)
+}
+
+func TestRevokeOldestUserSessionsKeepsMostRecentlyActive(t *testing.T) {
+	setupUserSessionTest(t)
+	createUserSessionTestUser(t, 1201, 1)
+	now := time.Now().Unix()
+	rows := []UserSession{
+		*newTestUserSession("oldest", 1201, now-300),
+		*newTestUserSession("middle", 1201, now-200),
+		*newTestUserSession("newest", 1201, now-100),
+	}
+	// A stale auth version is invisible in the device list but still consumes
+	// the active limit, so eviction must reclaim it first.
+	rows[0].UserAuthVersion = 7
+	require.NoError(t, DB.Create(&rows).Error)
+
+	affected, err := RevokeOldestUserSessions(1201, 2, now, "session_limit_evicted")
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, affected)
+
+	var active []UserSession
+	require.NoError(t, DB.Where("user_id = ? AND status = ?", 1201, UserSessionStatusActive).
+		Order("last_active_at").Find(&active).Error)
+	require.Len(t, active, 2)
+	assert.Equal(t, "middle", active[0].SID)
+	assert.Equal(t, "newest", active[1].SID)
+
+	affected, err = RevokeOldestUserSessions(1201, 2, now, "session_limit_evicted")
+	require.NoError(t, err)
+	assert.Zero(t, affected, "a repeated call must not revoke anything")
+}
+
+func TestEnsureUserSessionCapacityRevokesEvictedSessionCache(t *testing.T) {
+	setupUserSessionTest(t)
+	createUserSessionTestUser(t, 1202, 1)
+	useUserCacheMiniRedis(t)
+	oldActiveLimit := common.UserSessionActiveLimit
+	common.UserSessionActiveLimit = 2
+	t.Cleanup(func() { common.UserSessionActiveLimit = oldActiveLimit })
+	now := time.Now().Unix()
+	require.NoError(t, CreateUserSession(newTestUserSession("cached-oldest", 1202, now-300)))
+	require.NoError(t, CreateUserSession(newTestUserSession("cached-newest", 1202, now-100)))
+
+	require.NoError(t, EnsureUserSessionCapacity(1202, now))
+
+	_, err := GetUserSessionCached("cached-oldest")
+	assert.ErrorIs(t, err, ErrUserSessionInactive,
+		"the evicted session must be denied from the cache without waiting for its TTL")
+	stored, err := GetUserSessionBySID("cached-oldest")
+	require.NoError(t, err)
+	assert.Equal(t, UserSessionStatusRevoked, stored.Status)
+	assert.Equal(t, userSessionLimitEvictReason, stored.RevokedReason)
 }
 
 func TestRevokeOtherUserSessionsKeepsCurrent(t *testing.T) {

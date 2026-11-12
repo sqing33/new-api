@@ -23,6 +23,9 @@ const (
 	userSessionRevokeBatchSize  = 500
 	userSessionCleanupScanLimit = 1000
 	userSessionCleanupBatchSize = 500
+
+	userSessionLimitEvictReason = "session_limit_evicted"
+	userSessionIdleRevokeReason = "idle_timeout"
 )
 
 var (
@@ -174,6 +177,34 @@ func publishCreatedUserSession(session *UserSession, cacheDeadline time.Time) er
 	return nil
 }
 
+// idleCutoff returns the last_active_at boundary below which an active Session
+// counts as idle. A zero timeout disables the control and yields zero, which
+// leaves every session predicate untouched.
+func idleCutoff(now int64) int64 {
+	if common.UserSessionIdleTimeoutSeconds <= 0 {
+		return 0
+	}
+	return now - common.UserSessionIdleTimeoutSeconds
+}
+
+func userSessionIdleExpired(lastActiveAt, now int64) bool {
+	cutoff := idleCutoff(now)
+	return cutoff > 0 && lastActiveAt <= cutoff
+}
+
+// sessionExpired reports whether a Session can no longer authenticate at now:
+// it was revoked, its absolute lifetime ended, or it has been idle past the
+// configured idle timeout.
+func sessionExpired(session *UserSession, now int64) bool {
+	if session.Status != UserSessionStatusActive || session.RevokedAt != 0 || session.ExpiresAt <= now {
+		return true
+	}
+	return userSessionIdleExpired(session.LastActiveAt, now)
+}
+
+// CountActiveUserSessions counts the Sessions that can still authenticate at
+// now. Idle Sessions are excluded when the idle timeout is enabled, so a user
+// who abandoned devices does not consume the active limit.
 func CountActiveUserSessions(userID int, now int64) (int64, error) {
 	if userID <= 0 {
 		return 0, ErrUserSessionInvalid
@@ -181,10 +212,13 @@ func CountActiveUserSessions(userID int, now int64) (int64, error) {
 	if now <= 0 {
 		now = time.Now().Unix()
 	}
+	query := DB.Model(&UserSession{}).
+		Where("user_id = ? AND status = ? AND expires_at > ?", userID, UserSessionStatusActive, now)
+	if cutoff := idleCutoff(now); cutoff > 0 {
+		query = query.Where("last_active_at > ?", cutoff)
+	}
 	var count int64
-	err := DB.Model(&UserSession{}).
-		Where("user_id = ? AND status = ? AND expires_at > ?", userID, UserSessionStatusActive, now).
-		Count(&count).Error
+	err := query.Count(&count).Error
 	return count, err
 }
 
@@ -236,7 +270,7 @@ func GetUserSessionCached(sid string) (*UserSession, error) {
 		return nil, err
 	}
 	now := time.Now().Unix()
-	if session.Status != UserSessionStatusActive || session.RevokedAt != 0 || session.ExpiresAt <= now {
+	if sessionExpired(session, now) {
 		if common.RedisEnabled {
 			entry := session.cacheEntry()
 			entry.Status = UserSessionStatusRevoked
@@ -269,7 +303,8 @@ func getUserSessionCache(sid string) (*userSessionCacheEntry, error) {
 	if entry.CacheSchema != userSessionCacheSchema || entry.SID != sid || entry.UserID <= 0 || entry.Version <= 0 || entry.UserAuthVersion <= 0 {
 		return nil, fmt.Errorf("user session cache schema is stale")
 	}
-	if entry.Status != UserSessionStatusActive || entry.RevokedAt != 0 || entry.ExpiresAt <= time.Now().Unix() {
+	now := time.Now().Unix()
+	if entry.Status != UserSessionStatusActive || entry.RevokedAt != 0 || entry.ExpiresAt <= now || userSessionIdleExpired(entry.LastActiveAt, now) {
 		return nil, ErrUserSessionInactive
 	}
 	return &entry, nil
@@ -440,6 +475,11 @@ func ListActiveUserSessions(userID int, currentSID string, now int64) ([]UserSes
 		UserSessionStatusActive,
 		now,
 	)
+	// An idle Session can no longer authenticate, so it must not be presented
+	// as a usable device either.
+	if cutoff := idleCutoff(now); cutoff > 0 {
+		otherQuery = otherQuery.Where("last_active_at > ?", cutoff)
+	}
 	if currentSID != "" {
 		otherQuery = otherQuery.Where("sid <> ?", currentSID)
 	}
@@ -473,7 +513,7 @@ func RotateUserSessionRefresh(userID int, sid, presentedHash, nextHash string, n
 		if err := DB.Where("sid = ? AND user_id = ?", sid, userID).First(&session).Error; err != nil {
 			return nil, err
 		}
-		if session.Status != UserSessionStatusActive || session.RevokedAt != 0 || session.ExpiresAt <= now {
+		if sessionExpired(&session, now) {
 			return nil, ErrUserSessionInactive
 		}
 
@@ -717,6 +757,56 @@ func RevokeAllUserSessions(userID int, reason string) (int64, error) {
 	return revokeUserSessions(userID, "", reason)
 }
 
+// revokeActiveUserSessionRows is the single write path for revoking a batch of
+// active Sessions. Deny fences are published before the transaction so a
+// concurrent read cannot observe an active cache entry after the revoke
+// commits; final tombstones replace them once the rows are updated.
+func revokeActiveUserSessionRows(candidates []UserSession, reason string, now int64) (int64, error) {
+	for i := range candidates {
+		if err := writeUserSessionDenyFence(&candidates[i], UserSessionStatusRevoking, now, reason); err != nil {
+			return 0, err
+		}
+	}
+
+	sids := make([]string, 0, len(candidates))
+	for i := range candidates {
+		sids = append(sids, candidates[i].SID)
+	}
+	var affected int64
+	var revoked []UserSession
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := lockForUpdate(tx).Where("sid IN ? AND status = ?", sids, UserSessionStatusActive).Find(&revoked).Error; err != nil {
+			return err
+		}
+		if len(revoked) == 0 {
+			return nil
+		}
+		lockedSIDs := make([]string, 0, len(revoked))
+		for i := range revoked {
+			lockedSIDs = append(lockedSIDs, revoked[i].SID)
+		}
+		result := tx.Model(&UserSession{}).Where("sid IN ? AND status = ?", lockedSIDs, UserSessionStatusActive).Updates(map[string]any{
+			"status":         UserSessionStatusRevoked,
+			"revoked_at":     now,
+			"revoked_reason": reason,
+		})
+		affected = result.RowsAffected
+		return result.Error
+	})
+	if err != nil {
+		return 0, err
+	}
+	for i := range revoked {
+		revoked[i].Status = UserSessionStatusRevoked
+		revoked[i].RevokedAt = now
+		revoked[i].RevokedReason = reason
+		if err := writeUserSessionCache(revoked[i].cacheEntry(), time.Time{}); err != nil {
+			common.SysLog("failed to finalize bulk user session revoke tombstone: " + err.Error())
+		}
+	}
+	return affected, nil
+}
+
 func revokeUserSessions(userID int, excludedSID, reason string) (int64, error) {
 	if userID <= 0 {
 		return 0, ErrUserSessionInvalid
@@ -735,49 +825,118 @@ func revokeUserSessions(userID int, excludedSID, reason string) (int64, error) {
 		if len(candidates) == 0 {
 			return totalAffected, nil
 		}
-		for i := range candidates {
-			if err := writeUserSessionDenyFence(&candidates[i], UserSessionStatusRevoking, now, reason); err != nil {
-				return totalAffected, err
-			}
-		}
-
-		sids := make([]string, 0, len(candidates))
-		for i := range candidates {
-			sids = append(sids, candidates[i].SID)
-		}
-		var affected int64
-		var revoked []UserSession
-		err := DB.Transaction(func(tx *gorm.DB) error {
-			if err := lockForUpdate(tx).Where("sid IN ? AND status = ?", sids, UserSessionStatusActive).Find(&revoked).Error; err != nil {
-				return err
-			}
-			if len(revoked) == 0 {
-				return nil
-			}
-			lockedSIDs := make([]string, 0, len(revoked))
-			for i := range revoked {
-				lockedSIDs = append(lockedSIDs, revoked[i].SID)
-			}
-			result := tx.Model(&UserSession{}).Where("sid IN ? AND status = ?", lockedSIDs, UserSessionStatusActive).Updates(map[string]any{
-				"status":         UserSessionStatusRevoked,
-				"revoked_at":     now,
-				"revoked_reason": reason,
-			})
-			affected = result.RowsAffected
-			return result.Error
-		})
+		affected, err := revokeActiveUserSessionRows(candidates, reason, now)
 		if err != nil {
 			return totalAffected, err
 		}
 		totalAffected += affected
-		for i := range revoked {
-			revoked[i].Status = UserSessionStatusRevoked
-			revoked[i].RevokedAt = now
-			revoked[i].RevokedReason = reason
-			if err := writeUserSessionCache(revoked[i].cacheEntry(), time.Time{}); err != nil {
-				common.SysLog("failed to finalize bulk user session revoke tombstone: " + err.Error())
-			}
+	}
+}
+
+// RevokeOldestUserSessions revokes the least recently active Sessions of one
+// user until at most keepCount remain usable. Session issuance calls it to make
+// room for a new login instead of rejecting it, so abandoned Sessions on other
+// devices can never lock an account out. Rows past the idle timeout are
+// already excluded from the count, so they are not revived by this path.
+func RevokeOldestUserSessions(userID int, keepCount int, now int64, reason string) (int64, error) {
+	if userID <= 0 || keepCount < 0 {
+		return 0, ErrUserSessionInvalid
+	}
+	if now <= 0 {
+		now = time.Now().Unix()
+	}
+	var totalAffected int64
+	for {
+		activeCount, err := CountActiveUserSessions(userID, now)
+		if err != nil {
+			return totalAffected, err
 		}
+		victims := activeCount - int64(keepCount)
+		if victims <= 0 {
+			return totalAffected, nil
+		}
+		batch := int(min(victims, userSessionRevokeBatchSize))
+		query := DB.Where("user_id = ? AND status = ? AND expires_at > ?", userID, UserSessionStatusActive, now)
+		if cutoff := idleCutoff(now); cutoff > 0 {
+			query = query.Where("last_active_at > ?", cutoff)
+		}
+		var candidates []UserSession
+		if err := query.Order("last_active_at").Order("created_at").Limit(batch).Find(&candidates).Error; err != nil {
+			return totalAffected, err
+		}
+		if len(candidates) == 0 {
+			return totalAffected, nil
+		}
+		affected, err := revokeActiveUserSessionRows(candidates, reason, now)
+		if err != nil {
+			return totalAffected, err
+		}
+		if affected == 0 {
+			// Every candidate was revoked concurrently; the caller re-checks
+			// capacity instead of looping on an unchanged count.
+			return totalAffected, nil
+		}
+		totalAffected += affected
+	}
+}
+
+// EnsureUserSessionCapacity keeps one free slot for a new Session by evicting
+// the least recently active Sessions when the user is at the active limit. A
+// revoked row still authorizes nothing, so eviction never weakens the account's
+// session controls; it only prevents permanent self-lockout.
+func EnsureUserSessionCapacity(userID int, now int64) error {
+	limit := max(common.UserSessionActiveLimit, 1)
+	activeCount, err := CountActiveUserSessions(userID, now)
+	if err != nil {
+		return err
+	}
+	if activeCount < int64(limit) {
+		return nil
+	}
+	evicted, err := RevokeOldestUserSessions(userID, limit-1, now, userSessionLimitEvictReason)
+	if err != nil {
+		return err
+	}
+	if evicted > 0 {
+		common.SysLog(fmt.Sprintf(
+			"user session active limit reached, evicted least recently active sessions: user_id=%d limit=%d evicted=%d",
+			userID,
+			limit,
+			evicted,
+		))
+	}
+	return nil
+}
+
+// RevokeIdleUserSessions revokes Sessions that have been idle past the
+// configured timeout. Rows are kept for the revoked retention window so the
+// issuance counter and the audit trail stay intact.
+func RevokeIdleUserSessions(now int64) (int64, error) {
+	if now <= 0 {
+		now = time.Now().Unix()
+	}
+	cutoff := idleCutoff(now)
+	if cutoff <= 0 {
+		return 0, nil
+	}
+	var totalAffected int64
+	for {
+		var candidates []UserSession
+		if err := DB.Where("status = ? AND expires_at > ? AND last_active_at <= ?", UserSessionStatusActive, now, cutoff).
+			Order("last_active_at").Limit(userSessionRevokeBatchSize).Find(&candidates).Error; err != nil {
+			return totalAffected, err
+		}
+		if len(candidates) == 0 {
+			return totalAffected, nil
+		}
+		affected, err := revokeActiveUserSessionRows(candidates, userSessionIdleRevokeReason, now)
+		if err != nil {
+			return totalAffected, err
+		}
+		if affected == 0 {
+			return totalAffected, nil
+		}
+		totalAffected += affected
 	}
 }
 

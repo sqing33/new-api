@@ -77,19 +77,21 @@
 
 服务端在所有登录方式的统一 Session 签发出口执行两级账户限制：
 
-- `USER_SESSION_ACTIVE_LIMIT`（默认 `50`）：单用户未过期且状态为 active 的 Session 上限。达到上限时新登录返回 `409 AUTH_SESSION_LIMIT`。
+- `USER_SESSION_ACTIVE_LIMIT`（默认 `50`）：单用户未过期且状态为 active 的 Session 上限。达到上限时，服务端先撤销最久未活跃（`last_active_at` 最小，其次 `created_at` 最小）的 Session 腾出位置，再签发新 Session；只有淘汰后仍然超额时才返回 `409 AUTH_SESSION_LIMIT`。
 - `USER_SESSION_ISSUANCE_LIMIT`（默认 `100`）和 `USER_SESSION_ISSUANCE_WINDOW_SECONDS`（默认 `86400`）：统计窗口内该用户创建的所有 Session，包含已撤销和旧鉴权版本的记录。达到上限时返回 `429 AUTH_SESSION_ISSUANCE_LIMIT`。
-- 这两次计数与插入不加跨数据库锁；极端并发登录可能出现少量超额，但计数失败会拒绝签发，不会降级放行。
+- 这两次计数与插入不加跨数据库锁；极端并发登录可能出现少量超额，或一次淘汰多于 1 条，但计数失败会拒绝签发，不会降级放行。
 
-升级时已经超过活跃上限的账户不会被自动下线或挤掉旧会话；限制只作用于后续的新 Session 签发。
+淘汰只作用于同一用户的 active 行，包含当前鉴权版本下设备列表不可见的旧版本残留行；被淘汰的 Session 立即失效并记录 `revoked_reason=session_limit_evicted`。因此已经积满历史会话的账户在下一次登录时会被自动腾出位置，不会再被永久锁在登录之外。淘汰写库失败时整次签发失败，不会降级放行。腾出位置发生在会话落库之前，因此落库失败或被并发请求抢先时不会回滚淘汰，只在账户本就处于上限时多下线一台旧设备；不会产生超额或放行。
+
+`USER_SESSION_IDLE_TIMEOUT_SECONDS`（默认 `0`，即关闭）开启后，`last_active_at` 超过该时长的 Session 不再计入活跃数量、不能继续用于鉴权和 refresh，并由每小时清理任务撤销（`revoked_reason=idle_timeout`）。活跃用户的 Access Token 每 15 分钟轮换一次，轮换会同时刷新 `last_active_at`，因此正常使用的设备不会被误判为空闲。Session 的绝对有效期仍为 30 天。注意：关闭空闲超时（默认配置）意味着当前实现不满足 OWASP ASVS 5.0 V7.3.1 对空闲超时的要求，需要部署方显式开启。
 
 `USER_SESSION_REVOKED_RETENTION_DAYS`（默认 `7`）控制 revoked 行的审计保留期。签发计数依赖窗口内的行仍存在，因此签发窗口不得超过 revoked 保留期。如果配置超出，启动时会记录告警并将实际窗口钳制到保留期，避免提前删除 revoked 行导致限流计数被低估。
 
 定时清理即使发现 `expires_at` 已过期，也不会删除 `created_at` 仍落在实际签发窗口内的行；尚未达到 revoked 保留期的撤销记录同样会继续保留。这样在扩大配置窗口时，过期清理不会静默削弱签发计数或审计保留。
 
-活跃数量会计入状态仍为 active 但 `user_auth_version` 已过期的异常残留行，而设备列表只展示当前鉴权版本。因此遇到 `AUTH_SESSION_LIMIT` 时，应优先在仍已登录的设备上执行“撤销其他会话”，该操作会同时清理不可见的旧版本 active 行；没有可用设备时可使用密码重置撤销所有会话。密码重置不会清空签发窗口计数。
+需要手工检查或撤销会话时，使用 `GET /api/user/sessions`、`DELETE /api/user/sessions/:sid` 和 `POST /api/user/sessions/revoke-others`；它们要求 Bearer Access Token（classic 面板的旧 cookie 会话没有 SID，无法调用）。没有可用设备时也可以使用密码重置撤销所有会话，密码重置不会清空签发窗口计数。
 
-仅 master 节点每小时分批删除过期 Session 和超过保留期的 revoked Session。`USER_SESSION_HOURLY_ALERT_THRESHOLD`（默认 `5000`）只在最近一小时全局签发量异常时记录告警，不会形成可被滥用的全站登录拒绝开关。
+仅 master 节点每小时分批撤销空闲 Session、删除过期 Session 和超过保留期的 revoked Session。`USER_SESSION_HOURLY_ALERT_THRESHOLD`（默认 `5000`）只在最近一小时全局签发量异常时记录告警，不会形成可被滥用的全站登录拒绝开关。
 
 ## Refresh/Logout 的 Origin 校验
 
