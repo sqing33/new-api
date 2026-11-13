@@ -5157,7 +5157,9 @@
     "{{count}} 个模型的插件价格需要更新": "Có {{count}} model cần cập nhật giá plugin",
     "这些模型的插件价格缺失或已过期，请到模型定价页补齐后再启用该插件。": "Các model này thiếu giá plugin hoặc đã lỗi thời. Hãy bổ sung ở trang định giá model trước khi bật plugin.",
     "{{count}} 条路由未注册": "{{count}} tuyến đường chưa được đăng ký",
-    "这些路由已被其它插件或宿主占用，本插件不会处理对应请求。": "Các tuyến đường này đã thuộc plugin khác hoặc máy chủ, nên plugin này sẽ không xử lý các yêu cầu đó."
+    "这些路由已被其它插件或宿主占用，本插件不会处理对应请求。": "Các tuyến đường này đã thuộc plugin khác hoặc máy chủ, nên plugin này sẽ không xử lý các yêu cầu đó.",
+    "包含与上游一致的模型": "Bao gồm cả model khớp với phía trên",
+    "历史": "Lịch sử"
   },
   "启用TTS": "Bật TTS",
   "启用ASR": "Bật ASR",

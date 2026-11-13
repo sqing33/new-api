@@ -30,6 +30,8 @@ import {
   Select,
   Modal,
   Spin,
+  Switch,
+  Typography,
 } from '@douyinfe/semi-ui';
 import { IconSearch } from '@douyinfe/semi-icons';
 import { RefreshCcw, CheckSquare, AlertTriangle } from 'lucide-react';
@@ -119,6 +121,9 @@ export default function UpstreamRatioSync(props) {
 
   // 是否已经执行过同步
   const [hasSynced, setHasSynced] = useState(false);
+
+  // 是否把与上游一致的模型也纳入结果（默认只看差异）
+  const [includeUnchanged, setIncludeUnchanged] = useState(false);
 
   // 分页相关状态
   const [currentPage, setCurrentPage] = useState(1);
@@ -226,6 +231,7 @@ export default function UpstreamRatioSync(props) {
     const payload = {
       upstreams: upstreams,
       timeout: 10,
+      include_unchanged: includeUnchanged,
     };
 
     try {
@@ -693,6 +699,18 @@ export default function UpstreamRatioSync(props) {
                 {t('表达式计费')}
               </Select.Option>
             </Select>
+
+            <div className='flex items-center gap-2 px-2'>
+              <Switch
+                size='small'
+                checked={includeUnchanged}
+                disabled={loading || syncLoading || confirmLoading}
+                onChange={setIncludeUnchanged}
+              />
+              <Typography.Text size='small'>
+                {t('包含与上游一致的模型')}
+              </Typography.Text>
+            </div>
           </div>
         </div>
       </div>

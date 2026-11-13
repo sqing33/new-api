@@ -4778,7 +4778,10 @@
     "{{count}} 个模型的插件价格需要更新": "{{count}} models need a plugin price update",
     "这些模型的插件价格缺失或已过期，请到模型定价页补齐后再启用该插件。": "These models have a missing or outdated plugin price. Complete the model pricing page before enabling this plugin.",
     "{{count}} 条路由未注册": "{{count}} routes were not registered",
-    "这些路由已被其它插件或宿主占用，本插件不会处理对应请求。": "These routes are already owned by another plugin or the host, so this plugin will not handle those requests."
+    "这些路由已被其它插件或宿主占用，本插件不会处理对应请求。": "These routes are already owned by another plugin or the host, so this plugin will not handle those requests.",
+    "包含与上游一致的模型": "Include models matching upstream",
+    "范围": "Scope",
+    "历史": "History"
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",

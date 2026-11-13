@@ -53,6 +53,8 @@ export const useSystemInfoData = () => {
   const [tasksLoading, setTasksLoading] = useState(true);
   const [tasksRefreshing, setTasksRefreshing] = useState(false);
   const tasksLoadingRef = useRef(false);
+  // 后端 SystemTaskFilter 支持 scope/type/status；空值表示不过滤。
+  const [taskFilter, setTaskFilter] = useState({ scope: '', type: '', status: '' });
 
   const loadInstances = useCallback(
     async (silent = false) => {
@@ -138,7 +140,7 @@ export const useSystemInfoData = () => {
       }
       try {
         const res = await API.get('/api/system-task/list', {
-          params: { limit: TASK_LIMIT },
+          params: { limit: TASK_LIMIT, ...taskFilter },
           skipErrorHandler: silent,
         });
         const { success, message, data } = res.data;
@@ -155,7 +157,7 @@ export const useSystemInfoData = () => {
         setTasksRefreshing(false);
       }
     },
-    [t],
+    [t, taskFilter],
   );
 
   const [clearingTaskHistory, setClearingTaskHistory] = useState(false);
@@ -213,6 +215,8 @@ export const useSystemInfoData = () => {
     loadTasks,
     clearSystemTaskHistory,
     clearingTaskHistory,
+    taskFilter,
+    setTaskFilter,
     t,
   };
 };

@@ -21,6 +21,7 @@ import React from 'react';
 import {
   Button,
   Progress,
+  Select,
   Space,
   Table,
   Tag,
@@ -151,7 +152,17 @@ const SystemTasksPanel = ({ data, t }) => {
     loadTasks,
     clearSystemTaskHistory,
     clearingTaskHistory = false,
+    taskFilter = { scope: '', type: '', status: '' },
+    setTaskFilter,
   } = data;
+
+  const updateTaskFilter = (key, value) => {
+    if (!setTaskFilter) {
+      return;
+    }
+    // 过滤条件变化后立即按新条件重新拉取，避免列表与筛选不一致。
+    setTaskFilter((prev) => ({ ...prev, [key]: value }));
+  };
 
   const activeTasks = tasks.filter(
     (task) => task.status === 'pending' || task.status === 'running',
@@ -172,7 +183,33 @@ const SystemTasksPanel = ({ data, t }) => {
             {t('各实例正在执行与维护中的后台任务状态')}
           </div>
         </div>
-        <Space>
+        <Space wrap>
+          <Select
+            size='small'
+            style={{ width: 130 }}
+            value={taskFilter.scope || undefined}
+            placeholder={t('范围')}
+            showClear
+            onChange={(value) => updateTaskFilter('scope', value || '')}
+            onClear={() => updateTaskFilter('scope', '')}
+          >
+            <Select.Option value='active'>{t('运行中')}</Select.Option>
+            <Select.Option value='history'>{t('历史')}</Select.Option>
+          </Select>
+          <Select
+            size='small'
+            style={{ width: 130 }}
+            value={taskFilter.status || undefined}
+            placeholder={t('状态')}
+            showClear
+            onChange={(value) => updateTaskFilter('status', value || '')}
+            onClear={() => updateTaskFilter('status', '')}
+          >
+            <Select.Option value='pending'>{t('等待中')}</Select.Option>
+            <Select.Option value='running'>{t('执行中')}</Select.Option>
+            <Select.Option value='succeeded'>{t('已完成')}</Select.Option>
+            <Select.Option value='failed'>{t('失败')}</Select.Option>
+          </Select>
           <Text type='tertiary' className='text-xs'>
             {hasActiveTasks
               ? t('每 {{seconds}} 秒自动刷新', { seconds: 8 })
