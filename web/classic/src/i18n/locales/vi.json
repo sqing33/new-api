@@ -5159,7 +5159,10 @@
     "{{count}} 条路由未注册": "{{count}} tuyến đường chưa được đăng ký",
     "这些路由已被其它插件或宿主占用，本插件不会处理对应请求。": "Các tuyến đường này đã thuộc plugin khác hoặc máy chủ, nên plugin này sẽ không xử lý các yêu cầu đó.",
     "包含与上游一致的模型": "Bao gồm cả model khớp với phía trên",
-    "历史": "Lịch sử"
+    "历史": "Lịch sử",
+    "高级自定义路由": "Tuyến đường tùy chỉnh nâng cao",
+    "按 incoming_path 匹配请求并转发到 upstream_path，可指定 converter 与鉴权方式；高级自定义渠道必须填写": "Khớp yêu cầu theo incoming_path và chuyển đến upstream_path; có thể chỉ định converter và phương thức xác thực. Bắt buộc với kênh tùy chỉnh nâng cao.",
+    "高级自定义路由配置不是合法的 JSON": "Cấu hình tuyến đường tùy chỉnh không phải JSON hợp lệ"
   },
   "启用TTS": "Bật TTS",
   "启用ASR": "Bật ASR",

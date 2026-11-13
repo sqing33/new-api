@@ -4781,7 +4781,10 @@
     "这些路由已被其它插件或宿主占用，本插件不会处理对应请求。": "These routes are already owned by another plugin or the host, so this plugin will not handle those requests.",
     "包含与上游一致的模型": "Include models matching upstream",
     "范围": "Scope",
-    "历史": "History"
+    "历史": "History",
+    "高级自定义路由": "Advanced custom routes",
+    "按 incoming_path 匹配请求并转发到 upstream_path，可指定 converter 与鉴权方式；高级自定义渠道必须填写": "Match requests by incoming_path and forward to upstream_path; a converter and auth method can be set. Required for advanced custom channels.",
+    "高级自定义路由配置不是合法的 JSON": "The advanced custom route config is not valid JSON"
   },
   "启用TTS": "Enable TTS",
   "启用ASR": "Enable ASR",

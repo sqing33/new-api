@@ -267,6 +267,8 @@ const EditChannelModal = (props) => {
     tls_insecure_skip_verify: false,
     // 全渠道: 允许该渠道承载 Responses WebSocket
     responses_websocket_enabled: false,
+    // 高级自定义渠道（type 58）的路由配置，存入 settings.advanced_custom
+    advanced_custom_json: '',
     // 任务插件渠道（type 61）绑定的插件 key，存入 settings.task_plugin_key
     task_plugin_key: '',
     // New API 渠道（type 60）额外绑定的插件集合，存入 settings.task_extend_plugin_keys
@@ -1058,6 +1060,10 @@ const EditChannelModal = (props) => {
             parsedSettings.tls_insecure_skip_verify === true;
           data.responses_websocket_enabled =
             parsedSettings.responses_websocket_enabled === true;
+          // 读取高级自定义渠道的路由配置
+          data.advanced_custom_json = parsedSettings.advanced_custom
+            ? JSON.stringify(parsedSettings.advanced_custom, null, 2)
+            : '';
           // 读取任务插件绑定
           data.task_plugin_key = parsedSettings.task_plugin_key || '';
           data.task_extend_plugin_keys = Array.isArray(
@@ -1980,6 +1986,23 @@ const EditChannelModal = (props) => {
     // type === 4 (Ollama): 是否走 OpenAI 兼容聊天端点
     if (localInputs.type === 4) {
       settings.ollama_openai_chat = localInputs.ollama_openai_chat === true;
+    }
+
+    // type 58（高级自定义）：路由表存在 settings.advanced_custom 里。
+    if (localInputs.type === 58) {
+      const rawConfig = String(localInputs.advanced_custom_json || '').trim();
+      if (rawConfig) {
+        try {
+          settings.advanced_custom = JSON.parse(rawConfig);
+        } catch (error) {
+          showError(t('高级自定义路由配置不是合法的 JSON'));
+          return;
+        }
+      } else {
+        delete settings.advanced_custom;
+      }
+    } else if ('advanced_custom' in settings) {
+      delete settings.advanced_custom;
     }
 
     // type 61（任务插件）：单个插件 key 是该渠道的必填绑定；
@@ -3136,6 +3159,22 @@ const EditChannelModal = (props) => {
                       '仅用于自建上游使用自签证书的场景；开启后该渠道到上游的连接不再校验证书链',
                     )}
                   />
+                  {inputs.type === 58 && (
+                    <Form.TextArea
+                      field='advanced_custom_json'
+                      label={t('高级自定义路由')}
+                      placeholder={t(
+                        '例如：{"advanced_routes":[{"incoming_path":"/v1/chat/completions","upstream_path":"/custom/chat","models":["gpt-4o"]}]}',
+                      )}
+                      autosize={{ minRows: 6, maxRows: 16 }}
+                      onChange={(value) =>
+                        handleInputChange('advanced_custom_json', value)
+                      }
+                      extraText={t(
+                        '按 incoming_path 匹配请求并转发到 upstream_path，可指定 converter 与鉴权方式；高级自定义渠道必须填写',
+                      )}
+                    />
+                  )}
                   {inputs.type === 61 && (
                     <Form.Select
                       field='task_plugin_key'

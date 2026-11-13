@@ -4652,7 +4652,10 @@
     "这些路由已被其它插件或宿主占用，本插件不会处理对应请求。": "Ces routes appartiennent déjà à un autre plugin ou à l’hôte ; ce plugin ne traitera pas ces requêtes.",
     "包含与上游一致的模型": "Inclure les modèles identiques à l’amont",
     "范围": "Portée",
-    "历史": "Historique"
+    "历史": "Historique",
+    "高级自定义路由": "Routes personnalisées avancées",
+    "按 incoming_path 匹配请求并转发到 upstream_path，可指定 converter 与鉴权方式；高级自定义渠道必须填写": "Fait correspondre les requêtes via incoming_path et les transmet à upstream_path ; un convertisseur et une méthode d’authentification peuvent être définis. Obligatoire pour les canaux personnalisés avancés.",
+    "高级自定义路由配置不是合法的 JSON": "La configuration des routes personnalisées n’est pas un JSON valide"
   },
   "启用TTS": "Activer TTS",
   "启用ASR": "Activer ASR",
