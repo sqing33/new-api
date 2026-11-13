@@ -109,6 +109,32 @@ func TestClaudeMessagesRequestToOpenAIChatToolResultContent(t *testing.T) {
 	}
 }
 
+func TestClaudeMessagesRequestToOpenAIChatKeepsAssistantThinkingAsReasoningContent(t *testing.T) {
+	got, err := ClaudeMessagesRequestToOpenAIChat(context.Background(), dto.ClaudeRequest{
+		Model:     "claude-test",
+		MaxTokens: lo.ToPtr(uint(64)),
+		Messages: []dto.ClaudeMessage{
+			{Role: "user", Content: "why is the sky blue?"},
+			{Role: "assistant", Content: []dto.ClaudeMediaMessage{
+				{Type: "thinking", Thinking: lo.ToPtr("Rayleigh scattering."), Signature: "sig"},
+				{Type: "text", Text: lo.ToPtr("Short answer.")},
+			}},
+			{Role: "user", Content: "and the sunset?"},
+		},
+	}, &convmeta.Values{})
+	require.NoError(t, err)
+
+	require.Len(t, got.Messages, 3)
+	assistant := got.Messages[1]
+	assert.Equal(t, "assistant", assistant.Role)
+	require.NotNil(t, assistant.ReasoningContent)
+	assert.Equal(t, "Rayleigh scattering.", *assistant.ReasoningContent)
+	parts := assistant.ParseContent()
+	require.Len(t, parts, 1)
+	assert.Equal(t, dto.ContentTypeText, parts[0].Type)
+	assert.Equal(t, "Short answer.", parts[0].Text)
+}
+
 func TestClaudeMessagesRequestToOpenAIChatKeepsParallelToolResultsContiguous(t *testing.T) {
 	const dataURL = "data:image/png;base64,iVBORw0KGgo="
 	got, err := ClaudeMessagesRequestToOpenAIChat(context.Background(), dto.ClaudeRequest{
