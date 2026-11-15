@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,34 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 )
+
+// RelayErrorSource tells where a failed attempt went wrong: "channel" for the
+// channel's own key or config (channel:* codes), "transport" when the
+// upstream could not be reached, "local" for an error new-api raised itself
+// before or without an upstream answer, and "upstream" for an upstream error
+// response. Adaptors also report what the upstream answered with new-api
+// error values, so the response codes count as upstream, and a local error
+// that wraps another relay error takes that error's source.
+func RelayErrorSource(err *types.NewAPIError) string {
+	switch {
+	case types.IsChannelError(err):
+		return "channel"
+	case err.GetErrorCode() == types.ErrorCodeDoRequestFailed:
+		return "transport"
+	case err.GetErrorType() != types.ErrorTypeNewAPIError:
+		return "upstream"
+	}
+	switch err.GetErrorCode() {
+	case types.ErrorCodeReadResponseBodyFailed, types.ErrorCodeBadResponseStatusCode, types.ErrorCodeBadResponse,
+		types.ErrorCodeBadResponseBody, types.ErrorCodeEmptyResponse, types.ErrorCodeAwsInvokeError:
+		return "upstream"
+	}
+	var inner *types.NewAPIError
+	if errors.As(err.Unwrap(), &inner) && inner != err {
+		return RelayErrorSource(inner)
+	}
+	return "local"
+}
 
 func formatNotifyType(channelId int, status int) string {
 	return fmt.Sprintf("%s_%d_%d", dto.NotifyTypeChannelUpdate, channelId, status)
@@ -49,8 +78,15 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 	if err == nil {
 		return false
 	}
-	if types.IsChannelError(err) {
+	// Channel key and config errors fail for every request, so they disable.
+	// Errors new-api raised itself never do: the request may not have reached
+	// the upstream, and their message can carry client input that would
+	// otherwise match a disable keyword.
+	switch RelayErrorSource(err) {
+	case "channel":
 		return true
+	case "local":
+		return false
 	}
 	if types.IsSkipRetryError(err) {
 		return false
