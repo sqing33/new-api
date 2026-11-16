@@ -176,6 +176,15 @@ func ClaudeMessagesRequestToOpenAIChat(claudeRequest dto.ClaudeRequest, info con
 						CacheControl: mediaMsg.CacheControl,
 					}
 					mediaMessages = append(mediaMessages, message)
+				case "thinking":
+					// Claude carries the assistant turn's own reasoning in a
+					// thinking block; the Chat dialect names the same content
+					// reasoning_content. Thinking-mode upstreams require it to be
+					// passed back on every replayed assistant turn, so it is
+					// carried over instead of being dropped.
+					if openAIMessage.ReasoningContent == nil && mediaMsg.Thinking != nil && *mediaMsg.Thinking != "" {
+						openAIMessage.ReasoningContent = mediaMsg.Thinking
+					}
 				case "image":
 					imageData := fmt.Sprintf("data:%s;base64,%s", mediaMsg.Source.MediaType, mediaMsg.Source.Data)
 					mediaMessage := dto.MediaContent{
