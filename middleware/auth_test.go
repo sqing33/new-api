@@ -255,3 +255,45 @@ func TestTryUserAuthCredentialClassification(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, databaseFailureResponse.Code)
 	assert.Contains(t, databaseFailureResponse.Body.String(), "AUTH_INTERNAL_ERROR")
 }
+
+// Self-deleting an account soft-deletes the user but leaves its API keys in
+// place; those keys must read as invalid rather than as a database failure.
+func TestTokenAuthRejectsKeysOfDeletedUser(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	require.NoError(t, model.DB.AutoMigrate(&model.Token{}))
+	// Shares the main database and initializes the quoted column names the
+	// API key lookup needs.
+	t.Setenv("LOG_SQL_DSN", "")
+	require.NoError(t, model.InitLogDB())
+	gin.SetMode(gin.TestMode)
+
+	user := createMiddlewarePATUser(t, "deleted-key-owner", "deleted-key-owner-pat")
+	key := "deletedownerkey0123456789abcdefghijklmnopqrstuvwx"
+	require.NoError(t, model.DB.Create(&model.Token{
+		UserId: user.Id, Key: key, Name: "owner key", Status: common.TokenStatusEnabled,
+		ExpiredTime: -1, UnlimitedQuota: true,
+	}).Error)
+
+	router := gin.New()
+	router.GET("/v1/chat/completions", TokenAuth(), func(c *gin.Context) { c.Status(http.StatusOK) })
+	router.GET("/api/usage/token", TokenAuthReadOnly(), func(c *gin.Context) { c.Status(http.StatusOK) })
+	request := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer sk-"+key)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, req)
+		return response
+	}
+
+	for _, path := range []string{"/v1/chat/completions", "/api/usage/token"} {
+		require.Equal(t, http.StatusOK, request(path).Code, path)
+	}
+
+	require.NoError(t, model.DeleteUserById(user.Id))
+
+	for _, path := range []string{"/v1/chat/completions", "/api/usage/token"} {
+		response := request(path)
+		assert.Equal(t, http.StatusUnauthorized, response.Code, path)
+		assert.NotEqual(t, http.StatusInternalServerError, response.Code, path)
+	}
+}
