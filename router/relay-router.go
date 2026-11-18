@@ -67,9 +67,33 @@ func SetRelayRouter(router *gin.Engine) {
 		playgroundRouter.POST("/chat/completions", controller.Playground)
 		playgroundRouter.POST("/images/generations", controller.ImagePlayground)
 		playgroundRouter.POST("/images/edits", controller.ImagePlayground)
-		playgroundRouter.POST("/videos", controller.VideoPlayground)
-		playgroundRouter.GET("/videos/:task_id", controller.VideoPlaygroundFetch)
 	}
+
+	// Playground 视频入口说的是 OpenAI video host protocol，因此需要任务插件的
+	// pin -> prepare -> distribute 链路，且顺序不能变。playgroundRouter 组上的
+	// Use(Distribute()) 会让分发早于 pin 执行，type=61 任务插件渠道永远进不了候选，
+	// 表现为“分组 X 下模型 Y 无可用渠道”。所以这两条路由单独注册在 engine 上，
+	// 保留 UserAuth 的会话鉴权（Playground 用登录态，不是 API token）。
+	// 路径别名 /pg/videos -> /v1/videos 见 pkg/jsplugin.ResolveHostProtocolPath。
+	router.POST("/pg/videos",
+		middleware.RouteTag("relay"),
+		middleware.SystemPerformanceCheck(),
+		middleware.UserAuth(),
+		middleware.PinTaskPluginEndpoint(),
+		middleware.TaskPluginEndpointOnly(middleware.ModelRequestRateLimit()),
+		middleware.PrepareTaskPluginEndpoint(),
+		middleware.Distribute(),
+		func(c *gin.Context) {
+			controller.RelayTaskPluginEndpoint(c, controller.VideoPlayground)
+		},
+	)
+	router.GET("/pg/videos/:task_id",
+		middleware.RouteTag("relay"),
+		middleware.SystemPerformanceCheck(),
+		middleware.UserAuth(),
+		middleware.Distribute(),
+		controller.VideoPlaygroundFetch,
+	)
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))
 	relayV1Router.Use(middleware.SystemPerformanceCheck())

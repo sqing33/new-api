@@ -354,9 +354,10 @@ func PinTaskPluginEndpoint() gin.HandlerFunc {
 			return
 		}
 
+		protocolPath := pluginruntime.ResolveHostProtocolPath(c.Request.URL.Path)
 		modelRequest, err := getModelFromRequest(c)
 		if err != nil {
-			if _, _, protocolPath := pluginruntime.LookupHostProtocolOperation(c.Request.Method, c.Request.URL.Path); protocolPath {
+			if _, _, isProtocolPath := pluginruntime.LookupHostProtocolOperation(c.Request.Method, protocolPath); isProtocolPath {
 				abortWithOpenAiMessage(c, http.StatusBadRequest, "Invalid task protocol request")
 				return
 			}
@@ -399,9 +400,9 @@ func PinTaskPluginEndpoint() gin.HandlerFunc {
 		var found bool
 		var candidates []pluginruntime.ProtocolBinding
 		if pluginDeclared {
-			binding, found = generation.LookupEndpoint(c.Request.Method, c.Request.URL.Path, lookupModel)
+			binding, found = generation.LookupEndpoint(c.Request.Method, protocolPath, lookupModel)
 			if found && binding.Plugin != nil {
-				candidates = generation.LookupEndpointCandidates(c.Request.Method, c.Request.URL.Path, lookupModel)
+				candidates = generation.LookupEndpointCandidates(c.Request.Method, protocolPath, lookupModel)
 			}
 		} else if setting.ImageModelSupportsVideo(claimedModel) {
 			// Administrator configuration admitted this model without any plugin
@@ -409,7 +410,7 @@ func PinTaskPluginEndpoint() gin.HandlerFunc {
 			// types that can serve the model. The model name is never rewritten:
 			// there is no declared spelling to fold it to.
 			channelTypes := model.GetEnabledChannelTypesForModel(claimedModel)
-			candidates = generation.EndpointBindingsForChannelTypes(c.Request.Method, c.Request.URL.Path, claimedModel, channelTypes)
+			candidates = generation.EndpointBindingsForChannelTypes(c.Request.Method, protocolPath, claimedModel, channelTypes)
 			if len(candidates) == 0 {
 				abortWithOpenAiMessage(c, http.StatusBadRequest, fmt.Sprintf(
 					"model %q is configured for video generation but no task plugin can serve it (enabled channel types: %v)",

@@ -168,6 +168,25 @@ func orderProtocolSupports(protocol string, supports []string) []string {
 	return ordered
 }
 
+// hostProtocolPathAliases maps an ingress path onto the host-protocol path it
+// speaks. The Playground video endpoint (/pg/videos) is a session-authenticated
+// alias of the OpenAI video protocol (/v1/videos): it carries the same request
+// body and must resolve to the same plugin binding. It cannot be declared in
+// hostProtocols because SetTaskPluginProtocolRouter registers a route for every
+// operation path, which would collide with the playground route.
+var hostProtocolPathAliases = map[string]string{
+	"/pg/videos": "/v1/videos",
+}
+
+// ResolveHostProtocolPath returns the host-protocol path an ingress path speaks,
+// following hostProtocolPathAliases. Paths without an alias are returned unchanged.
+func ResolveHostProtocolPath(path string) string {
+	if aliased, ok := hostProtocolPathAliases[path]; ok {
+		return aliased
+	}
+	return path
+}
+
 func LookupHostProtocolOperation(method, path string) (string, HostProtocolOperation, bool) {
 	method = strings.ToUpper(strings.TrimSpace(method))
 	for _, definition := range hostProtocols {
