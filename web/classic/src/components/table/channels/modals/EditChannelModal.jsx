@@ -2071,17 +2071,26 @@ const EditChannelModal = (props) => {
     }
 
     if (isEdit) {
+      // 多密钥渠道编辑时若密钥只剩一行（留空 = 不修改密钥，不降级），
+      // 请求降级为单密钥渠道（后端会清空按密钥索引的状态数据）。
+      const downgradeToSingle =
+        isMultiKeyChannel &&
+        !batch &&
+        String(localInputs.key || '').trim() !== '' &&
+        sensenovaKeyRows(localInputs.key).length <= 1;
       res = await API.put(`/api/channel/`, {
         ...localInputs,
         id: parseInt(channelId),
-        key_mode: isMultiKeyChannel ? keyMode : undefined, // 只在多key模式下传递
-        // 单密钥渠道编辑时勾选批量密钥：请求单向升级为多密钥（后端仅在
-        // 密钥多于一行时生效，并初始化多密钥元数据；不支持降级）。
-        is_multi_key_request: !isMultiKeyChannel && batch ? true : undefined,
+        key_mode: isMultiKeyChannel && !downgradeToSingle ? keyMode : undefined, // 只在多key模式下传递
+        // 单密钥渠道编辑时勾选批量密钥：请求升级为多密钥（后端仅在
+        // 密钥多于一行时生效，并初始化多密钥元数据）；多密钥渠道编辑成
+        // 单行密钥时降级回单密钥。
+        is_multi_key_request: !isMultiKeyChannel && batch ? true : downgradeToSingle ? false : undefined,
         // 已有多密钥渠道与单→多升级都要传模式：若不传，这里的三元会把
         // 展开 localInputs 后用户刚选的模式覆盖成 undefined，后端收不到
         // 变更，保存后仍停留原模式（例如随机切不到轮询）。
-        multi_key_mode: isMultiKeyChannel || batch ? multiKeyMode : undefined,
+        multi_key_mode:
+          (isMultiKeyChannel || batch) && !downgradeToSingle ? multiKeyMode : undefined,
       });
     } else {
       res = await API.post(`/api/channel/`, {

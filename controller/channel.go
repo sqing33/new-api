@@ -1084,12 +1084,16 @@ func UpdateChannel(c *gin.Context) {
 	// Always copy the original ChannelInfo so that fields like IsMultiKey and MultiKeySize are retained.
 	channel.ChannelInfo = originChannel.ChannelInfo
 
-	// One-way upgrade: an explicit is_multi_key_request=true on a
-	// single-key channel with a multi-line key converts it to multi-key
-	// (initializes empty per-key metadata). Downgrading multi-key back to
-	// single is never allowed here — per-key state maps (disabled status,
-	// reasons, times) are index-keyed and would silently misalign.
-	if !channel.ChannelInfo.IsMultiKey && channel.IsMultiKeyRequest != nil && *channel.IsMultiKeyRequest {
+	// Bi-directional key mode switch driven by the edit form:
+	//   - single -> multi: explicit is_multi_key_request=true with a
+	//     multi-line key (initializes empty per-key metadata);
+	//   - multi -> single: a submitted key with exactly one line drops the
+	//     per-key metadata. An empty key field means "keys unchanged" and
+	//     never downgrades. Index-keyed state is dropped together with the
+	//     multi-key flag so stale entries can never misalign.
+	var downgradedInfo *model.ChannelInfo
+	if channel.IsMultiKeyRequest != nil && *channel.IsMultiKeyRequest &&
+		!channel.ChannelInfo.IsMultiKey {
 		if keys := channel.GetKeys(); len(keys) > 1 {
 			// 单→多升级时把原单密钥合并进新列表（原密钥在前、去重）：
 			// 编辑态下前端拿不到已保存密钥，若不合并用户提交的多行密钥会
@@ -1114,6 +1118,23 @@ func UpdateChannel(c *gin.Context) {
 			channel.ChannelInfo.MultiKeyDisabledReason = map[int]string{}
 			channel.ChannelInfo.MultiKeyDisabledTime = map[int]int64{}
 			channel.ChannelInfo.MultiKeyPriority = nil // 全部从默认优先级 0 开始
+		}
+	} else if channel.ChannelInfo.IsMultiKey {
+		// 多→单降级：编辑时把密钥替换成恰好一行（非空）即转回单密钥渠道；
+		// 密钥留空视为不修改密钥，不触发降级。按密钥索引的状态数据一并
+		// 清空，避免残留索引错位。
+		if keys := channel.GetKeys(); len(keys) == 1 && strings.TrimSpace(keys[0]) != "" {
+			channel.Key = strings.TrimSpace(keys[0])
+			channel.ChannelInfo.IsMultiKey = false
+			channel.ChannelInfo.MultiKeySize = 0
+			channel.ChannelInfo.MultiKeyStatusList = nil
+			channel.ChannelInfo.MultiKeyDisabledReason = nil
+			channel.ChannelInfo.MultiKeyDisabledTime = nil
+			channel.ChannelInfo.MultiKeyPriority = nil
+			channel.ChannelInfo.MultiKeyPollingIndex = 0
+			channel.ChannelInfo.MultiKeyMode = ""
+			cleared := channel.ChannelInfo
+			downgradedInfo = &cleared
 		}
 	}
 
@@ -1239,6 +1260,15 @@ func UpdateChannel(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if downgradedInfo != nil {
+		// GORM 的 struct Updates 会跳过全零的 ChannelInfo 字段，降级产生
+		// 的清空状态必须显式写库，否则数据库仍保留旧的多密钥元数据。
+		if err := model.DB.Model(&model.Channel{Id: channel.Id}).
+			Update("channel_info", *downgradedInfo).Error; err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	}
 	model.InitChannelCache()
 	if proxyChanged {

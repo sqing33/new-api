@@ -32,6 +32,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 )
 
@@ -167,6 +168,90 @@ func TestUpdateChannelNeverDowngradesMultiKey(t *testing.T) {
 	updated, err := model.GetChannelById(1, true)
 	require.NoError(t, err)
 	assert.True(t, updated.ChannelInfo.IsMultiKey, "multi-key is never downgraded")
+}
+
+func TestUpdateChannelDowngradesMultiKeyToSingle(t *testing.T) {
+	setupMultiKeyUpgradeTest(t)
+	multi := model.Channel{
+		Id: 1, Type: 1, Name: "multi", Key: "sk-a\nsk-b\nsk-c", Models: "gpt-4o",
+		Group: "default", Status: common.ChannelStatusEnabled,
+		OtherSettings: "{}",
+	}
+	multi.ChannelInfo.IsMultiKey = true
+	multi.ChannelInfo.MultiKeySize = 3
+	multi.ChannelInfo.MultiKeyMode = constant.MultiKeyModePolling
+	multi.ChannelInfo.MultiKeyStatusList = map[int]int{2: 2}
+	multi.ChannelInfo.MultiKeyDisabledReason = map[int]string{2: "manual"}
+	require.NoError(t, model.DB.Create(&multi).Error)
+
+	// 明确 is_multi_key_request=false + 单行密钥：降级为单密钥渠道。
+	recorder := updateChannelViaAPI(t, `{"id":1,"name":"multi","type":1,"key":"sk-kept","models":"gpt-4o","group":"default","is_multi_key_request":false,"settings":"{}"}`)
+
+	var response struct {
+		Success bool `json:"success"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success, recorder.Body.String())
+	updated, err := model.GetChannelById(1, true)
+	require.NoError(t, err)
+	assert.False(t, updated.ChannelInfo.IsMultiKey, "single-line key downgrades to single-key")
+	assert.Equal(t, 0, updated.ChannelInfo.MultiKeySize)
+	assert.Nil(t, updated.ChannelInfo.MultiKeyStatusList)
+	assert.Nil(t, updated.ChannelInfo.MultiKeyDisabledReason)
+	assert.Empty(t, updated.ChannelInfo.MultiKeyMode)
+	assert.Equal(t, "sk-kept", updated.Key)
+}
+
+func TestUpdateChannelDowngradeKeepsFirstKeyWhenBlank(t *testing.T) {
+	setupMultiKeyUpgradeTest(t)
+	multi := model.Channel{
+		Id: 1, Type: 1, Name: "multi", Key: "sk-first\nsk-second", Models: "gpt-4o",
+		Group: "default", Status: common.ChannelStatusEnabled,
+		OtherSettings: "{}",
+	}
+	multi.ChannelInfo.IsMultiKey = true
+	multi.ChannelInfo.MultiKeySize = 2
+	require.NoError(t, model.DB.Create(&multi).Error)
+
+	// 编辑多密钥渠道时密钥留空 = 不修改密钥：不得降级，保持多密钥形态。
+	recorder := updateChannelViaAPI(t, `{"id":1,"name":"multi","type":1,"key":"","models":"gpt-4o","group":"default","is_multi_key_request":false,"settings":"{}"}`)
+
+	var response struct {
+		Success bool `json:"success"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success, recorder.Body.String())
+	updated, err := model.GetChannelById(1, true)
+	require.NoError(t, err)
+	assert.True(t, updated.ChannelInfo.IsMultiKey, "blank key means keys unchanged, stays multi-key")
+	assert.Equal(t, 2, updated.ChannelInfo.MultiKeySize)
+	assert.Equal(t, "sk-first\nsk-second", updated.Key)
+}
+
+func TestUpdateChannelMultiKeyUnchangedKeepsState(t *testing.T) {
+	setupMultiKeyUpgradeTest(t)
+	multi := model.Channel{
+		Id: 1, Type: 1, Name: "multi", Key: "sk-a\nsk-b", Models: "gpt-4o",
+		Group: "default", Status: common.ChannelStatusEnabled,
+		OtherSettings: "{}",
+	}
+	multi.ChannelInfo.IsMultiKey = true
+	multi.ChannelInfo.MultiKeySize = 2
+	multi.ChannelInfo.MultiKeyStatusList = map[int]int{1: 2}
+	require.NoError(t, model.DB.Create(&multi).Error)
+
+	// 不带 is_multi_key_request 字段的常规编辑（密钥留空）不得影响多密钥状态。
+	recorder := updateChannelViaAPI(t, `{"id":1,"name":"multi","type":1,"key":"","models":"gpt-4o","group":"default","settings":"{}"}`)
+
+	var response struct {
+		Success bool `json:"success"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success, recorder.Body.String())
+	updated, err := model.GetChannelById(1, true)
+	require.NoError(t, err)
+	assert.True(t, updated.ChannelInfo.IsMultiKey)
+	assert.Equal(t, map[int]int{1: 2}, updated.ChannelInfo.MultiKeyStatusList)
 }
 
 func multiKeyManageViaAPI(t *testing.T, body string) *httptest.ResponseRecorder {
