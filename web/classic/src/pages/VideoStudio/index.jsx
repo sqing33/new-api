@@ -116,7 +116,9 @@ const normalizeTaskResponse = (payload) => {
   };
 };
 
-const getContentUrl = (taskId) => `/v1/videos/${taskId}/content`;
+// Playground 用会话 cookie 鉴权，取片地址必须走 /pg 一族；
+// /v1/videos/:task_id/content 挂的是 TokenAuth，浏览器带 cookie 会报“无效的令牌”。
+const getContentUrl = (taskId) => `/pg/videos/${taskId}/content`;
 
 const VideoStudio = () => {
   const { t } = useTranslation();

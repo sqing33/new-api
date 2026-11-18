@@ -94,6 +94,16 @@ func SetRelayRouter(router *gin.Engine) {
 		middleware.Distribute(),
 		controller.VideoPlaygroundFetch,
 	)
+
+	// Playground 取片走会话鉴权：浏览器带的是登录 cookie，不是 API token，
+	// 所以不能复用 /v1/videos/:task_id/content（那条挂 TokenAuth，会报“无效的令牌”）。
+	// VideoProxy 本身只依赖 task_id 与数据库，不校验 token，直接挂 UserAuth 即可。
+	router.GET("/pg/videos/:task_id/content",
+		middleware.RouteTag("relay"),
+		middleware.SystemPerformanceCheck(),
+		middleware.UserAuth(),
+		controller.VideoProxy,
+	)
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))
 	relayV1Router.Use(middleware.SystemPerformanceCheck())
