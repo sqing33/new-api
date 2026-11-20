@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	relaykittypes "github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -218,4 +219,38 @@ func TestOaiStreamHandlerUsageOnlyLastFrameUnaffected(t *testing.T) {
 	require.NotNil(t, usage)
 	assert.Equal(t, 1, usage.CompletionTokens)
 	assert.Contains(t, recorder.Body.String(), "hi")
+}
+
+// Embeddings 与 rerank 的响应没有 choices，payload 在 data / results 里；
+// 空响应守卫不能把它们误判成上游静默失败。
+func TestOpenaiHandlerChoiceLessResponsesUnaffected(t *testing.T) {
+	setupTestMode(t)
+
+	for _, tc := range []struct {
+		name      string
+		relayMode int
+		body      string
+	}{
+		{
+			name:      "embeddings",
+			relayMode: relayconstant.RelayModeEmbeddings,
+			body:      `{"object":"list","data":[{"object":"embedding","index":0,"embedding":[0.1,-0.2]}],"model":"bge-m3","usage":{"prompt_tokens":8,"total_tokens":8}}`,
+		},
+		{
+			name:      "rerank",
+			relayMode: relayconstant.RelayModeRerank,
+			body:      `{"object":"list","model":"rerank-1","results":[{"index":0,"relevance_score":0.9}],"usage":{"prompt_tokens":4,"total_tokens":4}}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, recorder, resp, info := newEmptyOutputTestContext(t, tc.body, "application/json", false)
+			info.RelayMode = tc.relayMode
+
+			usage, apiErr := OpenaiHandler(c, info, resp)
+
+			require.Nil(t, apiErr)
+			require.NotNil(t, usage)
+			assert.Equal(t, tc.body, recorder.Body.String(), "响应体必须原样透传给客户端")
+		})
+	}
 }
